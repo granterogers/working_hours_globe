@@ -170,4 +170,9 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .flb{flex:1}
 .flb2{flex:1;border:1px solid var(--glass-b);background:transparent;color:var(--ink);border-radius:11px;padding:9px 12px;cursor:pointer;font-size:.88rem}
 .flb2:hover{background:var(--field)}
+.flchips{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;align-items:center}
+.flcap{width:100%;font-size:.72rem;color:var(--ink2)}
+.flchip{border:1px solid var(--glass-b);background:var(--field);color:var(--ink);border-radius:999px;padding:3px 9px;font-size:.78rem;cursor:pointer}
+.flchip:hover{border-color:var(--accent)}
+.flchip.rec{font-weight:600}
 .flnote{font-size:.78rem;color:var(--ink2);margin:8px 0 0}

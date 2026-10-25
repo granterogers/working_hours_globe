@@ -105,7 +105,7 @@ function draw(){
   // pick detail by zoom; drop one level while the globe is moving, then redraw crisp at rest
   const lv=k<2.5?0:k<5?1:2;
   const TZ=[D.tzL,D.tzM,D.tz][lv],CB=[D.cbL,D.cbM,D.cb][lv];
-  const tileA=clamp((k-TILE_K)/2.5,0,1),bA=1-tileA;
+  const tileA=clamp((k-TILE_K)/4.5,0,1),bA=1-tileA;
   if(bA>0.02){ctx.globalAlpha=bA;ctx.lineJoin='round';strokeFC(CB,pal.coast1,k>4?9:6);strokeFC(CB,pal.coast2,k>4?3.5:2.5);ctx.globalAlpha=1}
   fillBands(D.gaps);fillBands(TZ);
   // street map fades in as you zoom towards a country, replacing the time-zone colours once fully in
@@ -228,7 +228,7 @@ function flyTo(lon,lat,sizeDeg,dur){
 // street map: OpenFreeMap vector tiles (OpenMapTiles schema). Each tile is painted to its own canvas and
 // reprojected onto the globe; place, road and water names are then set upright on top in screen space,
 // in English where OpenStreetMap has an English name (name:en), otherwise in the local name.
-const TILE_K=5.5,VT_JSON='https://tiles.openfreemap.org/planet',VT_DRAW_MAX=19;
+const TILE_K=9,VT_JSON='https://tiles.openfreemap.org/planet',VT_DRAW_MAX=19;
 const VT_ATTR='OpenFreeMap · © OpenMapTiles · Data © OpenStreetMap contributors';
 const attrib=document.getElementById('attrib');
 let tileDrawPending=false;const tcv=document.createElement('canvas'),tctx=tcv.getContext('2d');
@@ -369,12 +369,8 @@ function drawTiles(){
     if((x1-x0+1)*(y1-y0+1)<=90||z<=2)break;z--;}
   vtZ=z;
   const N=k<14?3:2;
-  for(let ty=Math.max(0,y0);ty<=Math.min(n-1,y1);ty++)for(let tx=x0;tx<=x1;tx++){
-    const wx=((tx%n)+n)%n;let t=tile(z,wx,ty,true),img=null,sx=0,sy=0,sz=256;
-    if(t&&t.ok){img=t.img;sz=img.width;vtUsed.add(t.dk)}
-    else for(let d=1;d<=5&&z-d>=0;d++){const p=tile(z-d,wx>>d,ty>>d,false);if(p&&p.ok){img=p.img;const s=p.img.width/(1<<d);sx=(wx-((wx>>d)<<d))*s;sy=(ty-((ty>>d)<<d))*s;sz=s;vtUsed.add(p.dk);break}}
-    if(!img)continue;
-    const cs=sz/N;
+  // draw one tile image (or a square part of it) over tile tx,ty of a 2^z grid of size n, split into NxN cells
+  const quad=(tx,ty,n,img,sx,sy,sz,N)=>{const cs=sz/N;
     for(let j=0;j<N;j++)for(let i=0;i<N;i++){
       const P=(u,v)=>scr([(tx+u)/n*360-180,y2lat(ty+v,n)]);
       const p0=P(i/N,j/N),p1=P((i+1)/N,j/N),p2=P(i/N,(j+1)/N),p3=P((i+1)/N,(j+1)/N);if(!p0||!p1||!p2||!p3)continue;
@@ -383,7 +379,21 @@ function drawTiles(){
       if(Math.max(a[0],b[0],c[0],d[0])<0||Math.min(a[0],b[0],c[0],d[0])>W||Math.max(a[1],b[1],c[1],d[1])<0||Math.min(a[1],b[1],c[1],d[1])>H)continue;
       tctx.save();tctx.beginPath();tctx.moveTo(a[0],a[1]);tctx.lineTo(b[0],b[1]);tctx.lineTo(c[0],c[1]);tctx.lineTo(d[0],d[1]);tctx.closePath();tctx.clip();
       tctx.transform((p1[0]-p0[0])/cs,(p1[1]-p0[1])/cs,(p2[0]-p0[0])/cs,(p2[1]-p0[1])/cs,p0[0],p0[1]);
-      const e=1.2*cs/Math.max(1,Math.hypot(p1[0]-p0[0],p1[1]-p0[1]));tctx.drawImage(img,sx+i*cs,sy+j*cs,cs,cs,-e,-e,cs+2*e,cs+2*e);tctx.restore();drew++;}}
+      const e=1.2*cs/Math.max(1,Math.hypot(p1[0]-p0[0],p1[1]-p0[1]));tctx.drawImage(img,sx+i*cs,sy+j*cs,cs,cs,-e,-e,cs+2*e,cs+2*e);tctx.restore();drew++;}};
+  // stand-ins while a tile is being painted: zooming out, the sharper tiles already painted (up to two levels
+  // down); zooming in, the nearest coarser one. Either way the street map never blinks out to the outlines.
+  const kids=(x,y,zz,depth)=>{let all=true;const n2=2**(zz+1);
+    for(let j=0;j<2;j++)for(let i=0;i<2;i++){const X=x*2+i,Y=y*2+j,c=zz+1<=VT_DRAW_MAX?tile(zz+1,X,Y,false):null;
+      if(c&&c.ok){quad(X,Y,n2,c.img,0,0,c.img.width,depth?1:2);vtUsed.add(c.dk)}else if(!(depth<1&&kids(X,Y,zz+1,depth+1)))all=false}
+    return all};
+  for(let ty=Math.max(0,y0);ty<=Math.min(n-1,y1);ty++)for(let tx=x0;tx<=x1;tx++){
+    const wx=((tx%n)+n)%n,t=tile(z,wx,ty,true);
+    if(t&&t.ok){quad(tx,ty,n,t.img,0,0,t.img.width,N);vtUsed.add(t.dk);continue}
+    let par=null,pd=0;for(let d=1;d<=5&&z-d>=0;d++){const p=tile(z-d,wx>>d,ty>>d,false);if(p&&p.ok){par=p;pd=d;break}}
+    // coarser stand-in first, then any sharper painted pieces on top of it
+    if(par){const s=par.img.width/(1<<pd);quad(tx,ty,n,par.img,(wx-((wx>>pd)<<pd))*s,(ty-((ty>>pd)<<pd))*s,s,N);vtUsed.add(par.dk)}
+    kids(wx,ty,z,0);
+  }
   return drew>0;
 }
 // map names, read once per data tile: English (name:en) where OpenStreetMap has it, else the local name.
@@ -507,8 +517,14 @@ function apSearch(q){q=q.trim().toLowerCase();if(q.length<2)return[];const res=[
   for(const a of airports){const code=a[0].toLowerCase(),s=(a[2]+' '+a[1]).toLowerCase();
     const score=code===q?0:a[2].toLowerCase().startsWith(q)?1:s.includes(q)?2:9;if(score<9)res.push([a[0],a[1],a[2],score+(a[6]?0:0.5)])}
   return res.sort((x,y)=>x[3]-y[3]).slice(0,8)}
+// where you fly from: the last one used, the last six searched, and the busiest European cities to pick from
 const fromGet=()=>{try{return localStorage.getItem('whg.from')||''}catch(e){return''}};
-const fromSet=v=>{try{localStorage.setItem('whg.from',v)}catch(e){}};
+const fromRecent=()=>{try{const v=JSON.parse(localStorage.getItem('whg.fromRecent')||'[]');return Array.isArray(v)?v.filter(c=>typeof c==='string').slice(0,6):[]}catch(e){return[]}};
+const fromSet=v=>{try{localStorage.setItem('whg.from',v);localStorage.setItem('whg.fromRecent',JSON.stringify([v,...fromRecent().filter(c=>c!==v)].slice(0,6)))}catch(e){}};
+const BUSY=['LON','IST','PAR','AMS','MAD','FRA','BCN','ROM','MUC','DUB'];
+const SKY={LON:'lond',PAR:'pari',ROM:'rome',IST:'ista',MIL:'mila',NYC:'nyca',TYO:'tyoa',MOW:'mosc',STO:'stoc',CHI:'chia',WAS:'wasa',SEL:'sela',BJS:'bjsa',SHA:'csha',OSA:'osaa',BKK:'bkkt',BUE:'buea',SAO:'saoa',RIO:'rioa',JKT:'jkta',TCI:'tci'};
+function apLabel(c){if(c in METRO)return METRO[c].replace(/ \((all|both) airports\)/,'')+' (all)';const a=airports&&airports.find(x=>x[0]===c);return a?(a[2]||apShort(a[1])).replace(/ am Main$/,'')+' '+c:c}
+const chips=(codes,cls)=>codes.map(c=>`<button type="button" class="flchip${cls||''}" data-c="${esc(c)}">${esc(apLabel(c))}</button>`).join('');
 function isoDay(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function flightsBlock(){return`<div class="fl"><button class="fltog" id="fltog" aria-expanded="false"><span aria-hidden="true">✈</span> Flights here<span class="flchev" aria-hidden="true">›</span></button><div class="flbody" id="flbody" hidden></div></div>`}
 function wireFlights(ll){const tog=document.getElementById('fltog'),body=document.getElementById('flbody');if(!tog||!ll)return;
@@ -519,6 +535,8 @@ function wireFlights(ll){const tog=document.getElementById('fltog'),body=documen
     const t=new Date();t.setDate(t.getDate()+14);const min=isoDay(new Date());
     body.innerHTML=`<label class="fll" for="flfrom">From</label>
       <input id="flfrom" class="flin" list="fllist" placeholder="City or airport code, e.g. London or LGW" value="${esc(fromGet())}" autocomplete="off"><datalist id="fllist"></datalist>
+      <div class="flchips" id="flrecent"></div>
+      <div class="flchips"><span class="flcap">Busiest in Europe</span>${chips(BUSY)}</div>
       <label class="fll" for="flto">To</label>
       <select id="flto" class="flin">${near.map(([d,a])=>`<option value="${a[0]}">${a[0]}, ${esc(apShort(a[1]))} (${Math.round(d)} km)</option>`).join('')}</select>
       <label class="fll" for="fldate">Date, one way</label><input id="fldate" class="flin" type="date" min="${min}" value="${isoDay(t)}">
@@ -526,15 +544,17 @@ function wireFlights(ll){const tog=document.getElementById('fltog'),body=documen
       <p class="flnote" id="flmsg">Opens in a new tab with your route filled in.</p>`;
     body.dataset.ready='1';
     const from=document.getElementById('flfrom'),dl=document.getElementById('fllist'),msg=document.getElementById('flmsg');
+    const recent=()=>{const r=fromRecent(),el=document.getElementById('flrecent');el.hidden=!r.length;el.innerHTML=r.length?'<span class="flcap">Recent</span>'+chips(r,' rec'):''};recent();
+    body.querySelectorAll('.flchips').forEach(el=>el.onclick=e=>{const b=e.target.closest('.flchip');if(!b)return;from.value=b.dataset.c;msg.textContent='Opens in a new tab with your route filled in.'});
     from.oninput=()=>{dl.innerHTML=apSearch(from.value).map(r=>`<option value="${r[0]}">${esc(r[1])}${r[2]?', '+esc(r[2]):''}</option>`).join('')};
     const code=()=>{const v=from.value.trim();const m=v.match(/^[A-Za-z]{3}\b/);let c=m?m[0].toUpperCase():'';
       if(!(c in METRO)&&!airports.some(a=>a[0]===c)){const r=apSearch(v);c=r.length?r[0][0]:''}
-      if(!c){msg.textContent='Choose where you are flying from first.';from.focus();return''}from.value=c;fromSet(c);return c};
+      if(!c){msg.textContent='Choose where you are flying from first.';from.focus();return''}from.value=c;fromSet(c);recent();return c};
     document.getElementById('flg').onclick=()=>{const o=code();if(!o)return;const d=document.getElementById('flto').value,dt=document.getElementById('fldate').value;
       window.open('https://www.google.com/travel/flights?q='+encodeURIComponent(`Flights from ${o} to ${d} on ${dt} one way`)+'&hl=en-GB&curr=GBP','_blank','noopener')};
     document.getElementById('flm').onclick=()=>{const o=code();if(!o)return;const d=document.getElementById('flto').value,dt=document.getElementById('fldate').value||isoDay(t);
       const ym=dt.slice(2,4)+dt.slice(5,7);
-      window.open(`https://www.skyscanner.net/transport/flights/${o.toLowerCase()}/${d.toLowerCase()}/?adultsv2=1&cabinclass=economy&rtn=0&oym=${ym}&selectedoday=01&currency=GBP&locale=en-GB&market=UK`,'_blank','noopener')};};}
+      window.open(`https://www.skyscanner.net/transport/flights/${SKY[o]||o.toLowerCase()}/${d.toLowerCase()}/?adultsv2=1&cabinclass=economy&rtn=0&oym=${ym}&selectedoday=01&currency=GBP&locale=en-GB&market=UK`,'_blank','noopener')};};}
 
 // dropping a pin for a new favourite
 let placing=false,draft=null,pinDrag=null,geoTimer=0,geoSeq=0;
