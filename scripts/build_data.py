@@ -84,8 +84,10 @@ def tz_at(x,y):
         if tzs[i][1].contains(p): return tzs[i][0]
     return tzs[tree.nearest(p)][0]
 countries=[];cfeat=[]
+mainland={}
 for f in json.load(open_utf8('ne50.geojson'))['features']:
     p=f['properties'];g=shape(f['geometry']);b=(max(g.geoms,key=lambda q:q.area) if g.geom_type=='MultiPolygon' else g).bounds
+    mainland[p['ADM0_A3']]=prep(max(g.geoms,key=lambda q:q.area) if g.geom_type=='MultiPolygon' else g)
     countries.append([p.get('NAME_EN') or p['NAME'],round(p['LABEL_X'],2),round(p['LABEL_Y'],2),tz_at(p['LABEL_X'],p['LABEL_Y']),p['ADM0_A3'],[round(v,2) for v in b]])
     s=clean(g,0.03,0.0002)
     if s: cfeat.append({"type":"Feature","properties":{"z":tz_at(p['LABEL_X'],p['LABEL_Y'])},"geometry":rnd(s)})
@@ -97,7 +99,7 @@ for f in json.load(open_utf8('adm1.geojson'))['features']:
     if x is None or not sh.contains(Point(x,y)):
         rp=sh.representative_point();x,y=rp.x,rp.y
     t=tz_at(x,y);b=sh.bounds
-    prov.append([p.get('name_en') or p.get('name') or '?',round(x,2),round(y,2),t,p.get('adm0_a3'),round(max(b[2]-b[0],b[3]-b[1]),2),p.get('admin')])
+    prov.append([p.get('name_en') or p.get('name') or '?',round(x,2),round(y,2),t,p.get('adm0_a3'),round(max(b[2]-b[0],b[3]-b[1]),2),p.get('admin'),1 if p.get('adm0_a3') in mainland and mainland[p.get('adm0_a3')].contains(Point(x,y)) else 0])
     ctz.setdefault(p.get('adm0_a3'),set()).add(tuple(zoneinfo[t]))
     s=clean(sh,0.04,0.002)
     if s: pfeat.append({"type":"Feature","properties":{},"geometry":rnd(s)})
@@ -162,9 +164,9 @@ cfeat=lines(cfeat,60,3);cbM=lines(cbM,60);cbL=lines(cbL,200,1)
 pfeat=lines(pfeat,80,2);pbM=lines(pbM,80)
 print("tiles",len(feats),len(tzM),"lines",len(cfeat),len(pfeat))
 data={"zones":zoneinfo,"tzM":{"type":"FeatureCollection","features":tzM},"cbM":{"type":"FeatureCollection","features":cbM},
-      "pbM":{"type":"FeatureCollection","features":pbM},"gaps":{"type":"FeatureCollection","features":gaps},"tzL":{"type":"FeatureCollection","features":tzL},"cbL":{"type":"FeatureCollection","features":cbL},"tz":{"type":"FeatureCollection","features":feats},
+      "gaps":{"type":"FeatureCollection","features":gaps},"tzL":{"type":"FeatureCollection","features":tzL},"cbL":{"type":"FeatureCollection","features":cbL},"tz":{"type":"FeatureCollection","features":feats},
       "countries":countries,"cb":{"type":"FeatureCollection","features":cfeat},
-      "prov":prov,"pb":{"type":"FeatureCollection","features":pfeat}}
+      "prov":prov}
 s=json.dumps(data,separators=(',',':'),ensure_ascii=False)
 open(OUT,'w',encoding='utf-8').write(s)
 print('Wrote',os.path.normpath(OUT))

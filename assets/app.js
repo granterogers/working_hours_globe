@@ -30,7 +30,7 @@ const RAD=Math.PI/180;
 function pack(f){const g=f.geometry;const ps=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:g.type==='MultiLineString'?[g.coordinates]:[];f.rings=[];
   ps.forEach(p=>p.forEach(r=>{const a=new Float32Array(r.length*3);for(let i=0;i<r.length;i++){const L=r[i][0]*RAD,B=r[i][1]*RAD,cb=Math.cos(B);a[i*3]=cb*Math.cos(L);a[i*3+1]=cb*Math.sin(L);a[i*3+2]=Math.sin(B)}f.rings.push(a)}));}
 function prep(fc){fc.features.forEach(f=>{if(f.geometry){cap(f);pack(f);delete f.geometry.coordinates;f.geometry=1}});return fc}
-TZHIT.features.forEach(f=>fixGeom(f.geometry));['tz','tzL','tzM','cb','cbL','cbM','pb','pbM','gaps'].forEach(n=>prep(D[n]));
+TZHIT.features.forEach(f=>fixGeom(f.geometry));['tz','tzL','tzM','cb','cbL','cbM','gaps'].forEach(n=>prep(D[n]));
 const csize=c=>{const b=c[5];let w=b[2]-b[0];if(w>300)w=160;return Math.max(w,b[3]-b[1])};
 const cByIso={};D.countries.forEach(c=>{c.size=csize(c);c.np=0;cByIso[c[4]]=c});
 D.prov.forEach(p=>{const c=cByIso[p[4]];if(c)c.np++;p.v=vec(p[1],p[2])});D.countries.forEach(c=>c.v=vec(c[1],c[2]));
@@ -58,6 +58,7 @@ const hours=o=>hhmm(S+o)+'–'+hhmm(E+o);
 const band=o=>{let s=(((S+o)%24)+24)%24;if(s<5)s+=24;for(let i=0;i<6;i++)if(s>=BANDS[i].lo&&s<BANDS[i].hi)return i;return 5};
 const vsUK=o=>{if(!o)return'Same as the UK';const a=Math.abs(o),h=Math.floor(a),m=Math.round((a-h)*60);
   return(h?h+(h===1?' hour':' hours'):'')+(h&&m?' ':'')+(m?m+' min':'')+(o>0?' ahead of':' behind')+' the UK'};
+const utc=o=>{const u=o+(season?1:0),a=Math.abs(u),h=Math.floor(a),m=Math.round((a-h)*60);return'UTC'+(u?(u>0?'+':'−')+h+(m?':'+String(m).padStart(2,'0'):''):'')};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 // sizing
@@ -108,9 +109,8 @@ function draw(){
   fillBands(D.gaps);fillBands(TZ);
   // street map tiles fade in as you zoom towards a country, tinted by the time-zone colours
   const tileA=BASEMAPS[basemap]?clamp((k-TILE_K)/2.5,0,1):0;
-  if(tileA>0&&drawTiles()){ctx.globalAlpha=tileA*0.8;ctx.drawImage(tcv,0,0,W,H);ctx.globalAlpha=1}
-  attrib.textContent=tileA>0?BASEMAPS[basemap].attr:'';attrib.classList.toggle('show',tileA>0);
-  if(k>2.8)strokeFC(k>8?D.pb:D.pbM,tileA>0.5?pal.pbTile:pal.pb,tileA>0.5?1.1:0.7);
+  const shown=tileA>0&&drawTiles();if(shown){ctx.globalAlpha=tileA*0.8;ctx.drawImage(tcv,0,0,W,H);ctx.globalAlpha=1}
+  if(shown)attrib.textContent=BASEMAPS[basemap].attr;attrib.classList.toggle('show',shown);
   strokeFC(CB,tileA>0.5?pal.borderTile:pal.border,k>4?1.4:0.9);
   // sphere shading for depth
   ctx.save();ctx.beginPath();path({type:'Sphere'});ctx.clip();
@@ -134,14 +134,19 @@ function drawLabels(){
   overlays.forEach(L=>{if(!L.on)return;L.fc.features.forEach(f=>{const g=f.geometry;if(!g)return;
     (g.type==='Point'?[g.coordinates]:g.type==='MultiPoint'?g.coordinates:[]).forEach(p=>cand.push({ov:L,f,lon:p[0],lat:p[1],name:(f.properties&&f.properties.name)||'',pri:4e9,a:1}))})});
   for(const f of favs)cand.push({fav:f,v:f.v,lon:f.lon,lat:f.lat,name:f.name,pri:5e9,a:1});
-  for(const c of D.countries){const px=c.size*ppd;let a=1;if(c.np>1){if(px>340)continue;a=clamp((340-px)/70,0,1)}
-    cand.push({lon:c[1],lat:c[2],v:c.v,name:c[0],tz:c[3],star:c[6],pri:2e9+px,kind:'c',ref:c,a});}
-  for(const p of D.prov){const px=p[5]*ppd;if(px<38)continue;const c=cByIso[p[4]];let a=clamp((px-38)/36,0,1);
-    if(c&&c.np>1){const cpx=c.size*ppd;if(cpx<270)continue;a*=clamp((cpx-270)/70,0,1)}
-    if(a<0.05)continue;if(p.v[0]*VC[0]+p.v[1]*VC[1]+p.v[2]*VC[2]<0.07)continue;cand.push({lon:p[1],lat:p[2],v:p.v,name:p[0],tz:p[3],pri:px,kind:'p',ref:p,a});}
+  // One label per country, then extra labels only where they add something: a region on a different
+  // clock, a separate island, or a repeat of the country's hours once the last one is far off screen.
+  const gap=clamp(Math.min(W,H)*0.45,260,480);
+  for(const c of D.countries){const px=c.size*ppd;
+    cand.push({lon:c[1],lat:c[2],v:c.v,name:c[0],tz:c[3],star:c[6]&&px<340,pri:2e9+px,kind:'c',ref:c,a:1,key:c[4]+'|'+off(c[3]),gap});}
+  for(const p of D.prov){const px=p[5]*ppd;if(px<38)continue;if(p.v[0]*VC[0]+p.v[1]*VC[1]+p.v[2]*VC[2]<0.07)continue;
+    const c=cByIso[p[4]],o=off(p[3]),same=c&&off(c[3])===o,a=clamp((px-38)/36,0,1);if(a<0.05)continue;
+    if(!same)cand.push({lon:p[1],lat:p[2],v:p.v,name:p[0],tz:p[3],pri:1e9+px,kind:'p',ref:p,a,key:p[4]+'|'+o,gap});
+    else if(!p[7])cand.push({lon:p[1],lat:p[2],v:p.v,name:p[0],tz:p[3],pri:5e8+px,kind:'p',ref:p,a,key:p[4]+'|'+o+'|isle',gap:gap*0.55});
+    else cand.push({lon:p[1],lat:p[2],v:p.v,name:c[0],tz:p[3],pri:px,kind:'c',rep:true,ref:p,a,key:p[4]+'|'+o,gap});}
   cand.sort((x,y)=>y.pri-x.pri);
   ctx.textAlign='center';ctx.textBaseline='alphabetic';ctx.lineJoin='round';
-  let n=0;
+  let n=0;const seen=[];
   for(const L of cand){
     const v=L.v||vec(L.lon,L.lat);const X=M[0]*v[0]+M[1]*v[1]+M[2]*v[2];if(X<0.07)continue;
     const x=cx+SC*(M[3]*v[0]+M[4]*v[1]),y=cy-SC*(M[6]*v[0]+M[7]*v[1]+M[8]*v[2]);
@@ -153,7 +158,9 @@ function drawLabels(){
     if(L.ov){nf=F.ov}else{const o=off(L.tz);nf=L.kind==='c'?F.cn:F.pn;hr=hours(o)+(L.star?'*':'');bi=band(o)}
     const nw=tw(L.name,nf),hw=hr?tw(hr,F.hr)+14:0,w=Math.max(nw,hw)+8,h=hr?32:18;
     const r={x0:x-w/2,y0:y-(hr?23:22),x1:x+w/2,y1:y-(hr?23:22)+h};
+    if(L.key&&seen.some(s=>s.key===L.key&&Math.hypot(s.x-x,s.y-y)<L.gap))continue;
     const P=6;if(placed.some(q=>r.x0-P<q.x1&&r.x1+P>q.x0&&r.y0-P/2<q.y1&&r.y1+P/2>q.y0))continue;
+    if(L.key)seen.push({key:L.key,x,y});
     if(L.a>0.3){r.L=L;placed.push(r)}
     ctx.globalAlpha=L.a;
     if(L.ov){ctx.beginPath();ctx.arc(x,y,4.5,0,7);ctx.fillStyle=L.ov.color;ctx.fill();ctx.lineWidth=2;ctx.strokeStyle=pal.halo;ctx.stroke();
@@ -379,7 +386,7 @@ function clickAt(x,y){
 function showInfo(title,where,tz,ll){activeFav=null;const z=D.zones[tz]||[0,0],o=z[season],b=band(o),other=z[1-season];
   document.getElementById('infob').innerHTML=`<h2>${esc(title)}</h2><p class="where">${esc(where&&where!==title?where:' ')}</p>
   <div class="big"><i style="background:${pal['b'+b]}"></i>${hours(o)}</div><p class="bandname">${BANDS[b].name}, ${season?'summer':'winter'}</p>
-  <dl><dt>${season?'Winter':'Summer'}</dt><dd>${hours(other)}</dd><dt>Difference</dt><dd>${vsUK(o)}</dd><dt>Clock follows</dt><dd>${esc(tz)}</dd></dl>${favButton(title,ll,tz,where)}`;
+  <dl><dt>${season?'Winter':'Summer'}</dt><dd>${hours(other)}</dd><dt>Difference</dt><dd>${vsUK(o)}</dd><dt>Time zone</dt><dd>${utc(o)}</dd></dl>${favButton(title,ll,tz,where)}`;
   wireFav(title,ll,tz,where);document.getElementById('info').classList.add('show');}
 function hideInfo(){document.getElementById('info').classList.remove('show');if(selected||activeFav){selected=null;activeFav=null;draw()}}
 document.getElementById('infox').onclick=hideInfo;

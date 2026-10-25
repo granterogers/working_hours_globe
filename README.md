@@ -9,7 +9,7 @@ Built for planning where to live and work as a remote worker on UK hours.
 ## Features
 
 - Spin, zoom and fly around a smooth, hand-rendered globe, with eased zoom towards the cursor and momentum when you flick it.
-- Local working hours for about 240 countries and 4,600 states, provinces and regions, with labels that change as you zoom.
+- Local working hours for every country, with smart labelling as you zoom: one label per country, plus extra labels only for regions on a different clock, separate islands, or to repeat a large country's hours once the previous label is far away. No clutter from dozens of identical labels.
 - Colours follow real time-zone boundaries, from "Early bird" through "Classic day" to "Overnight".
 - Set any shift in UK time, and switch between winter (UK on GMT) and summer (UK on BST).
 - Click any place for its hours in both seasons and its offset from the UK.
@@ -64,7 +64,7 @@ The script downloads the source data into `scripts/cache/` (ignored by git), com
 index.html              Page markup
 assets/style.css        Styles and themes
 assets/app.js           Globe rendering, interaction, search and layers
-data/globe-data.json    Prebuilt map data (time zones, borders, labels)
+data/globe-data.json    Prebuilt map data (time zones, country borders, label points)
 data/LICENSE-DATA.md    Data sources and licence
 scripts/build_data.py   Rebuilds globe-data.json from the source data
 scripts/requirements.txt
