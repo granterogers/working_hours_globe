@@ -80,7 +80,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .strip i{width:10px;height:10px;border-radius:50%;flex:none}
 
 /* details card */
-.info{position:absolute;right:72px;bottom:66px;width:300px;max-width:calc(100% - 104px);border-radius:18px;padding:16px 18px;transform:translateY(12px);opacity:0;pointer-events:none;transition:opacity .25s,transform .25s}
+.info{position:absolute;right:72px;bottom:66px;width:340px;max-height:calc(100% - 150px);overflow:auto;max-width:calc(100% - 104px);border-radius:18px;padding:16px 18px;transform:translateY(12px);opacity:0;pointer-events:none;transition:opacity .25s,transform .25s}
 .info.show{opacity:1;transform:none;pointer-events:auto}
 .info h2{font-family:var(--serif);font-weight:600;font-size:1.25rem;margin:0;line-height:1.15;padding-right:22px}
 .info .where{color:var(--ink2);font-size:.86rem;margin:2px 0 12px}
@@ -110,3 +110,13 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 .loading{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-family:var(--serif);font-size:1.1rem;color:var(--ink2)}
 .loading.fail{font-family:var(--sans);font-size:.95rem;max-width:420px;text-align:center;line-height:1.5}
+.info .ldot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:0}
+.info .desc{font-size:.88rem;line-height:1.5;margin:10px 0 12px;padding:10px 12px;border-radius:12px;background:var(--field);overflow-wrap:anywhere}
+.info .desc img{max-width:100%;height:auto;border-radius:8px}
+.info .desc table{border-collapse:collapse;font-size:.84rem}
+.info .desc td,.info .desc th{padding:3px 8px 3px 0;vertical-align:top;text-align:left}
+.info .desc a,.info .meta a{color:var(--accent)}
+.info .meta dd{overflow-wrap:anywhere}
+.info .nometa{font-size:.84rem;color:var(--ink2);margin:8px 0 0}
+.info .desc>:first-child{margin-top:0}
+.info .desc>:last-child{margin-bottom:0}

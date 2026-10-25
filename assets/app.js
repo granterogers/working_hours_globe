@@ -117,13 +117,18 @@ function draw(){
 
 function drawOverlays(){overlays.forEach(L=>{if(!L.on)return;L.fc.features.forEach(f=>{const g=f.geometry;if(!g||/Point/.test(g.type))return;
   ctx.beginPath();path(f);if(/Polygon/.test(g.type)){ctx.globalAlpha=.2;ctx.fillStyle=L.color;ctx.fill();ctx.globalAlpha=1}
-  ctx.strokeStyle=pal.halo;ctx.lineWidth=4;ctx.stroke();ctx.strokeStyle=L.color;ctx.lineWidth=2.2;ctx.stroke();})});}
+  ctx.strokeStyle=pal.halo;ctx.lineWidth=4;ctx.stroke();ctx.strokeStyle=L.color;ctx.lineWidth=2.2;ctx.stroke();})});
+  if(selected&&selected.L.on){const f=selected.f,g=f.geometry;
+    if(/Point/.test(g.type)){(g.type==='Point'?[g.coordinates]:g.coordinates).forEach(p=>{const s=scr(p);if(!s)return;
+      ctx.beginPath();ctx.arc(s[0],s[1],10,0,7);ctx.strokeStyle=pal.halo;ctx.lineWidth=5;ctx.stroke();ctx.strokeStyle=selected.L.color;ctx.lineWidth=2.5;ctx.stroke();});}
+    else{ctx.beginPath();path(f);if(/Polygon/.test(g.type)){ctx.globalAlpha=.35;ctx.fillStyle=selected.L.color;ctx.fill();ctx.globalAlpha=1}
+      ctx.strokeStyle=pal.halo;ctx.lineWidth=7;ctx.stroke();ctx.strokeStyle=selected.L.color;ctx.lineWidth=3.5;ctx.stroke();}}}
 
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 function drawLabels(){
   placed=[];const ctr=viewCap[0],ppd=base*k/DEG,cand=[];
   overlays.forEach(L=>{if(!L.on)return;L.fc.features.forEach(f=>{const g=f.geometry;if(!g)return;
-    (g.type==='Point'?[g.coordinates]:g.type==='MultiPoint'?g.coordinates:[]).forEach(p=>cand.push({ov:L,lon:p[0],lat:p[1],name:f.properties.name||'',pri:4e9,a:1}))})});
+    (g.type==='Point'?[g.coordinates]:g.type==='MultiPoint'?g.coordinates:[]).forEach(p=>cand.push({ov:L,f,lon:p[0],lat:p[1],name:(f.properties&&f.properties.name)||'',pri:4e9,a:1}))})});
   for(const c of D.countries){const px=c.size*ppd;let a=1;if(c.np>1){if(px>340)continue;a=clamp((340-px)/70,0,1)}
     cand.push({lon:c[1],lat:c[2],v:c.v,name:c[0],tz:c[3],star:c[6],pri:2e9+px,kind:'c',ref:c,a});}
   for(const p of D.prov){const px=p[5]*ppd;if(px<38)continue;const c=cByIso[p[4]];let a=clamp((px-38)/36,0,1);
@@ -201,8 +206,59 @@ function flyTo(lon,lat,sizeDeg,dur){
   fly={t0:performance.now(),dur:reduce?1:dur||1500,ir:d3.interpolate(r0,r1),ik:t=>ik0+(ik1-ik0)*t-Math.sin(Math.PI*t)*lift};vel=[0,0];kick();
 }
 
+// layer features: hit-testing and metadata
+let selected=null;
+function scr(p){const v=vec(p[0],p[1]);if(M[0]*v[0]+M[1]*v[1]+M[2]*v[2]<0)return null;return[cx+SC*(M[3]*v[0]+M[4]*v[1]),cy-SC*(M[6]*v[0]+M[7]*v[1]+M[8]*v[2])]}
+function segDist(x,y,a,b){const dx=b[0]-a[0],dy=b[1]-a[1],l=dx*dx+dy*dy;let t=l?((x-a[0])*dx+(y-a[1])*dy)/l:0;t=clamp(t,0,1);return Math.hypot(x-a[0]-t*dx,y-a[1]-t*dy)}
+function linesOf(g){return g.type==='LineString'?[g.coordinates]:g.type==='MultiLineString'||g.type==='Polygon'?g.coordinates:g.type==='MultiPolygon'?g.coordinates.flat():[]}
+function overlayHit(x,y){
+  const lab=placed.find(q=>q.L.ov&&x>=q.x0&&x<=q.x1&&y>=q.y0&&y<=q.y1);if(lab)return{L:lab.L.ov,f:lab.L.f};
+  const ll=proj.invert([x,y]),onGlobe=ll&&d3.geoDistance(ll,viewCap[0])<1.56;
+  for(let li=overlays.length-1;li>=0;li--){const L=overlays[li];if(!L.on)continue;let best=null,bd=12;
+    for(const f of L.fc.features){const g=f.geometry;if(!g||!/Point/.test(g.type))continue;
+      for(const p of(g.type==='Point'?[g.coordinates]:g.coordinates)){const s=scr(p);if(s){const d=Math.hypot(s[0]-x,s[1]-y);if(d<bd){bd=d;best=f}}}}
+    if(best)return{L,f:best};bd=7;
+    for(const f of L.fc.features){const g=f.geometry;if(!g||/Point/.test(g.type))continue;
+      for(const line of linesOf(g)){let prev=null;for(const p of line){const s=scr(p);if(s&&prev){const d=segDist(x,y,prev,s);if(d<bd){bd=d;best=f}}prev=s}}}
+    if(best)return{L,f:best};
+    if(onGlobe)for(let i=L.fc.features.length-1;i>=0;i--){const f=L.fc.features[i];if(f.geometry&&/Polygon/.test(f.geometry.type)&&d3.geoContains(f,ll))return{L,f}}}
+  return null;}
+function cleanHTML(html){
+  if(!/<[a-z][\s\S]*>/i.test(html))return esc(html).replace(/\n/g,'<br>');
+  const doc=new DOMParser().parseFromString('<div>'+html+'</div>','text/html');
+  doc.querySelectorAll('script,style,iframe,object,embed,form,input,button,link,meta,base').forEach(e=>e.remove());
+  doc.querySelectorAll('*').forEach(el=>{[...el.attributes].forEach(a=>{const n=a.name.toLowerCase(),v=a.value.trim().toLowerCase();
+    if(n.startsWith('on')||n==='style'||n==='class'||n==='id'||((n==='href'||n==='src')&&/^(javascript|data|vbscript):/.test(v)&&!(n==='src'&&v.startsWith('data:image/'))))el.removeAttribute(a.name)});
+    if(el.tagName==='A'){el.setAttribute('target','_blank');el.setAttribute('rel','noopener noreferrer')}});
+  return doc.body.firstChild.innerHTML;}
+const isURL=v=>/^https?:\/\/\S+$/i.test(v);
+function showFeature(L,f,ll){
+  const p=f.properties||{},g=f.geometry,name=p.name||p.Name||p.title||'Untitled feature';
+  const at=g.type==='Point'?g.coordinates:(ll&&d3.geoDistance(ll,viewCap[0])<1.56?ll:d3.geoCentroid(f));
+  const zf=TZHIT.features.find(z=>d3.geoContains(z,at));let tzid=zf&&zf.properties.z;
+  if(!tzid){let bd=0.08;for(const q of D.prov){const d=d3.geoDistance(at,[q[1],q[2]]);if(d<bd){bd=d;tzid=q[3]}}}
+  let hrs='';if(tzid){const z=D.zones[tzid],o=z[season],b=band(o);
+    hrs=`<div class="big"><i style="background:${pal['b'+b]}"></i>${hours(o)}</div><p class="bandname">Your hours here, ${season?'summer':'winter'}. ${season?'Winter':'Summer'}: ${hours(z[1-season])}</p>`;}
+  const skip=new Set(['name','Name','title','description','Description','styleUrl','styleHash','styleMapHash','stroke','stroke-width','stroke-opacity','fill','fill-opacity','marker-color','marker-size','marker-symbol','icon','visibility','tessellate','extrude','altitudeMode','drawOrder']);
+  const desc=p.description||p.Description;
+  const rows=Object.entries(p).filter(([k,v])=>!skip.has(k)&&v!=null&&v!==''&&typeof v!=='object');
+  const kind=/Point/.test(g.type)?'Point':/Line/.test(g.type)?'Line':'Area';
+  const coord=g.type==='Point'?`${g.coordinates[1].toFixed(5)}, ${g.coordinates[0].toFixed(5)}`:'';
+  document.getElementById('infob').innerHTML=`<h2>${esc(name)}</h2>
+    <p class="where"><i class="ldot" style="background:${L.color}"></i>${esc(L.name)}, ${kind.toLowerCase()}</p>${hrs}
+    ${desc?`<div class="desc">${cleanHTML(String(desc))}</div>`:''}
+    ${rows.length||coord?`<dl class="meta">${rows.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${isURL(String(v))?`<a href="${esc(v)}" target="_blank" rel="noopener noreferrer">${esc(v)}</a>`:esc(v)}</dd>`).join('')}${coord?`<dt>Coordinates</dt><dd>${coord}</dd>`:''}</dl>`:''}
+    ${!desc&&!rows.length?'<p class="nometa">This feature has no metadata in the file.</p>':''}`;
+  document.getElementById('info').classList.add('show');}
+let hoverPending=false;
+cv.addEventListener('pointermove',e=>{if(dragging||!overlays.length||hoverPending)return;hoverPending=true;
+  requestAnimationFrame(()=>{hoverPending=false;const r=cv.getBoundingClientRect();cv.style.cursor=overlayHit(e.clientX-r.left,e.clientY-r.top)?'pointer':''});});
+
 // details
 function clickAt(x,y){
+  const oh=overlays.length?overlayHit(x,y):null;
+  if(oh){selected=oh;showFeature(oh.L,oh.f,proj.invert([x,y]));draw();return}
+  if(selected){selected=null;draw()}
   const hit=placed.find(q=>x>=q.x0&&x<=q.x1&&y>=q.y0&&y<=q.y1&&!q.L.ov);let title,tz,where='';
   if(hit){title=hit.L.name;tz=hit.L.tz;where=hit.L.kind==='p'?(hit.L.ref[6]||''):'';}
   else{const ll=proj.invert([x,y]);if(!ll||d3.geoDistance(ll,viewCap[0])>1.56){hideInfo();return}
@@ -217,7 +273,7 @@ function showInfo(title,where,tz){const z=D.zones[tz]||[0,0],o=z[season],b=band(
   <div class="big"><i style="background:${pal['b'+b]}"></i>${hours(o)}</div><p class="bandname">${BANDS[b].name}, ${season?'summer':'winter'}</p>
   <dl><dt>${season?'Winter':'Summer'}</dt><dd>${hours(other)}</dd><dt>Difference</dt><dd>${vsUK(o)}</dd><dt>Clock follows</dt><dd>${esc(tz)}</dd></dl>`;
   document.getElementById('info').classList.add('show');}
-function hideInfo(){document.getElementById('info').classList.remove('show')}
+function hideInfo(){document.getElementById('info').classList.remove('show');if(selected){selected=null;draw()}}
 document.getElementById('infox').onclick=hideInfo;
 
 // panel & controls
@@ -261,24 +317,32 @@ document.getElementById('file').onchange=async e=>{for(const f of e.target.files
 async function loadFile(f){let fc;const n=f.name.toLowerCase();
   if(n.endsWith('.kmz')){const zip=await JSZip.loadAsync(f);const kf=Object.keys(zip.files).find(x=>x.toLowerCase().endsWith('.kml'));if(!kf)throw new Error('the KMZ has no KML inside');fc=kml2geo(await zip.file(kf).async('string'))}
   else if(n.endsWith('.kml'))fc=kml2geo(await f.text());
-  else{fc=JSON.parse(await f.text());if(fc.type==='Feature')fc={type:'FeatureCollection',features:[fc]}}
+  else{fc=JSON.parse(await f.text());if(fc.type==='Feature')fc={type:'FeatureCollection',features:[fc]};fc.features.forEach(x=>{if(!x.properties)x.properties={}})}
   if(!fc.features||!fc.features.length)throw new Error('it has no placemarks or features');
   fc.features.forEach(x=>fixGeom(x.geometry));const L={name:f.name,fc,on:true,color:COLORS[overlays.length%COLORS.length]};overlays.push(L);renderLayers();
   const c=d3.geoCentroid(fc),b=d3.geoBounds(fc);flyTo(c[0],c[1],Math.max(Math.abs(b[1][0]-b[0][0]),Math.abs(b[1][1]-b[0][1]),1));}
 function kml2geo(txt){const doc=new DOMParser().parseFromString(txt,'text/xml'),out=[];
   const T=(el,t)=>Array.from(el.getElementsByTagNameNS('*',t));
   const C=el=>(el?el.textContent:'').trim().split(/\s+/).filter(Boolean).map(s=>s.split(',').slice(0,2).map(Number)).filter(p=>isFinite(p[0])&&isFinite(p[1]));
-  T(doc,'Placemark').forEach(pm=>{const nm=(T(pm,'name')[0]||{}).textContent||'';
-    T(pm,'Point').forEach(p=>{const c=C(T(p,'coordinates')[0]);if(c.length)out.push({type:'Feature',properties:{name:nm},geometry:{type:'Point',coordinates:c[0]}})});
-    T(pm,'LineString').forEach(l=>{const c=C(T(l,'coordinates')[0]);if(c.length>1)out.push({type:'Feature',properties:{name:nm},geometry:{type:'LineString',coordinates:c}})});
+  const kids=(el,t)=>Array.from(el.children).filter(c=>c.localName===t);
+  T(doc,'Placemark').forEach(pm=>{
+    const props={name:((kids(pm,'name')[0]||{}).textContent||'').trim()};
+    const d=kids(pm,'description')[0];if(d&&d.textContent.trim())props.description=d.textContent.trim();
+    ['address','phoneNumber','Snippet'].forEach(t=>{const e=kids(pm,t)[0];if(e&&e.textContent.trim())props[t]=e.textContent.trim()});
+    const when=T(pm,'when')[0]||T(pm,'begin')[0];if(when)props.when=when.textContent.trim();
+    T(pm,'Data').forEach(dd=>{const key=((T(dd,'displayName')[0]||{}).textContent||dd.getAttribute('name')||'').trim();const v=T(dd,'value')[0];if(key&&v)props[key]=v.textContent.trim()});
+    T(pm,'SimpleData').forEach(sd=>{const key=sd.getAttribute('name');if(key)props[key]=sd.textContent.trim()});
+    T(pm,'Point').forEach(p=>{const c=C(T(p,'coordinates')[0]);if(c.length)out.push({type:'Feature',properties:props,geometry:{type:'Point',coordinates:c[0]}})});
+    T(pm,'LineString').forEach(l=>{const c=C(T(l,'coordinates')[0]);if(c.length>1)out.push({type:'Feature',properties:props,geometry:{type:'LineString',coordinates:c}})});
+    T(pm,'LinearRing').filter(r=>!r.closest||!r.closest('Polygon')).forEach(l=>{const c=C(T(l,'coordinates')[0]);if(c.length>1)out.push({type:'Feature',properties:props,geometry:{type:'LineString',coordinates:c}})});
     T(pm,'Polygon').forEach(p=>{const rings=[],ob=T(p,'outerBoundaryIs')[0];if(ob)rings.push(C(T(ob,'coordinates')[0]));
       T(p,'innerBoundaryIs').forEach(ib=>rings.push(C(T(ib,'coordinates')[0])));
-      if(rings[0]&&rings[0].length>3)out.push({type:'Feature',properties:{name:nm},geometry:{type:'Polygon',coordinates:rings}})});});
+      if(rings[0]&&rings[0].length>3)out.push({type:'Feature',properties:props,geometry:{type:'Polygon',coordinates:rings}})});});
   return{type:'FeatureCollection',features:out}}
 function renderLayers(){const ul=document.getElementById('layers');ul.innerHTML='';
   overlays.forEach((L,i)=>{const li=document.createElement('li');
     li.innerHTML=`<input type="checkbox" ${L.on?'checked':''} aria-label="Show ${esc(L.name)}"><i style="width:10px;height:10px;border-radius:50%;background:${L.color};flex:none"></i><span title="${esc(L.name)}">${esc(L.name)}</span><button class="x" aria-label="Remove ${esc(L.name)}">×</button>`;
-    li.querySelector('input').onchange=e=>{L.on=e.target.checked;draw()};li.querySelector('.x').onclick=()=>{overlays.splice(i,1);renderLayers();draw()};ul.appendChild(li)});}
+    li.querySelector('input').onchange=e=>{L.on=e.target.checked;draw()};li.querySelector('.x').onclick=()=>{if(selected&&selected.L===L){selected=null;hideInfo()}overlays.splice(i,1);renderLayers();draw()};ul.appendChild(li)});}
 
 // start
 window.addEventListener('resize',resize);setSeason(season);theme();resize();

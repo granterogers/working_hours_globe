@@ -14,7 +14,7 @@ Built for planning where to live and work as a remote worker on UK hours.
 - Set any shift in UK time, and switch between winter (UK on GMT) and summer (UK on BST).
 - Click any place for its hours in both seasons and its offset from the UK.
 - Search for any country, state or island (press `/`).
-- Add your own KML, KMZ or GeoJSON files as layers on top.
+- Add your own KML, KMZ or GeoJSON files as layers on top, then click any point, line or area to see its name, description, extended data and your working hours at that spot.
 - Dark and light themes, full-screen mode, keyboard controls (arrow keys to spin, `+` and `-` to zoom), and a layout that works on mobile.
 
 ## Run it locally
