@@ -14,7 +14,7 @@ Built for planning where to live and work as a remote worker on UK hours.
 - Set any shift in UK time, and switch between winter (UK on GMT) and summer (UK on BST).
 - Click any place for its hours in both seasons and its offset from the UK.
 - Search for any country, state or island (press `/`).
-- Street-level detail when you zoom in towards a country: an English-labelled street map (Esri World Street Map) fades in, tinted by the time-zone colours, and the rough outlines fade away.
+- Street-level detail when you zoom in towards a country: OpenStreetMap fades in, tinted by the time-zone colours, and the rough outlines fade away.
 - Flights from any place's details card: pick where you're flying from (remembered), choose one of the nearest airports and a date, then open a one-way search on Google Flights or Skyscanner's cheapest-days month calendar with everything filled in.
 - Favourites: press **Add a favourite**, click the map to drop a pin, and it's named after the nearest town or feature with its coordinates. Drag the pin to fine-tune it, add a note and save. A heart marks the spot, saved favourites can be dragged too, and they're kept in your browser between visits.
 - Add your own KML, KMZ or GeoJSON files as layers on top (the view stays where you are, and layers are kept between visits), then click any point, line or area to see its name, description, extended data and your working hours at that spot.
@@ -80,7 +80,7 @@ Hours are worked out per IANA time zone for two reference dates: 15 December 202
 
 ## Map tiles
 
-Street maps come from [Esri World Street Map](https://www.arcgis.com/home/item.html?id=3b93337983e9436f8db950e38a8629af), chosen because it labels places in English worldwide (OpenStreetMap's own tiles always use local-language names), and load only once you zoom in. Place names for new favourites come from OpenStreetMap's [Nominatim](https://nominatim.org/) service, one lookup per pin drop. Both are free for light personal use with attribution, which the page shows while tiles are visible. For a high-traffic or commercial deployment, use an ArcGIS account or another commercial tile provider, and follow the [Nominatim usage policy](https://operations.osmfoundation.org/policies/nominatim/).
+Street maps come from [OpenStreetMap](https://www.openstreetmap.org/copyright) and load only once you zoom in. Their labels use each place's local language. Place names for new favourites come from OpenStreetMap's [Nominatim](https://nominatim.org/) service, one lookup per pin drop. Both are free for light personal use with attribution, which the page shows while tiles are visible. For a high-traffic deployment, switch to a commercial provider, as the [tile](https://operations.osmfoundation.org/policies/tiles/) and [Nominatim](https://operations.osmfoundation.org/policies/nominatim/) usage policies ask.
 
 Flight searches open Google Flights or Skyscanner in a new tab. Neither offers a free public API for embedding live prices, so the page prefills their search pages instead.
 

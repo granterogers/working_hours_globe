@@ -228,7 +228,7 @@ function flyTo(lon,lat,sizeDeg,dur){
 // street map tiles (OpenStreetMap and CARTO), reprojected onto the globe
 const TILE_K=5.5;
 const BASEMAPS={
-  osm:{name:'Street map',max:18,attr:'Tiles © Esri, sources: Esri, HERE, Garmin, USGS, OpenStreetMap contributors and others',url:(z,x,y)=>`https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${z}/${y}/${x}`},
+  osm:{name:'OpenStreetMap',max:19,attr:'Map data © OpenStreetMap contributors',url:(z,x,y)=>`https://tile.openstreetmap.org/${z}/${x}/${y}.png`},
   light:{name:'Light',max:20,attr:'© OpenStreetMap contributors © CARTO',url:(z,x,y)=>`https://${'abcd'[(x+y)&3]}.basemaps.cartocdn.com/light_all/${z}/${x}/${y}${dpr>1?'@2x':''}.png`},
   dark:{name:'Dark',max:20,attr:'© OpenStreetMap contributors © CARTO',url:(z,x,y)=>`https://${'abcd'[(x+y)&3]}.basemaps.cartocdn.com/dark_all/${z}/${x}/${y}${dpr>1?'@2x':''}.png`},
   off:null};
