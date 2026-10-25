@@ -228,7 +228,7 @@ function flyTo(lon,lat,sizeDeg,dur){
 // street map tiles (OpenStreetMap and CARTO), reprojected onto the globe
 const TILE_K=5.5;
 const BASEMAPS={
-  osm:{name:'OpenStreetMap',max:19,attr:'Map data © OpenStreetMap contributors',url:(z,x,y)=>`https://tile.openstreetmap.org/${z}/${x}/${y}.png`},
+  osm:{name:'Street map',max:18,attr:'Tiles © Esri, sources: Esri, HERE, Garmin, USGS, OpenStreetMap contributors and others',url:(z,x,y)=>`https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${z}/${y}/${x}`},
   light:{name:'Light',max:20,attr:'© OpenStreetMap contributors © CARTO',url:(z,x,y)=>`https://${'abcd'[(x+y)&3]}.basemaps.cartocdn.com/light_all/${z}/${x}/${y}${dpr>1?'@2x':''}.png`},
   dark:{name:'Dark',max:20,attr:'© OpenStreetMap contributors © CARTO',url:(z,x,y)=>`https://${'abcd'[(x+y)&3]}.basemaps.cartocdn.com/dark_all/${z}/${x}/${y}${dpr>1?'@2x':''}.png`},
   off:null};
@@ -296,7 +296,7 @@ function showFav(f,focus){activeFav=f;selected=null;draft=null;
   document.getElementById('infob').innerHTML=`<input class="ftitle" id="fname" value="${esc(f.name)}" aria-label="Favourite name" maxlength="80">
     <p class="where"><span class="fh" aria-hidden="true">♥</span> ${esc(f.where?f.where+', ':'')}saved ${ds}</p><p class="coords">${coordStr(f)}</p>${hoursBlock(f.tz)}
     <label class="nl" for="fnote">Note</label><textarea id="fnote" rows="4" placeholder="Where to stay, who to contact, what to check…">${esc(f.note||'')}</textarea>
-    <p class="hint2">Drag the heart to move it.</p><div class="frow"><span class="saved" id="fsaved"></span><button class="ghost" id="fdel">Remove favourite</button></div>`;
+    ${flightsBlock()}<p class="hint2">Drag the heart to move it.</p><div class="frow"><span class="saved" id="fsaved"></span><button class="ghost" id="fdel">Remove favourite</button></div>`;wireFlights([f.lon,f.lat]);
   const nm=document.getElementById('fname'),nt=document.getElementById('fnote'),sv=document.getElementById('fsaved');
   const commit=()=>{clearTimeout(favTimer);favTimer=setTimeout(()=>{f.name=nm.value.trim()||'Saved place';f.note=nt.value;saveFavs();renderFavs();draw();sv.textContent='Saved';setTimeout(()=>sv.textContent='',1500)},400)};
   nm.oninput=commit;nt.oninput=commit;
@@ -310,6 +310,50 @@ function renderFavs(){const ul=document.getElementById('favs');if(!ul)return;
     b.onclick=()=>{flyTo(f.lon,f.lat,2);showFav(f)};li.appendChild(b);ul.appendChild(li)});}
 
 
+
+// flights: nearest airports to a place, then Google Flights or Skyscanner's month price calendar, one way
+let airports=null,airportsP=null;
+const METRO={LON:'London (all airports)',NYC:'New York (all airports)',PAR:'Paris (all airports)',MIL:'Milan (all airports)',ROM:'Rome (all airports)',
+  TYO:'Tokyo (all airports)',SEL:'Seoul (all airports)',BJS:'Beijing (all airports)',SHA:'Shanghai (all airports)',MOW:'Moscow (all airports)',STO:'Stockholm (all airports)',
+  BUE:'Buenos Aires (all airports)',SAO:'São Paulo (all airports)',RIO:'Rio de Janeiro (all airports)',CHI:'Chicago (all airports)',WAS:'Washington (all airports)',
+  OSA:'Osaka (all airports)',BER:'Berlin',IST:'Istanbul (all airports)',BKK:'Bangkok (all airports)',JKT:'Jakarta (all airports)',TCI:'Tenerife (both airports)'};
+function loadAirports(){return airportsP||(airportsP=fetch('data/airports.json').then(r=>{if(!r.ok)throw new Error(r.status);return r.json()}).then(a=>{airports=a;return a}))}
+const apShort=n=>n.replace(/\b(International|Intl\.?|Regional|Airport|Aeropuerto|Aéroport|Flughafen)\b/gi,'').replace(/\s+/g,' ').replace(/[\s,–-]+$/,'').trim()||n;
+function nearAirports(ll,n=5){const out=[];for(const a of airports){const d=d3.geoDistance(ll,[a[5],a[4]])*6371;if(d<700)out.push([d,a])}
+  out.sort((x,y)=>(x[0]-(x[1][6]?40:0))-(y[0]-(y[1][6]?40:0)));return out.slice(0,n)}
+function apSearch(q){q=q.trim().toLowerCase();if(q.length<2)return[];const res=[];
+  for(const [c,name] of Object.entries(METRO))if(c.toLowerCase()===q||name.toLowerCase().startsWith(q))res.push([c,name,'',1]);
+  for(const a of airports){const code=a[0].toLowerCase(),s=(a[2]+' '+a[1]).toLowerCase();
+    const score=code===q?0:a[2].toLowerCase().startsWith(q)?1:s.includes(q)?2:9;if(score<9)res.push([a[0],a[1],a[2],score+(a[6]?0:0.5)])}
+  return res.sort((x,y)=>x[3]-y[3]).slice(0,8)}
+const fromGet=()=>{try{return localStorage.getItem('whg.from')||''}catch(e){return''}};
+const fromSet=v=>{try{localStorage.setItem('whg.from',v)}catch(e){}};
+function isoDay(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function flightsBlock(){return`<div class="fl"><button class="fltog" id="fltog" aria-expanded="false"><span aria-hidden="true">✈</span> Flights here<span class="flchev" aria-hidden="true">›</span></button><div class="flbody" id="flbody" hidden></div></div>`}
+function wireFlights(ll){const tog=document.getElementById('fltog'),body=document.getElementById('flbody');if(!tog||!ll)return;
+  tog.onclick=async()=>{const open=body.hidden;body.hidden=!open;tog.setAttribute('aria-expanded',String(open));if(!open||body.dataset.ready)return;
+    body.innerHTML='<p class="flnote">Loading airports…</p>';
+    try{await loadAirports()}catch(e){body.innerHTML='<p class="flnote">The airport list could not be loaded.</p>';return}
+    const near=nearAirports(ll);if(!near.length){body.innerHTML='<p class="flnote">No airport with scheduled flights within 700 km of here.</p>';return}
+    const t=new Date();t.setDate(t.getDate()+14);const min=isoDay(new Date());
+    body.innerHTML=`<label class="fll" for="flfrom">From</label>
+      <input id="flfrom" class="flin" list="fllist" placeholder="City or airport code, e.g. London or LGW" value="${esc(fromGet())}" autocomplete="off"><datalist id="fllist"></datalist>
+      <label class="fll" for="flto">To</label>
+      <select id="flto" class="flin">${near.map(([d,a])=>`<option value="${a[0]}">${a[0]}, ${esc(apShort(a[1]))} (${Math.round(d)} km)</option>`).join('')}</select>
+      <label class="fll" for="fldate">Date, one way</label><input id="fldate" class="flin" type="date" min="${min}" value="${isoDay(t)}">
+      <div class="flbtns"><button class="primary flb" id="flg">Google Flights</button><button class="flb2" id="flm">Cheapest days this month</button></div>
+      <p class="flnote" id="flmsg">Opens in a new tab with your route filled in.</p>`;
+    body.dataset.ready='1';
+    const from=document.getElementById('flfrom'),dl=document.getElementById('fllist'),msg=document.getElementById('flmsg');
+    from.oninput=()=>{dl.innerHTML=apSearch(from.value).map(r=>`<option value="${r[0]}">${esc(r[1])}${r[2]?', '+esc(r[2]):''}</option>`).join('')};
+    const code=()=>{const v=from.value.trim();const m=v.match(/^[A-Za-z]{3}\b/);let c=m?m[0].toUpperCase():'';
+      if(!(c in METRO)&&!airports.some(a=>a[0]===c)){const r=apSearch(v);c=r.length?r[0][0]:''}
+      if(!c){msg.textContent='Choose where you are flying from first.';from.focus();return''}from.value=c;fromSet(c);return c};
+    document.getElementById('flg').onclick=()=>{const o=code();if(!o)return;const d=document.getElementById('flto').value,dt=document.getElementById('fldate').value;
+      window.open('https://www.google.com/travel/flights?q='+encodeURIComponent(`Flights from ${o} to ${d} on ${dt} one way`)+'&hl=en-GB&curr=GBP','_blank','noopener')};
+    document.getElementById('flm').onclick=()=>{const o=code();if(!o)return;const d=document.getElementById('flto').value,dt=document.getElementById('fldate').value||isoDay(t);
+      const ym=dt.slice(2,4)+dt.slice(5,7);
+      window.open(`https://www.skyscanner.net/transport/flights/${o.toLowerCase()}/${d.toLowerCase()}/?adultsv2=1&cabinclass=economy&rtn=0&oym=${ym}&selectedoday=01&currency=GBP&locale=en-GB&market=UK`,'_blank','noopener')};};}
 
 // dropping a pin for a new favourite
 let placing=false,draft=null,pinDrag=null,geoTimer=0,geoSeq=0;
@@ -340,9 +384,9 @@ function showDraft(){const d=draft;activeFav=null;selected=null;
   infob.innerHTML=`<input class="ftitle" id="dname" value="${esc(d.name)}" placeholder="Finding the nearest place…" aria-label="Favourite name" maxlength="80">
     <p class="where" id="dwhere">${esc(d.where)}</p><p class="coords" id="dcoords">${coordStr(d)}</p><div id="dhrs">${hoursBlock(tzAt([d.lon,d.lat]))}</div>
     <label class="nl" for="dnote">Note</label><textarea id="dnote" rows="3" placeholder="Where to stay, who to contact, what to check…">${esc(d.note)}</textarea>
-    <p class="hint2">Drag the pin to fine-tune the spot, or click elsewhere to move it.</p>
+    ${flightsBlock()}<p class="hint2">Drag the pin to fine-tune the spot, or click elsewhere to move it.</p>
     <div class="frow"><button class="ghost" id="dcancel">Cancel</button><button class="primary" id="dsave"><span aria-hidden="true">♥</span> Save favourite</button></div>`;
-  document.getElementById('dname').oninput=e=>{d.name=e.target.value;d.edited=true};
+  wireFlights([d.lon,d.lat]);document.getElementById('dname').oninput=e=>{d.name=e.target.value;d.edited=true};
   document.getElementById('dnote').oninput=e=>{d.note=e.target.value};
   document.getElementById('dcancel').onclick=()=>{draft=null;hideInfo();draw()};
   document.getElementById('dsave').onclick=()=>{const f={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:(d.name||'').trim()||'Saved place',where:d.where,
@@ -408,8 +452,8 @@ function showFeature(L,f,ll){activeFav=null;draft=null;
     <p class="where"><i class="ldot" style="background:${L.color}"></i>${esc(L.name)}, ${kind.toLowerCase()}</p>${hrs}
     ${desc?`<div class="desc">${cleanHTML(String(desc))}</div>`:''}
     ${rows.length||coord?`<dl class="meta">${rows.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${isURL(String(v))?`<a href="${esc(v)}" target="_blank" rel="noopener noreferrer">${esc(v)}</a>`:esc(v)}</dd>`).join('')}${coord?`<dt>Coordinates</dt><dd>${coord}</dd>`:''}</dl>`:''}
-    ${!desc&&!rows.length?'<p class="nometa">This feature has no metadata in the file.</p>':''}`;
-  document.getElementById('info').classList.add('show');}
+    ${!desc&&!rows.length?'<p class="nometa">This feature has no metadata in the file.</p>':''}${flightsBlock()}`;
+  wireFlights(at);document.getElementById('info').classList.add('show');}
 let hoverPending=false;
 cv.addEventListener('pointermove',e=>{if(dragging||pinDrag||placing||hoverPending||(!overlays.length&&!draft&&!activeFav))return;hoverPending=true;
   requestAnimationFrame(()=>{hoverPending=false;const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;cv.style.cursor=pinTarget(x,y)?'grab':(overlays.length&&overlayHit(x,y)?'pointer':'')});});
@@ -437,8 +481,8 @@ function clickAt(x,y){
 function showInfo(title,where,tz,ll){activeFav=null;draft=null;const z=D.zones[tz]||[0,0],o=z[season],b=band(o),other=z[1-season];
   document.getElementById('infob').innerHTML=`<h2>${esc(title)}</h2><p class="where">${esc(where&&where!==title?where:' ')}</p>
   <div class="big"><i style="background:${pal['b'+b]}"></i>${hours(o)}</div><p class="bandname">${BANDS[b].name}, ${season?'summer':'winter'}</p>
-  <dl><dt>${season?'Winter':'Summer'}</dt><dd>${hours(other)}</dd><dt>Difference</dt><dd>${vsUK(o)}</dd><dt>Time zone</dt><dd>${utc(o)}</dd></dl>`;
-  document.getElementById('info').classList.add('show');}
+  <dl><dt>${season?'Winter':'Summer'}</dt><dd>${hours(other)}</dd><dt>Difference</dt><dd>${vsUK(o)}</dd><dt>Time zone</dt><dd>${utc(o)}</dd></dl>${ll?flightsBlock():''}`;
+  wireFlights(ll);document.getElementById('info').classList.add('show');}
 function hideInfo(){document.getElementById('info').classList.remove('show');if(selected||activeFav||draft){selected=null;activeFav=null;draft=null;draw()}}
 document.getElementById('infox').onclick=hideInfo;
 

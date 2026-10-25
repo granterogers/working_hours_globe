@@ -19,6 +19,7 @@ SOURCES = {
     "ne50.geojson": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson",
     "adm1.geojson": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_1_states_provinces.geojson",
     "tz.zip": f"https://github.com/evansiroky/timezone-boundary-builder/releases/download/{TZBB_RELEASE}/timezones-now.geojson.zip",
+    "airports.csv": "https://raw.githubusercontent.com/davidmegginson/ourairports-data/main/airports.csv",
 }
 
 def fetch():
@@ -172,3 +173,13 @@ open(OUT,'w',encoding='utf-8').write(s)
 print('Wrote',os.path.normpath(OUT))
 for k in data: print(k, len(json.dumps(data[k],separators=(',',':')))//1024,"KB")
 print("total",len(s.encode())//1024,"KB")
+
+# Airports with scheduled flights, for the flights search in the details card
+import csv
+aps=[]
+for r in csv.DictReader(open_utf8('airports.csv')):
+    if r['type'] in ('large_airport','medium_airport') and r['scheduled_service']=='yes' and len(r['iata_code'])==3:
+        aps.append([r['iata_code'],r['name'],r['municipality'],r['iso_country'],round(float(r['latitude_deg']),3),round(float(r['longitude_deg']),3),1 if r['type']=='large_airport' else 0])
+AP_OUT=os.path.join(HERE,"..","data","airports.json")
+open(AP_OUT,'w',encoding='utf-8').write(json.dumps(aps,separators=(',',':'),ensure_ascii=False))
+print('Wrote',os.path.normpath(AP_OUT),len(aps),'airports')
