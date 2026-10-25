@@ -14,6 +14,8 @@ Built for planning where to live and work as a remote worker on UK hours.
 - Set any shift in UK time, and switch between winter (UK on GMT) and summer (UK on BST).
 - Click any place for its hours in both seasons and its offset from the UK.
 - Search for any country, state or island (press `/`).
+- Street-level detail when you zoom in towards a country: OpenStreetMap, light or dark map tiles fade in, tinted by the time-zone colours. Choose the style, or turn it off, in the panel.
+- Save favourites: click any place, then **Save to favourites**. A heart marks the spot, and you can rename it and add a note. Favourites are kept in your browser between visits, and you can export them to a file and import them on another device.
 - Add your own KML, KMZ or GeoJSON files as layers on top, then click any point, line or area to see its name, description, extended data and your working hours at that spot.
 - Dark and light themes, full-screen mode, keyboard controls (arrow keys to spin, `+` and `-` to zoom), and a layout that works on mobile.
 
@@ -74,11 +76,16 @@ The globe is drawn on a canvas with a custom orthographic projection. Every vert
 
 Hours are worked out per IANA time zone for two reference dates: 15 December 2026 for winter and 15 July 2027 for summer. Around the daylight-saving changeover weeks in March, October and November, when countries switch on different dates, real offsets can briefly differ by an hour.
 
+## Map tiles
+
+Street maps come from [OpenStreetMap](https://www.openstreetmap.org/copyright) and [CARTO](https://carto.com/attributions) and load only once you zoom in. Both are free for light personal use with attribution, which the page shows while tiles are visible. For a high-traffic deployment, switch to a commercial tile provider, as the [OSM tile usage policy](https://operations.osmfoundation.org/policies/tiles/) asks.
+
 ## Limitations
 
 - A few very large regions that cross a time-zone line, such as Nunavut and some Russian and Brazilian states, get one label based on the zone at their centre. The colours underneath still show the split, and clicking a spot gives that spot's hours.
 - The borders are simplified to keep the data small, so coastlines are approximate when you zoom right in.
-- There is no satellite imagery. The globe uses vector shapes only.
+- There is no satellite imagery.
+- Favourites live in your browser's local storage, so clearing site data removes them. Use **Export** for a backup.
 
 ## Licence
 

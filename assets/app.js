@@ -41,9 +41,9 @@ const proj=d3.geoOrthographic().clipAngle(90).precision(0.35),path=d3.geoPath(pr
 function theme(){dark=!matchMedia('(prefers-color-scheme: light)').matches;
   if(document.documentElement.dataset.theme)dark=document.documentElement.dataset.theme==='dark';
   pal=dark?{oceanIn:'#163a68',oceanOut:'#071630',glow:'rgba(110,170,255,',grat:'rgba(170,200,255,.07)',border:'rgba(8,14,30,.55)',pb:'rgba(8,14,30,.28)',
-            ink:'#f6f7fb',ink2:'rgba(226,232,246,.82)',halo:'rgba(5,10,24,.82)',shadeLite:'rgba(255,255,255,.10)',shadeDark:'rgba(0,4,16,.55)',coast1:'rgba(120,190,255,.07)',coast2:'rgba(140,200,255,.14)'}
+            ink:'#f6f7fb',ink2:'rgba(226,232,246,.82)',halo:'rgba(5,10,24,.82)',shadeLite:'rgba(255,255,255,.10)',shadeDark:'rgba(0,4,16,.55)',coast1:'rgba(120,190,255,.07)',coast2:'rgba(140,200,255,.14)',pbTile:'rgba(40,30,80,.45)',borderTile:'rgba(30,20,70,.75)'}
           :{oceanIn:'#d4e6f8',oceanOut:'#9dbfe2',glow:'rgba(120,170,235,',grat:'rgba(30,70,130,.08)',border:'rgba(255,255,255,.85)',pb:'rgba(255,255,255,.55)',
-            ink:'#111a30',ink2:'rgba(30,42,70,.85)',halo:'rgba(255,255,255,.9)',shadeLite:'rgba(255,255,255,.22)',shadeDark:'rgba(20,40,80,.22)',coast1:'rgba(255,255,255,.25)',coast2:'rgba(255,255,255,.45)'};
+            ink:'#111a30',ink2:'rgba(30,42,70,.85)',halo:'rgba(255,255,255,.9)',shadeLite:'rgba(255,255,255,.22)',shadeDark:'rgba(20,40,80,.22)',coast1:'rgba(255,255,255,.25)',coast2:'rgba(255,255,255,.45)',pbTile:'rgba(40,30,80,.4)',borderTile:'rgba(30,20,70,.7)'};
   BANDS.forEach((b,i)=>pal['b'+i]=dark?b.dark:b.light);stars();ui();draw();}
 matchMedia('(prefers-color-scheme: light)').addEventListener('change',theme);
 
@@ -106,8 +106,12 @@ function draw(){
   const TZ=[D.tzL,D.tzM,D.tz][lv],CB=[D.cbL,D.cbM,D.cb][lv];
   ctx.lineJoin='round';strokeFC(CB,pal.coast1,k>4?9:6);strokeFC(CB,pal.coast2,k>4?3.5:2.5);
   fillBands(D.gaps);fillBands(TZ);
-  if(k>2.8)strokeFC(k>8?D.pb:D.pbM,pal.pb,0.7);
-  strokeFC(CB,pal.border,k>4?1.4:0.9);
+  // street map tiles fade in as you zoom towards a country, tinted by the time-zone colours
+  const tileA=BASEMAPS[basemap]?clamp((k-TILE_K)/2.5,0,1):0;
+  if(tileA>0&&drawTiles()){ctx.globalAlpha=tileA*0.8;ctx.drawImage(tcv,0,0,W,H);ctx.globalAlpha=1}
+  attrib.textContent=tileA>0?BASEMAPS[basemap].attr:'';attrib.classList.toggle('show',tileA>0);
+  if(k>2.8)strokeFC(k>8?D.pb:D.pbM,tileA>0.5?pal.pbTile:pal.pb,tileA>0.5?1.1:0.7);
+  strokeFC(CB,tileA>0.5?pal.borderTile:pal.border,k>4?1.4:0.9);
   // sphere shading for depth
   ctx.save();ctx.beginPath();path({type:'Sphere'});ctx.clip();
   const sg=ctx.createRadialGradient(cx-s*.42,cy-s*.48,0,cx,cy,s*1.02);sg.addColorStop(0,pal.shadeLite);sg.addColorStop(.55,'rgba(0,0,0,0)');sg.addColorStop(1,pal.shadeDark);
@@ -129,6 +133,7 @@ function drawLabels(){
   placed=[];const ctr=viewCap[0],ppd=base*k/DEG,cand=[];
   overlays.forEach(L=>{if(!L.on)return;L.fc.features.forEach(f=>{const g=f.geometry;if(!g)return;
     (g.type==='Point'?[g.coordinates]:g.type==='MultiPoint'?g.coordinates:[]).forEach(p=>cand.push({ov:L,f,lon:p[0],lat:p[1],name:(f.properties&&f.properties.name)||'',pri:4e9,a:1}))})});
+  for(const f of favs)cand.push({fav:f,v:f.v,lon:f.lon,lat:f.lat,name:f.name,pri:5e9,a:1});
   for(const c of D.countries){const px=c.size*ppd;let a=1;if(c.np>1){if(px>340)continue;a=clamp((340-px)/70,0,1)}
     cand.push({lon:c[1],lat:c[2],v:c.v,name:c[0],tz:c[3],star:c[6],pri:2e9+px,kind:'c',ref:c,a});}
   for(const p of D.prov){const px=p[5]*ppd;if(px<38)continue;const c=cByIso[p[4]];let a=clamp((px-38)/36,0,1);
@@ -141,6 +146,9 @@ function drawLabels(){
     const v=L.v||vec(L.lon,L.lat);const X=M[0]*v[0]+M[1]*v[1]+M[2]*v[2];if(X<0.07)continue;
     const x=cx+SC*(M[3]*v[0]+M[4]*v[1]),y=cy-SC*(M[6]*v[0]+M[7]*v[1]+M[8]*v[2]);
     if(x<-60||y<-30||x>W+60||y>H+40)continue;
+    if(L.fav){const nw=tw(L.name,F.ov)+8,r={x0:x-Math.max(nw,22)/2,y0:y-30,x1:x+Math.max(nw,22)/2,y1:y+9};
+      if(placed.some(q=>r.x0<q.x1&&r.x1>q.x0&&r.y0<q.y1&&r.y1>q.y0)&&L.fav!==activeFav)continue;r.L=L;placed.push(r);
+      heart(x,y,L.fav===activeFav?9:7.5,FAVC,pal.halo);ctx.font=F.ov;ctx.lineWidth=4;ctx.strokeStyle=pal.halo;ctx.strokeText(L.name,x,y-14);ctx.fillStyle=pal.ink;ctx.fillText(L.name,x,y-14);continue;}
     let nf,hr=null,bi=0;
     if(L.ov){nf=F.ov}else{const o=off(L.tz);nf=L.kind==='c'?F.cn:F.pn;hr=hours(o)+(L.star?'*':'');bi=band(o)}
     const nw=tw(L.name,nf),hw=hr?tw(hr,F.hr)+14:0,w=Math.max(nw,hw)+8,h=hr?32:18;
@@ -206,6 +214,103 @@ function flyTo(lon,lat,sizeDeg,dur){
   fly={t0:performance.now(),dur:reduce?1:dur||1500,ir:d3.interpolate(r0,r1),ik:t=>ik0+(ik1-ik0)*t-Math.sin(Math.PI*t)*lift};vel=[0,0];kick();
 }
 
+// street map tiles (OpenStreetMap and CARTO), reprojected onto the globe
+const TILE_K=5.5;
+const BASEMAPS={
+  osm:{name:'OpenStreetMap',max:19,attr:'Map data © OpenStreetMap contributors',url:(z,x,y)=>`https://tile.openstreetmap.org/${z}/${x}/${y}.png`},
+  light:{name:'Light',max:20,attr:'© OpenStreetMap contributors © CARTO',url:(z,x,y)=>`https://${'abcd'[(x+y)&3]}.basemaps.cartocdn.com/light_all/${z}/${x}/${y}${dpr>1?'@2x':''}.png`},
+  dark:{name:'Dark',max:20,attr:'© OpenStreetMap contributors © CARTO',url:(z,x,y)=>`https://${'abcd'[(x+y)&3]}.basemaps.cartocdn.com/dark_all/${z}/${x}/${y}${dpr>1?'@2x':''}.png`},
+  off:null};
+let basemap='osm';try{const b=localStorage.getItem('whg.basemap');if(b&&b in BASEMAPS)basemap=b}catch(e){}
+const attrib=document.getElementById('attrib');
+const tiles=new Map();let tileDrawPending=false;const tcv=document.createElement('canvas'),tctx=tcv.getContext('2d');
+function tileRedraw(){if(tileDrawPending||running)return;tileDrawPending=true;requestAnimationFrame(()=>{tileDrawPending=false;if(!running)draw()})}
+function tile(z,x,y,load){const key=basemap+'/'+z+'/'+x+'/'+y;let t=tiles.get(key);
+  if(!t&&load){t={img:new Image(),ok:false};t.img.onload=()=>{t.ok=true;tileRedraw()};t.img.onerror=()=>{t.err=true};
+    t.img.src=BASEMAPS[basemap].url(z,x,y);tiles.set(key,t);
+    if(tiles.size>700){let n=tiles.size-600;for(const kk of tiles.keys()){tiles.delete(kk);if(--n<=0)break}}}
+  else if(t){tiles.delete(key);tiles.set(key,t)}
+  return t;}
+const inflate=1.2;
+const lon2x=(lon,n)=>(lon+180)/360*n;
+const lat2y=(lat,n)=>{const r=clamp(lat,-85.05,85.05)*RAD;return(1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*n};
+const y2lat=(y,n)=>Math.atan(Math.sinh(Math.PI*(1-2*y/n)))*DEG;
+function drawTiles(){
+  if(tcv.width!==cv.width||tcv.height!==cv.height){tcv.width=cv.width;tcv.height=cv.height}
+  tctx.setTransform(dpr,0,0,dpr,0,0);tctx.clearRect(0,0,W,H);let drew=0;
+  const B=BASEMAPS[basemap],c0=-rot[0];let r0=1e9,r1=-1e9,la0=90,la1=-90,hit=0;
+  for(let i=0;i<=8;i++)for(let j=0;j<=8;j++){const ll=proj.invert([W*i/8,H*j/8]);if(!ll||d3.geoDistance(ll,viewCap[0])>1.5)continue;hit++;
+    const r=wrap(ll[0]-c0);r0=Math.min(r0,r);r1=Math.max(r1,r);la0=Math.min(la0,ll[1]);la1=Math.max(la1,ll[1]);}
+  if(!hit)return false;const pad=(r1-r0)*0.08+0.01;r0-=pad;r1+=pad;la0=Math.max(-85,la0-pad);la1=Math.min(85,la1+pad);
+  const ppd=base*k/DEG,lat=clamp(-rot[1],-80,80);
+  let z=clamp(Math.round(Math.log2(ppd*360*Math.cos(lat*RAD)/256*(dpr>1?1.25:1))),2,B.max),x0,x1,y0,y1,n;
+  for(;;){n=2**z;x0=Math.floor(lon2x(c0+r0,n));x1=Math.floor(lon2x(c0+r1,n));y0=Math.floor(lat2y(la1,n));y1=Math.floor(lat2y(la0,n));
+    if((x1-x0+1)*(y1-y0+1)<=90||z<=2)break;z--;}
+  const N=k<14?3:2;
+  for(let ty=Math.max(0,y0);ty<=Math.min(n-1,y1);ty++)for(let tx=x0;tx<=x1;tx++){
+    const wx=((tx%n)+n)%n;let t=tile(z,wx,ty,true),img=null,sx=0,sy=0,sz=256;
+    if(t&&t.ok){img=t.img;sz=img.naturalWidth}
+    else for(let d=1;d<=5&&z-d>=0;d++){const p=tile(z-d,wx>>d,ty>>d,false);if(p&&p.ok){img=p.img;const s=p.img.naturalWidth/(1<<d);sx=(wx-((wx>>d)<<d))*s;sy=(ty-((ty>>d)<<d))*s;sz=s;break}}
+    if(!img)continue;
+    const cs=sz/N;
+    for(let j=0;j<N;j++)for(let i=0;i<N;i++){
+      const P=(u,v)=>scr([(tx+u)/n*360-180,y2lat(ty+v,n)]);
+      const p0=P(i/N,j/N),p1=P((i+1)/N,j/N),p2=P(i/N,(j+1)/N),p3=P((i+1)/N,(j+1)/N);if(!p0||!p1||!p2||!p3)continue;
+      const mx=(p0[0]+p1[0]+p2[0]+p3[0])/4,my=(p0[1]+p1[1]+p2[1]+p3[1])/4,inf=q=>{const dx=q[0]-mx,dy=q[1]-my,l=Math.hypot(dx,dy)||1;return[q[0]+dx/l*inflate,q[1]+dy/l*inflate]};
+      const a=inf(p0),b=inf(p1),c=inf(p3),d=inf(p2);
+      if(Math.max(a[0],b[0],c[0],d[0])<0||Math.min(a[0],b[0],c[0],d[0])>W||Math.max(a[1],b[1],c[1],d[1])<0||Math.min(a[1],b[1],c[1],d[1])>H)continue;
+      tctx.save();tctx.beginPath();tctx.moveTo(a[0],a[1]);tctx.lineTo(b[0],b[1]);tctx.lineTo(c[0],c[1]);tctx.lineTo(d[0],d[1]);tctx.closePath();tctx.clip();
+      tctx.transform((p1[0]-p0[0])/cs,(p1[1]-p0[1])/cs,(p2[0]-p0[0])/cs,(p2[1]-p0[1])/cs,p0[0],p0[1]);
+      const e=1.2*cs/Math.max(1,Math.hypot(p1[0]-p0[0],p1[1]-p0[1]));tctx.drawImage(img,sx+i*cs,sy+j*cs,cs,cs,-e,-e,cs+2*e,cs+2*e);tctx.restore();drew++;}}
+  return drew>0;
+}
+function setBasemap(b){basemap=b;try{localStorage.setItem('whg.basemap',b)}catch(e){}
+  document.querySelectorAll('#bm button').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.b===b)));draw();}
+
+// favourites, kept in this browser between visits
+const FKEY='whg.favourites.v1';let favs=[];
+try{const v=JSON.parse(localStorage.getItem(FKEY)||'[]');if(Array.isArray(v))favs=v.filter(f=>f&&isFinite(f.lon)&&isFinite(f.lat))}catch(e){}
+favs.forEach(f=>f.v=vec(f.lon,f.lat));
+const strip=f=>{const{v,...rest}=f;return rest};
+function saveFavs(){try{localStorage.setItem(FKEY,JSON.stringify(favs.map(strip)))}catch(e){}}
+function tzAt(ll){const zf=TZHIT.features.find(z=>d3.geoContains(z,ll));if(zf)return zf.properties.z;let bd=0.08,t=null;for(const q of D.prov){const d=d3.geoDistance(ll,[q[1],q[2]]);if(d<bd){bd=d;t=q[3]}}return t}
+function addFav(name,ll,tz,where){const f={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:name||'Saved place',where:where||'',lon:+(+ll[0]).toFixed(5),lat:+(+ll[1]).toFixed(5),tz:tz||tzAt(ll),note:'',created:new Date().toISOString()};
+  f.v=vec(f.lon,f.lat);favs.push(f);saveFavs();renderFavs();showFav(f,true);draw();}
+function heart(x,y,s,fill,stroke){ctx.beginPath();ctx.moveTo(x,y+0.9*s);ctx.bezierCurveTo(x-1.5*s,y-0.1*s,x-0.75*s,y-1.2*s,x,y-0.45*s);ctx.bezierCurveTo(x+0.75*s,y-1.2*s,x+1.5*s,y-0.1*s,x,y+0.9*s);ctx.closePath();
+  ctx.fillStyle=fill;ctx.fill();ctx.lineWidth=2;ctx.strokeStyle=stroke;ctx.stroke();}
+const FAVC='#ff4f87';let activeFav=null,favTimer=0;
+function hoursBlock(tz){if(!tz||!D.zones[tz])return'';const z=D.zones[tz],o=z[season],b=band(o);
+  return`<div class="big"><i style="background:${pal['b'+b]}"></i>${hours(o)}</div><p class="bandname">${BANDS[b].name}, ${season?'summer':'winter'}. ${season?'Winter':'Summer'}: ${hours(z[1-season])}</p>`}
+function showFav(f,focus){activeFav=f;selected=null;
+  const when=new Date(f.created);const ds=isNaN(when)?'':when.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+  document.getElementById('infob').innerHTML=`<input class="ftitle" id="fname" value="${esc(f.name)}" aria-label="Favourite name" maxlength="80">
+    <p class="where"><span class="fh" aria-hidden="true">♥</span> ${esc(f.where?f.where+', ':'')}saved ${ds}</p>${hoursBlock(f.tz)}
+    <label class="nl" for="fnote">Note</label><textarea id="fnote" rows="4" placeholder="Where to stay, who to contact, what to check…">${esc(f.note||'')}</textarea>
+    <div class="frow"><span class="saved" id="fsaved"></span><button class="ghost" id="fdel">Remove favourite</button></div>`;
+  const nm=document.getElementById('fname'),nt=document.getElementById('fnote'),sv=document.getElementById('fsaved');
+  const commit=()=>{clearTimeout(favTimer);favTimer=setTimeout(()=>{f.name=nm.value.trim()||'Saved place';f.note=nt.value;saveFavs();renderFavs();draw();sv.textContent='Saved';setTimeout(()=>sv.textContent='',1500)},400)};
+  nm.oninput=commit;nt.oninput=commit;
+  document.getElementById('fdel').onclick=()=>{favs=favs.filter(x=>x!==f);saveFavs();renderFavs();activeFav=null;document.getElementById('info').classList.remove('show');draw()};
+  document.getElementById('info').classList.add('show');if(focus)setTimeout(()=>nt.focus(),50);}
+function favButton(name,ll,tz,where){if(!ll)return'';return`<button class="favbtn" id="favadd"><span aria-hidden="true">♡</span> Save to favourites</button>`}
+function wireFav(name,ll,tz,where){const b=document.getElementById('favadd');if(b)b.onclick=()=>addFav(name,ll,tz,where)}
+function renderFavs(){const ul=document.getElementById('favs');if(!ul)return;
+  if(!favs.length){ul.innerHTML='<li class="empty">Click any place on the globe, then the heart, to save it here with a note.</li>';return}
+  ul.innerHTML='';favs.slice().sort((a,b)=>a.name.localeCompare(b.name)).forEach(f=>{const li=document.createElement('li'),b=document.createElement('button');
+    const o=f.tz&&D.zones[f.tz]?D.zones[f.tz][season]:null;
+    b.innerHTML=`<span class="fh" aria-hidden="true">♥</span><span class="fn">${esc(f.name)}</span>${o!=null?`<span class="fhrs">${hours(o)}</span>`:''}`;
+    b.onclick=()=>{flyTo(f.lon,f.lat,2);showFav(f)};li.appendChild(b);ul.appendChild(li)});}
+document.getElementById('favexp').onclick=()=>{const blob=new Blob([JSON.stringify({app:'working-hours-globe',version:1,favourites:favs.map(strip)},null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='working-hours-favourites.json';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)};
+document.getElementById('favimp').onclick=()=>document.getElementById('favfile').click();
+document.getElementById('favfile').onchange=async e=>{const file=e.target.files[0];e.target.value='';if(!file)return;
+  try{const d=JSON.parse(await file.text());const list=Array.isArray(d)?d:d.favourites;if(!Array.isArray(list))throw new Error('no favourites in that file');
+    let added=0;list.forEach(f=>{if(!f||!isFinite(f.lon)||!isFinite(f.lat))return;if(f.id&&favs.some(x=>x.id===f.id))return;
+      const n={id:f.id||Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:String(f.name||'Saved place'),where:String(f.where||''),lon:+f.lon,lat:+f.lat,tz:f.tz||tzAt([+f.lon,+f.lat]),note:String(f.note||''),created:f.created||new Date().toISOString()};
+      n.v=vec(n.lon,n.lat);favs.push(n);added++});saveFavs();renderFavs();draw();alert(added+' favourite'+(added===1?'':'s')+' imported.')}
+  catch(err){alert('Those favourites could not be imported: '+err.message)}};
+document.querySelectorAll('#bm button').forEach(b=>b.onclick=()=>setBasemap(b.dataset.b));
+
 // layer features: hit-testing and metadata
 let selected=null;
 function scr(p){const v=vec(p[0],p[1]);if(M[0]*v[0]+M[1]*v[1]+M[2]*v[2]<0)return null;return[cx+SC*(M[3]*v[0]+M[4]*v[1]),cy-SC*(M[6]*v[0]+M[7]*v[1]+M[8]*v[2])]}
@@ -232,7 +337,7 @@ function cleanHTML(html){
     if(el.tagName==='A'){el.setAttribute('target','_blank');el.setAttribute('rel','noopener noreferrer')}});
   return doc.body.firstChild.innerHTML;}
 const isURL=v=>/^https?:\/\/\S+$/i.test(v);
-function showFeature(L,f,ll){
+function showFeature(L,f,ll){activeFav=null;
   const p=f.properties||{},g=f.geometry,name=p.name||p.Name||p.title||'Untitled feature';
   const at=g.type==='Point'?g.coordinates:(ll&&d3.geoDistance(ll,viewCap[0])<1.56?ll:d3.geoCentroid(f));
   const zf=TZHIT.features.find(z=>d3.geoContains(z,at));let tzid=zf&&zf.properties.z;
@@ -248,32 +353,35 @@ function showFeature(L,f,ll){
     <p class="where"><i class="ldot" style="background:${L.color}"></i>${esc(L.name)}, ${kind.toLowerCase()}</p>${hrs}
     ${desc?`<div class="desc">${cleanHTML(String(desc))}</div>`:''}
     ${rows.length||coord?`<dl class="meta">${rows.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${isURL(String(v))?`<a href="${esc(v)}" target="_blank" rel="noopener noreferrer">${esc(v)}</a>`:esc(v)}</dd>`).join('')}${coord?`<dt>Coordinates</dt><dd>${coord}</dd>`:''}</dl>`:''}
-    ${!desc&&!rows.length?'<p class="nometa">This feature has no metadata in the file.</p>':''}`;
-  document.getElementById('info').classList.add('show');}
+    ${!desc&&!rows.length?'<p class="nometa">This feature has no metadata in the file.</p>':''}${favButton(name,at,tzid,L.name)}`;
+  wireFav(name,at,tzid,L.name);document.getElementById('info').classList.add('show');}
 let hoverPending=false;
 cv.addEventListener('pointermove',e=>{if(dragging||!overlays.length||hoverPending)return;hoverPending=true;
   requestAnimationFrame(()=>{hoverPending=false;const r=cv.getBoundingClientRect();cv.style.cursor=overlayHit(e.clientX-r.left,e.clientY-r.top)?'pointer':''});});
 
 // details
 function clickAt(x,y){
+  const fh=placed.find(q=>q.L.fav&&x>=q.x0&&x<=q.x1&&y>=q.y0&&y<=q.y1);
+  if(fh){if(selected)selected=null;showFav(fh.L.fav);draw();return}
+  if(activeFav){activeFav=null;draw()}
   const oh=overlays.length?overlayHit(x,y):null;
   if(oh){selected=oh;showFeature(oh.L,oh.f,proj.invert([x,y]));draw();return}
   if(selected){selected=null;draw()}
-  const hit=placed.find(q=>x>=q.x0&&x<=q.x1&&y>=q.y0&&y<=q.y1&&!q.L.ov);let title,tz,where='';
-  if(hit){title=hit.L.name;tz=hit.L.tz;where=hit.L.kind==='p'?(hit.L.ref[6]||''):'';}
-  else{const ll=proj.invert([x,y]);if(!ll||d3.geoDistance(ll,viewCap[0])>1.56){hideInfo();return}
+  const hit=placed.find(q=>x>=q.x0&&x<=q.x1&&y>=q.y0&&y<=q.y1&&!q.L.ov&&!q.L.fav);let title,tz,where='',at=null;
+  if(hit){title=hit.L.name;tz=hit.L.tz;where=hit.L.kind==='p'?(hit.L.ref[6]||''):'';at=proj.invert([x,y])||[hit.L.lon,hit.L.lat];}
+  else{const ll=proj.invert([x,y]);at=ll;if(!ll||d3.geoDistance(ll,viewCap[0])>1.56){hideInfo();return}
     const f=TZHIT.features.find(f=>d3.geoContains(f,ll));
     let best=null,bd=1e9;for(const p of D.prov){const d=d3.geoDistance(ll,[p[1],p[2]]);if(d<bd){bd=d;best=p}}
     if(!f&&!(best&&bd<0.05)){hideInfo();return}
     tz=f?f.properties.z:best[3];title=best&&bd<0.12?best[0]:tz.split('/').pop().replace(/_/g,' ');where=best&&bd<0.12?(best[6]||''):'';}
-  showInfo(title,where,tz);
+  showInfo(title,where,tz,at);
 }
-function showInfo(title,where,tz){const z=D.zones[tz]||[0,0],o=z[season],b=band(o),other=z[1-season];
+function showInfo(title,where,tz,ll){activeFav=null;const z=D.zones[tz]||[0,0],o=z[season],b=band(o),other=z[1-season];
   document.getElementById('infob').innerHTML=`<h2>${esc(title)}</h2><p class="where">${esc(where&&where!==title?where:' ')}</p>
   <div class="big"><i style="background:${pal['b'+b]}"></i>${hours(o)}</div><p class="bandname">${BANDS[b].name}, ${season?'summer':'winter'}</p>
-  <dl><dt>${season?'Winter':'Summer'}</dt><dd>${hours(other)}</dd><dt>Difference</dt><dd>${vsUK(o)}</dd><dt>Clock follows</dt><dd>${esc(tz)}</dd></dl>`;
-  document.getElementById('info').classList.add('show');}
-function hideInfo(){document.getElementById('info').classList.remove('show');if(selected){selected=null;draw()}}
+  <dl><dt>${season?'Winter':'Summer'}</dt><dd>${hours(other)}</dd><dt>Difference</dt><dd>${vsUK(o)}</dd><dt>Clock follows</dt><dd>${esc(tz)}</dd></dl>${favButton(title,ll,tz,where)}`;
+  wireFav(title,ll,tz,where);document.getElementById('info').classList.add('show');}
+function hideInfo(){document.getElementById('info').classList.remove('show');if(selected||activeFav){selected=null;activeFav=null;draw()}}
 document.getElementById('infox').onclick=hideInfo;
 
 // panel & controls
@@ -285,7 +393,7 @@ document.getElementById('e').oninput=e=>{if(e.target.value){E=tval(e.target.valu
 const bw=document.getElementById('w'),bs=document.getElementById('su');
 function setSeason(v){season=v;bw.setAttribute('aria-pressed',String(v===0));bs.setAttribute('aria-pressed',String(v===1));ui();draw();hideInfo()}
 bw.onclick=()=>setSeason(0);bs.onclick=()=>setSeason(1);
-function ui(){document.getElementById('sum').textContent=`${hhmm(S)}–${hhmm(E)} UK, ${season?'summer':'winter'}`;
+function ui(){renderFavs();document.getElementById('sum').textContent=`${hhmm(S)}–${hhmm(E)} UK, ${season?'summer':'winter'}`;
   document.getElementById('snote').textContent=season?'Late March to late October, while the UK is on BST.':'Late October to late March, while the UK is on GMT.';
   document.getElementById('key').innerHTML=BANDS.map((b,i)=>`<li><i style="background:${pal['b'+i]}"></i>${b.name} <small>${b.sub}</small></li>`).join('');
   document.getElementById('strip').innerHTML=BANDS.map((b,i)=>`<span><i style="background:${pal['b'+i]}"></i>${b.name}</span>`).join('');}
@@ -301,7 +409,7 @@ function renderRes(){res.innerHTML='';if(!q.value.trim()){res.classList.remove('
   if(!matches.length){res.innerHTML='<li class="empty">No place by that name. Try a country, state or island.</li>'}
   matches.forEach((m,i)=>{const li=document.createElement('li'),b=document.createElement('button');b.className=i===hl?'hl':'';
     b.innerHTML=`${esc(m.n)}<small>${esc(m.sub)}</small>`;b.onclick=()=>pick(m);li.appendChild(b);res.appendChild(li)});res.classList.add('show');}
-function pick(m){flyTo(m.lon,m.lat,m.size);closeSearch();setTimeout(()=>showInfo(m.n,m.sub==='Country'?'':m.sub,m.tz),400)}
+function pick(m){flyTo(m.lon,m.lat,m.size);closeSearch();setTimeout(()=>showInfo(m.n,m.sub==='Country'?'':m.sub,m.tz,[m.lon,m.lat]),400)}
 q.addEventListener('input',()=>{const v=q.value.trim().toLowerCase();hl=0;
   matches=v.length<2?[]:index.filter(i=>i.n.toLowerCase().includes(v)).sort((a,b)=>(a.n.toLowerCase().startsWith(v)?0:1)-(b.n.toLowerCase().startsWith(v)?0:1)||b.size-a.size).slice(0,8);
   if(v.length<2){res.classList.remove('show');return}renderRes();});
