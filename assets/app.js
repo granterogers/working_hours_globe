@@ -568,12 +568,13 @@ document.getElementById('pcancel').onclick=()=>{stopPlacing();draw()};
 // nearest named place: OpenStreetMap's Nominatim, falling back to the nearest region offline
 function geocode(o,cb){clearTimeout(geoTimer);const seq=++geoSeq;
   geoTimer=setTimeout(async()=>{let res=null;
-    try{const z=k>40?18:k>12?16:k>4?13:10;
+    // detail follows the map zoom: town level on the whole globe, down to the building once at street level
+    try{const z=clamp(Math.round(Math.log2(base*k/DEG*360/256))+2,10,18);
       const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${(+o.lat).toFixed(6)}&lon=${(+o.lon).toFixed(6)}&zoom=${z}&accept-language=en`);
       if(r.ok){const d=await r.json();if(d&&!d.error){const a=d.address||{};
         const local=a.village||a.town||a.city||a.hamlet||a.suburb||a.municipality||a.county;
         const primary=d.name||local||a.state||a.country;
-        const rest=[local,a.state||a.region,a.country].filter((v,i,arr)=>v&&v!==primary&&arr.indexOf(v)===i);
+        const rest=[local,a.island||a.archipelago,a.province||a.state_district,a.state||a.region,a.country].filter((v,i,arr)=>v&&v!==primary&&arr.indexOf(v)===i);
         if(primary)res={name:primary,where:rest.join(', ')}}}}catch(e){}
     if(!res){let bd=1e9,best=null;for(const q of D.prov){const d=d3.geoDistance([o.lon,o.lat],[q[1],q[2]]);if(d<bd){bd=d;best=q}}
       res=best?{name:'Near '+best[0],where:best[6]||''}:{name:'Dropped pin',where:''}}
@@ -670,16 +671,31 @@ function clickAt(x,y){
   const oh=overlays.length?overlayHit(x,y):null;
   if(oh){selected=oh;showFeature(oh.L,oh.f,proj.invert([x,y]));draw();return}
   if(selected){selected=null;draw()}
-  const hit=placed.find(q=>x>=q.x0&&x<=q.x1&&y>=q.y0&&y<=q.y1&&!q.L.ov&&!q.L.fav);let title,tz,where='',at=null;
+  const hit=placed.find(q=>x>=q.x0&&x<=q.x1&&y>=q.y0&&y<=q.y1&&!q.L.ov&&!q.L.fav);let title,tz,where='',at=null,fallback=null;
   if(hit){title=hit.L.name;tz=hit.L.tz;where=hit.L.kind==='p'?(hit.L.ref[6]||''):'';at=proj.invert([x,y])||[hit.L.lon,hit.L.lat];}
   else{const ll=proj.invert([x,y]);at=ll;if(!ll||d3.geoDistance(ll,viewCap[0])>1.56){hideInfo();return}
     const f=TZHIT.features.find(f=>d3.geoContains(f,ll));
     let best=null,bd=1e9;for(const p of D.prov){const d=d3.geoDistance(ll,[p[1],p[2]]);if(d<bd){bd=d;best=p}}
     if(!f&&!(best&&bd<0.05)){hideInfo();return}
-    tz=f?f.properties.z:best[3];title=best&&bd<0.12?best[0]:tz.split('/').pop().replace(/_/g,' ');where=best&&bd<0.12?(best[6]||''):'';}
+    tz=f?f.properties.z:best[3];title=best&&bd<0.03?best[0]:tz.split('/').pop().replace(/_/g,' ');where=best&&bd<0.03?(best[6]||''):'';
+    // until the lookup answers: the nearest town on the street map if one is close, otherwise a placeholder
+    fallback=title;const mp=nearestMapPlace(ll);title=mp||'Looking up this spot…';where=mp?'':where;}
+  if(hit)tz=tzAt(at)||tz;
   showInfo(title,where,tz,at);
+  // a country or region label clicked on the zoomed-out globe keeps its name; anywhere else, look up
+  // the actual spot clicked (nearest village, town or feature, at a detail matching the zoom)
+  if(at&&(!hit||k>=TILE_K)){const h=document.querySelector('#infob h2'),w=document.querySelector('#infob .where'),tok=infoTok;h.classList.add('pending');
+    geocode({lon:at[0],lat:at[1]},res=>{if(tok!==infoTok)return;h.classList.remove('pending');if(res.name.startsWith('Near ')||res.name==='Dropped pin'){if(fallback)h.textContent=fallback;return}
+      h.textContent=res.name;w.textContent=res.where||' '});}
 }
-function showInfo(title,where,tz,ll){activeFav=null;draft=null;const z=D.zones[tz]||[0,0],o=z[season],b=band(o),other=z[1-season];
+// nearest named place in the street-map tiles on screen, if one is close by
+function nearestMapPlace(ll){let best=null,bd=0.004;const VQ=vec(ll[0],ll[1]);
+  for(const dk of vtUsed){const dd=vdata.get(dk);if(!dd||!dd.ok)continue;
+    for(const L of vtLabels(dk,dd)){if(L.kind!=='place'||vtZ<L.minz-1)continue;const v=L.v,d=Math.acos(clamp(v[0]*VQ[0]+v[1]*VQ[1]+v[2]*VQ[2],-1,1));
+      if(d<bd){bd=d;best=L.name}}}
+  return best;}
+let infoTok=0;
+function showInfo(title,where,tz,ll){activeFav=null;draft=null;infoTok++;const z=D.zones[tz]||[0,0],o=z[season],b=band(o),other=z[1-season];
   document.getElementById('infob').innerHTML=`<h2>${esc(title)}</h2><p class="where">${esc(where&&where!==title?where:' ')}</p>
   <div class="big"><i style="background:${pal['b'+b]}"></i>${hours(o)}</div><p class="bandname">${BANDS[b].name}, ${season?'summer':'winter'}</p>
   <dl><dt>${season?'Winter':'Summer'}</dt><dd>${hours(other)}</dd><dt>Difference</dt><dd>${vsUK(o)}</dd><dt>Time zone</dt><dd>${utc(o)}</dd></dl>${ll?flightsBlock():''}`;
