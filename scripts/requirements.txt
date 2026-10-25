@@ -1,0 +1,2 @@
+shapely>=2.0
+tzdata  # time zone database for Windows, which has none built in
