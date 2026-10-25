@@ -32,18 +32,16 @@
     <div class="sec"><h3>Season</h3>
       <div class="seg" role="group" aria-label="Season"><button id="w" aria-pressed="true">Winter</button><button id="su" aria-pressed="false">Summer</button></div>
       <p class="note" id="snote"></p></div>
-    <div class="sec"><h3>Street map when zoomed in</h3>
-      <div class="seg" id="bm" role="group" aria-label="Street map style"><button data-b="osm" aria-pressed="true">OpenStreetMap</button><button data-b="light" aria-pressed="false">Light</button><button data-b="dark" aria-pressed="false">Dark</button><button data-b="off" aria-pressed="false">Off</button></div></div>
     <div class="sec"><h3>Favourites</h3>
+      <button class="add" id="favnew"><span class="fh" aria-hidden="true">♥</span> Add a favourite</button>
       <ul class="favs" id="favs"></ul>
-      <div class="frow2"><button class="mini" id="favexp">Export</button><button class="mini" id="favimp">Import</button><input type="file" id="favfile" accept=".json" hidden></div>
-      <p class="note">Favourites are saved in this browser. Export them to back up or move to another device.</p></div>
+      <p class="note">Saved in this browser.</p></div>
     <div class="sec"><h3>Map layers</h3>
       <button class="add" id="add">Add a KML, KMZ or GeoJSON file</button>
       <input type="file" id="file" accept=".kml,.kmz,.geojson,.json" multiple hidden>
       <ul class="layers" id="layers"></ul></div>
     <div class="sec"><h3>Colour key</h3><ul class="key" id="key"></ul>
-      <p class="note">An asterisk means the country spans several time zones. Zoom in and each state or province gets its own label.</p></div>
+      <p class="note">An asterisk means the country spans several time zones. Zoom in to see each zone labelled.</p></div>
   </div></div></div>
 </section>
 
@@ -58,6 +56,7 @@
 
 <div class="strip glass" id="strip" aria-hidden="true"></div>
 <div class="attrib" id="attrib"></div>
+<div class="ptoast glass" id="ptoast" hidden>Click the map to drop a pin <button id="pcancel">Cancel</button></div>
 <div class="zoom glass"><button id="zi" aria-label="Zoom in">+</button><button id="zo" aria-label="Zoom out">−</button></div>
 <aside class="info glass" id="info" aria-live="polite"><button class="x" id="infox" aria-label="Close details">×</button><div id="infob"></div></aside>
 <div class="toast glass" id="toast">Drag to spin, scroll or pinch to zoom, click a place for details</div>

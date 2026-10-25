@@ -105,18 +105,18 @@ function draw(){
   // pick detail by zoom; drop one level while the globe is moving, then redraw crisp at rest
   const lv=k<2.5?0:k<5?1:2;
   const TZ=[D.tzL,D.tzM,D.tz][lv],CB=[D.cbL,D.cbM,D.cb][lv];
-  ctx.lineJoin='round';strokeFC(CB,pal.coast1,k>4?9:6);strokeFC(CB,pal.coast2,k>4?3.5:2.5);
+  const tileA=clamp((k-TILE_K)/2.5,0,1),bA=1-tileA;
+  if(bA>0.02){ctx.globalAlpha=bA;ctx.lineJoin='round';strokeFC(CB,pal.coast1,k>4?9:6);strokeFC(CB,pal.coast2,k>4?3.5:2.5);ctx.globalAlpha=1}
   fillBands(D.gaps);fillBands(TZ);
   // street map tiles fade in as you zoom towards a country, tinted by the time-zone colours
-  const tileA=BASEMAPS[basemap]?clamp((k-TILE_K)/2.5,0,1):0;
   const shown=tileA>0&&drawTiles();if(shown){ctx.globalAlpha=tileA*0.8;ctx.drawImage(tcv,0,0,W,H);ctx.globalAlpha=1}
   if(shown)attrib.textContent=BASEMAPS[basemap].attr;attrib.classList.toggle('show',shown);
-  strokeFC(CB,tileA>0.5?pal.borderTile:pal.border,k>4?1.4:0.9);
+  if(bA>0.02){ctx.globalAlpha=bA;strokeFC(CB,pal.border,k>4?1.4:0.9);ctx.globalAlpha=1}
   // sphere shading for depth
   ctx.save();ctx.beginPath();path({type:'Sphere'});ctx.clip();
   const sg=ctx.createRadialGradient(cx-s*.42,cy-s*.48,0,cx,cy,s*1.02);sg.addColorStop(0,pal.shadeLite);sg.addColorStop(.55,'rgba(0,0,0,0)');sg.addColorStop(1,pal.shadeDark);
   ctx.fillStyle=sg;ctx.fillRect(0,0,W,H);ctx.restore();
-  drawOverlays();drawLabels();
+  drawOverlays();drawLabels();drawPin();
 }
 
 function drawOverlays(){overlays.forEach(L=>{if(!L.on)return;L.fc.features.forEach(f=>{const g=f.geometry;if(!g||/Point/.test(g.type))return;
@@ -193,14 +193,18 @@ function rotateBy(dx,dy){const s=base*k;rot[0]=wrap(rot[0]+dx/s*DEG);rot[1]=clam
 function zoomTo(nk,at){kT=clamp(nk,MINK,MAXK);anchor=at||null;fly=null;kick()}
 
 const pts=new Map();let moved=0,lastMove=0,pinch0=null;
-cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);pts.set(e.pointerId,[e.clientX,e.clientY]);fly=null;vel=[0,0];moved=0;lastMove=performance.now();
+cv.addEventListener('pointerdown',e=>{
+  if(!pts.size){const r=cv.getBoundingClientRect(),t=pinTarget(e.clientX-r.left,e.clientY-r.top);if(t){pinDrag={o:t,id:e.pointerId,moved:0};cv.setPointerCapture(e.pointerId);cv.classList.add('drag');fly=null;vel=[0,0];return}}
+  cv.setPointerCapture(e.pointerId);pts.set(e.pointerId,[e.clientX,e.clientY]);fly=null;vel=[0,0];moved=0;lastMove=performance.now();
   dragging=true;cv.classList.add('drag');if(pts.size===2){const [a,b]=[...pts.values()];pinch0={d:Math.hypot(a[0]-b[0],a[1]-b[1]),k:kT}}});
-cv.addEventListener('pointermove',e=>{if(!pts.has(e.pointerId))return;const p=pts.get(e.pointerId),dx=e.clientX-p[0],dy=e.clientY-p[1];pts.set(e.pointerId,[e.clientX,e.clientY]);
+cv.addEventListener('pointermove',e=>{if(pinDrag&&e.pointerId===pinDrag.id){const r=cv.getBoundingClientRect();pinDrag.moved++;movePin(pinDrag.o,e.clientX-r.left,e.clientY-r.top+(pinDrag.o===draft?0:0));return}
+  if(!pts.has(e.pointerId))return;const p=pts.get(e.pointerId),dx=e.clientX-p[0],dy=e.clientY-p[1];pts.set(e.pointerId,[e.clientX,e.clientY]);
   if(pts.size===1){const now=performance.now(),dt=Math.max(8,now-lastMove);lastMove=now;moved+=Math.abs(dx)+Math.abs(dy);rotateBy(dx,dy);
     vel=[vel[0]*0.3+dx*16/dt*0.7,vel[1]*0.3+dy*16/dt*0.7];draw();}
   else if(pts.size===2&&pinch0){const [a,b]=[...pts.values()];const d=Math.hypot(a[0]-b[0],a[1]-b[1]);const r=cv.getBoundingClientRect();
     moved+=10;zoomTo(pinch0.k*d/pinch0.d,[(a[0]+b[0])/2-r.left,(a[1]+b[1])/2-r.top]);}});
-function up(e){if(!pts.has(e.pointerId))return;pts.delete(e.pointerId);if(pts.size<2)pinch0=null;
+function up(e){if(pinDrag&&e.pointerId===pinDrag.id){const p=pinDrag;pinDrag=null;cv.classList.remove('drag');if(p.moved>1)endPinDrag(p.o);return}
+  if(!pts.has(e.pointerId))return;pts.delete(e.pointerId);if(pts.size<2)pinch0=null;
   if(pts.size===0){dragging=false;draw();cv.classList.remove('drag');if(performance.now()-lastMove>80)vel=[0,0];kick();
     if(moved<6){const r=cv.getBoundingClientRect();clickAt(e.clientX-r.left,e.clientY-r.top)}}}
 cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
@@ -228,7 +232,7 @@ const BASEMAPS={
   light:{name:'Light',max:20,attr:'© OpenStreetMap contributors © CARTO',url:(z,x,y)=>`https://${'abcd'[(x+y)&3]}.basemaps.cartocdn.com/light_all/${z}/${x}/${y}${dpr>1?'@2x':''}.png`},
   dark:{name:'Dark',max:20,attr:'© OpenStreetMap contributors © CARTO',url:(z,x,y)=>`https://${'abcd'[(x+y)&3]}.basemaps.cartocdn.com/dark_all/${z}/${x}/${y}${dpr>1?'@2x':''}.png`},
   off:null};
-let basemap='osm';try{const b=localStorage.getItem('whg.basemap');if(b&&b in BASEMAPS)basemap=b}catch(e){}
+const basemap='osm';
 const attrib=document.getElementById('attrib');
 const tiles=new Map();let tileDrawPending=false;const tcv=document.createElement('canvas'),tctx=tcv.getContext('2d');
 function tileRedraw(){if(tileDrawPending||running)return;tileDrawPending=true;requestAnimationFrame(()=>{tileDrawPending=false;if(!running)draw()})}
@@ -271,8 +275,7 @@ function drawTiles(){
       const e=1.2*cs/Math.max(1,Math.hypot(p1[0]-p0[0],p1[1]-p0[1]));tctx.drawImage(img,sx+i*cs,sy+j*cs,cs,cs,-e,-e,cs+2*e,cs+2*e);tctx.restore();drew++;}}
   return drew>0;
 }
-function setBasemap(b){basemap=b;try{localStorage.setItem('whg.basemap',b)}catch(e){}
-  document.querySelectorAll('#bm button').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.b===b)));draw();}
+
 
 // favourites, kept in this browser between visits
 const FKEY='whg.favourites.v1';let favs=[];
@@ -288,35 +291,80 @@ function heart(x,y,s,fill,stroke){ctx.beginPath();ctx.moveTo(x,y+0.9*s);ctx.bezi
 const FAVC='#ff4f87';let activeFav=null,favTimer=0;
 function hoursBlock(tz){if(!tz||!D.zones[tz])return'';const z=D.zones[tz],o=z[season],b=band(o);
   return`<div class="big"><i style="background:${pal['b'+b]}"></i>${hours(o)}</div><p class="bandname">${BANDS[b].name}, ${season?'summer':'winter'}. ${season?'Winter':'Summer'}: ${hours(z[1-season])}</p>`}
-function showFav(f,focus){activeFav=f;selected=null;
+function showFav(f,focus){activeFav=f;selected=null;draft=null;
   const when=new Date(f.created);const ds=isNaN(when)?'':when.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
   document.getElementById('infob').innerHTML=`<input class="ftitle" id="fname" value="${esc(f.name)}" aria-label="Favourite name" maxlength="80">
-    <p class="where"><span class="fh" aria-hidden="true">♥</span> ${esc(f.where?f.where+', ':'')}saved ${ds}</p>${hoursBlock(f.tz)}
+    <p class="where"><span class="fh" aria-hidden="true">♥</span> ${esc(f.where?f.where+', ':'')}saved ${ds}</p><p class="coords">${coordStr(f)}</p>${hoursBlock(f.tz)}
     <label class="nl" for="fnote">Note</label><textarea id="fnote" rows="4" placeholder="Where to stay, who to contact, what to check…">${esc(f.note||'')}</textarea>
-    <div class="frow"><span class="saved" id="fsaved"></span><button class="ghost" id="fdel">Remove favourite</button></div>`;
+    <p class="hint2">Drag the heart to move it.</p><div class="frow"><span class="saved" id="fsaved"></span><button class="ghost" id="fdel">Remove favourite</button></div>`;
   const nm=document.getElementById('fname'),nt=document.getElementById('fnote'),sv=document.getElementById('fsaved');
   const commit=()=>{clearTimeout(favTimer);favTimer=setTimeout(()=>{f.name=nm.value.trim()||'Saved place';f.note=nt.value;saveFavs();renderFavs();draw();sv.textContent='Saved';setTimeout(()=>sv.textContent='',1500)},400)};
   nm.oninput=commit;nt.oninput=commit;
   document.getElementById('fdel').onclick=()=>{favs=favs.filter(x=>x!==f);saveFavs();renderFavs();activeFav=null;document.getElementById('info').classList.remove('show');draw()};
   document.getElementById('info').classList.add('show');if(focus)setTimeout(()=>nt.focus(),50);}
-function favButton(name,ll,tz,where){if(!ll)return'';return`<button class="favbtn" id="favadd"><span aria-hidden="true">♡</span> Save to favourites</button>`}
-function wireFav(name,ll,tz,where){const b=document.getElementById('favadd');if(b)b.onclick=()=>addFav(name,ll,tz,where)}
 function renderFavs(){const ul=document.getElementById('favs');if(!ul)return;
-  if(!favs.length){ul.innerHTML='<li class="empty">Click any place on the globe, then the heart, to save it here with a note.</li>';return}
+  if(!favs.length){ul.innerHTML='<li class="empty">Use Add a favourite, then click the map to drop a pin.</li>';return}
   ul.innerHTML='';favs.slice().sort((a,b)=>a.name.localeCompare(b.name)).forEach(f=>{const li=document.createElement('li'),b=document.createElement('button');
     const o=f.tz&&D.zones[f.tz]?D.zones[f.tz][season]:null;
     b.innerHTML=`<span class="fh" aria-hidden="true">♥</span><span class="fn">${esc(f.name)}</span>${o!=null?`<span class="fhrs">${hours(o)}</span>`:''}`;
     b.onclick=()=>{flyTo(f.lon,f.lat,2);showFav(f)};li.appendChild(b);ul.appendChild(li)});}
-document.getElementById('favexp').onclick=()=>{const blob=new Blob([JSON.stringify({app:'working-hours-globe',version:1,favourites:favs.map(strip)},null,2)],{type:'application/json'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='working-hours-favourites.json';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)};
-document.getElementById('favimp').onclick=()=>document.getElementById('favfile').click();
-document.getElementById('favfile').onchange=async e=>{const file=e.target.files[0];e.target.value='';if(!file)return;
-  try{const d=JSON.parse(await file.text());const list=Array.isArray(d)?d:d.favourites;if(!Array.isArray(list))throw new Error('no favourites in that file');
-    let added=0;list.forEach(f=>{if(!f||!isFinite(f.lon)||!isFinite(f.lat))return;if(f.id&&favs.some(x=>x.id===f.id))return;
-      const n={id:f.id||Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:String(f.name||'Saved place'),where:String(f.where||''),lon:+f.lon,lat:+f.lat,tz:f.tz||tzAt([+f.lon,+f.lat]),note:String(f.note||''),created:f.created||new Date().toISOString()};
-      n.v=vec(n.lon,n.lat);favs.push(n);added++});saveFavs();renderFavs();draw();alert(added+' favourite'+(added===1?'':'s')+' imported.')}
-  catch(err){alert('Those favourites could not be imported: '+err.message)}};
-document.querySelectorAll('#bm button').forEach(b=>b.onclick=()=>setBasemap(b.dataset.b));
+
+
+
+// dropping a pin for a new favourite
+let placing=false,draft=null,pinDrag=null,geoTimer=0,geoSeq=0;
+const coordStr=o=>`${(+o.lat).toFixed(5)}, ${(+o.lon).toFixed(5)}`;
+const ptoast=document.getElementById('ptoast'),infob=document.getElementById('infob');
+function startPlacing(){placing=true;draft=null;cv.classList.add('placing');ptoast.hidden=false;hideInfo();
+  if(innerWidth<=700&&!panel.classList.contains('collapsed')){panel.classList.add('collapsed');ph.setAttribute('aria-expanded','false')}draw();}
+function stopPlacing(){placing=false;cv.classList.remove('placing');ptoast.hidden=true}
+document.getElementById('favnew').onclick=startPlacing;
+document.getElementById('pcancel').onclick=()=>{stopPlacing();draw()};
+// nearest named place: OpenStreetMap's Nominatim, falling back to the nearest region offline
+function geocode(o,cb){clearTimeout(geoTimer);const seq=++geoSeq;
+  geoTimer=setTimeout(async()=>{let res=null;
+    try{const z=k>40?18:k>12?16:k>4?13:10;
+      const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${(+o.lat).toFixed(6)}&lon=${(+o.lon).toFixed(6)}&zoom=${z}&accept-language=en`);
+      if(r.ok){const d=await r.json();if(d&&!d.error){const a=d.address||{};
+        const local=a.village||a.town||a.city||a.hamlet||a.suburb||a.municipality||a.county;
+        const primary=d.name||local||a.state||a.country;
+        const rest=[local,a.state||a.region,a.country].filter((v,i,arr)=>v&&v!==primary&&arr.indexOf(v)===i);
+        if(primary)res={name:primary,where:rest.join(', ')}}}}catch(e){}
+    if(!res){let bd=1e9,best=null;for(const q of D.prov){const d=d3.geoDistance([o.lon,o.lat],[q[1],q[2]]);if(d<bd){bd=d;best=q}}
+      res=best?{name:'Near '+best[0],where:best[6]||''}:{name:'Dropped pin',where:''}}
+    if(seq===geoSeq)cb(res)},300);}
+function dropPin(ll){stopPlacing();draft={lon:ll[0],lat:ll[1],v:vec(ll[0],ll[1]),name:'',where:'',note:'',edited:false};showDraft();lookupDraft();draw();}
+function lookupDraft(){const d=draft;const nm=document.getElementById('dname');if(nm&&!d.edited){nm.value='';nm.placeholder='Finding the nearest place…'}
+  geocode(d,res=>{if(draft!==d)return;if(!d.edited)d.name=res.name;d.where=res.where;updateDraft()});}
+function showDraft(){const d=draft;activeFav=null;selected=null;
+  infob.innerHTML=`<input class="ftitle" id="dname" value="${esc(d.name)}" placeholder="Finding the nearest place…" aria-label="Favourite name" maxlength="80">
+    <p class="where" id="dwhere">${esc(d.where)}</p><p class="coords" id="dcoords">${coordStr(d)}</p><div id="dhrs">${hoursBlock(tzAt([d.lon,d.lat]))}</div>
+    <label class="nl" for="dnote">Note</label><textarea id="dnote" rows="3" placeholder="Where to stay, who to contact, what to check…">${esc(d.note)}</textarea>
+    <p class="hint2">Drag the pin to fine-tune the spot, or click elsewhere to move it.</p>
+    <div class="frow"><button class="ghost" id="dcancel">Cancel</button><button class="primary" id="dsave"><span aria-hidden="true">♥</span> Save favourite</button></div>`;
+  document.getElementById('dname').oninput=e=>{d.name=e.target.value;d.edited=true};
+  document.getElementById('dnote').oninput=e=>{d.note=e.target.value};
+  document.getElementById('dcancel').onclick=()=>{draft=null;hideInfo();draw()};
+  document.getElementById('dsave').onclick=()=>{const f={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:(d.name||'').trim()||'Saved place',where:d.where,
+      lon:+d.lon.toFixed(6),lat:+d.lat.toFixed(6),tz:tzAt([d.lon,d.lat]),note:d.note,created:new Date().toISOString()};
+    f.v=vec(f.lon,f.lat);favs.push(f);draft=null;saveFavs();renderFavs();showFav(f);draw();};
+  document.getElementById('info').classList.add('show');}
+function updateDraft(){const d=draft;if(!d)return;const nm=document.getElementById('dname');if(!nm)return;
+  if(!d.edited)nm.value=d.name;document.getElementById('dwhere').textContent=d.where;document.getElementById('dcoords').textContent=coordStr(d);
+  document.getElementById('dhrs').innerHTML=hoursBlock(tzAt([d.lon,d.lat]));}
+function drawPin(){if(!draft)return;const s=scr([draft.lon,draft.lat]);if(!s)return;const x=s[0],y=s[1];
+  ctx.save();ctx.shadowColor='rgba(0,0,0,.35)';ctx.shadowBlur=8;ctx.shadowOffsetY=3;
+  ctx.beginPath();ctx.moveTo(x,y);ctx.bezierCurveTo(x-3,y-7,x-11,y-13,x-11,y-22);ctx.arc(x,y-22,11,Math.PI,0);ctx.bezierCurveTo(x+11,y-13,x+3,y-7,x,y);ctx.closePath();
+  ctx.fillStyle=FAVC;ctx.fill();ctx.restore();ctx.lineWidth=1.5;ctx.strokeStyle='rgba(255,255,255,.85)';ctx.stroke();
+  ctx.beginPath();ctx.arc(x,y-22,4.2,0,7);ctx.fillStyle='#fff';ctx.fill();}
+function pinTarget(x,y){if(draft){const s=scr([draft.lon,draft.lat]);if(s&&Math.hypot(x-s[0],y-(s[1]-17))<17)return draft}
+  if(activeFav){const s=scr([activeFav.lon,activeFav.lat]);if(s&&Math.hypot(x-s[0],y-s[1])<15)return activeFav}return null}
+function movePin(o,x,y){const ll=proj.invert([x,y]);if(!ll||d3.geoDistance(ll,viewCap[0])>1.5)return;o.lon=ll[0];o.lat=ll[1];o.v=vec(ll[0],ll[1]);
+  const el=document.getElementById(o===draft?'dcoords':'');if(o===draft&&el)el.textContent=coordStr(o);draw();}
+function endPinDrag(o){if(o===draft){lookupDraft();updateDraft();return}
+  o.lon=+o.lon.toFixed(6);o.lat=+o.lat.toFixed(6);o.tz=tzAt([o.lon,o.lat]);saveFavs();renderFavs();showFav(o);
+  geocode(o,res=>{o.where=res.where?res.name+', '+res.where:res.name;saveFavs();if(activeFav===o)showFav(o)});}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(placing){stopPlacing();draw()}else if(draft&&document.activeElement.tagName!=='TEXTAREA'){draft=null;hideInfo();draw()}}});
 
 // layer features: hit-testing and metadata
 let selected=null;
@@ -344,7 +392,7 @@ function cleanHTML(html){
     if(el.tagName==='A'){el.setAttribute('target','_blank');el.setAttribute('rel','noopener noreferrer')}});
   return doc.body.firstChild.innerHTML;}
 const isURL=v=>/^https?:\/\/\S+$/i.test(v);
-function showFeature(L,f,ll){activeFav=null;
+function showFeature(L,f,ll){activeFav=null;draft=null;
   const p=f.properties||{},g=f.geometry,name=p.name||p.Name||p.title||'Untitled feature';
   const at=g.type==='Point'?g.coordinates:(ll&&d3.geoDistance(ll,viewCap[0])<1.56?ll:d3.geoCentroid(f));
   const zf=TZHIT.features.find(z=>d3.geoContains(z,at));let tzid=zf&&zf.properties.z;
@@ -360,14 +408,17 @@ function showFeature(L,f,ll){activeFav=null;
     <p class="where"><i class="ldot" style="background:${L.color}"></i>${esc(L.name)}, ${kind.toLowerCase()}</p>${hrs}
     ${desc?`<div class="desc">${cleanHTML(String(desc))}</div>`:''}
     ${rows.length||coord?`<dl class="meta">${rows.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${isURL(String(v))?`<a href="${esc(v)}" target="_blank" rel="noopener noreferrer">${esc(v)}</a>`:esc(v)}</dd>`).join('')}${coord?`<dt>Coordinates</dt><dd>${coord}</dd>`:''}</dl>`:''}
-    ${!desc&&!rows.length?'<p class="nometa">This feature has no metadata in the file.</p>':''}${favButton(name,at,tzid,L.name)}`;
-  wireFav(name,at,tzid,L.name);document.getElementById('info').classList.add('show');}
+    ${!desc&&!rows.length?'<p class="nometa">This feature has no metadata in the file.</p>':''}`;
+  document.getElementById('info').classList.add('show');}
 let hoverPending=false;
-cv.addEventListener('pointermove',e=>{if(dragging||!overlays.length||hoverPending)return;hoverPending=true;
-  requestAnimationFrame(()=>{hoverPending=false;const r=cv.getBoundingClientRect();cv.style.cursor=overlayHit(e.clientX-r.left,e.clientY-r.top)?'pointer':''});});
+cv.addEventListener('pointermove',e=>{if(dragging||pinDrag||placing||hoverPending||(!overlays.length&&!draft&&!activeFav))return;hoverPending=true;
+  requestAnimationFrame(()=>{hoverPending=false;const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;cv.style.cursor=pinTarget(x,y)?'grab':(overlays.length&&overlayHit(x,y)?'pointer':'')});});
 
 // details
 function clickAt(x,y){
+  if(placing||draft){const ll=proj.invert([x,y]);if(ll&&d3.geoDistance(ll,viewCap[0])<1.5){
+    if(placing){dropPin(ll);return}const fh0=placed.find(q=>q.L.fav&&x>=q.x0&&x<=q.x1&&y>=q.y0&&y<=q.y1);
+    if(!fh0){draft.lon=ll[0];draft.lat=ll[1];draft.v=vec(ll[0],ll[1]);lookupDraft();updateDraft();draw();return}}else if(placing)return}
   const fh=placed.find(q=>q.L.fav&&x>=q.x0&&x<=q.x1&&y>=q.y0&&y<=q.y1);
   if(fh){if(selected)selected=null;showFav(fh.L.fav);draw();return}
   if(activeFav){activeFav=null;draw()}
@@ -383,12 +434,12 @@ function clickAt(x,y){
     tz=f?f.properties.z:best[3];title=best&&bd<0.12?best[0]:tz.split('/').pop().replace(/_/g,' ');where=best&&bd<0.12?(best[6]||''):'';}
   showInfo(title,where,tz,at);
 }
-function showInfo(title,where,tz,ll){activeFav=null;const z=D.zones[tz]||[0,0],o=z[season],b=band(o),other=z[1-season];
+function showInfo(title,where,tz,ll){activeFav=null;draft=null;const z=D.zones[tz]||[0,0],o=z[season],b=band(o),other=z[1-season];
   document.getElementById('infob').innerHTML=`<h2>${esc(title)}</h2><p class="where">${esc(where&&where!==title?where:' ')}</p>
   <div class="big"><i style="background:${pal['b'+b]}"></i>${hours(o)}</div><p class="bandname">${BANDS[b].name}, ${season?'summer':'winter'}</p>
-  <dl><dt>${season?'Winter':'Summer'}</dt><dd>${hours(other)}</dd><dt>Difference</dt><dd>${vsUK(o)}</dd><dt>Time zone</dt><dd>${utc(o)}</dd></dl>${favButton(title,ll,tz,where)}`;
-  wireFav(title,ll,tz,where);document.getElementById('info').classList.add('show');}
-function hideInfo(){document.getElementById('info').classList.remove('show');if(selected||activeFav){selected=null;activeFav=null;draw()}}
+  <dl><dt>${season?'Winter':'Summer'}</dt><dd>${hours(other)}</dd><dt>Difference</dt><dd>${vsUK(o)}</dd><dt>Time zone</dt><dd>${utc(o)}</dd></dl>`;
+  document.getElementById('info').classList.add('show');}
+function hideInfo(){document.getElementById('info').classList.remove('show');if(selected||activeFav||draft){selected=null;activeFav=null;draft=null;draw()}}
 document.getElementById('infox').onclick=hideInfo;
 
 // panel & controls
@@ -435,7 +486,7 @@ async function loadFile(f){let fc;const n=f.name.toLowerCase();
   else{fc=JSON.parse(await f.text());if(fc.type==='Feature')fc={type:'FeatureCollection',features:[fc]};fc.features.forEach(x=>{if(!x.properties)x.properties={}})}
   if(!fc.features||!fc.features.length)throw new Error('it has no placemarks or features');
   fc.features.forEach(x=>fixGeom(x.geometry));const L={name:f.name,fc,on:true,color:COLORS[overlays.length%COLORS.length]};overlays.push(L);renderLayers();
-  const c=d3.geoCentroid(fc),b=d3.geoBounds(fc);flyTo(c[0],c[1],Math.max(Math.abs(b[1][0]-b[0][0]),Math.abs(b[1][1]-b[0][1]),1));}
+  draw();}
 function kml2geo(txt){const doc=new DOMParser().parseFromString(txt,'text/xml'),out=[];
   const T=(el,t)=>Array.from(el.getElementsByTagNameNS('*',t));
   const C=el=>(el?el.textContent:'').trim().split(/\s+/).filter(Boolean).map(s=>s.split(',').slice(0,2).map(Number)).filter(p=>isFinite(p[0])&&isFinite(p[1]));

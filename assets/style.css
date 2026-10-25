@@ -146,3 +146,14 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .attrib{position:absolute;left:16px;bottom:60px;font-size:.7rem;color:var(--ink2);background:var(--glass);padding:3px 8px;border-radius:6px;opacity:0;transition:opacity .3s;pointer-events:none}
 .attrib.show{opacity:1}
 @media (max-width:700px){.attrib{bottom:118px;left:12px}}
+#c.placing{cursor:crosshair}
+.ptoast{position:absolute;left:50%;top:20px;transform:translateX(-50%);display:flex;align-items:center;gap:12px;padding:8px 8px 8px 18px;border-radius:999px;font-size:.9rem;z-index:5}
+.ptoast[hidden]{display:none}
+.ptoast button{border:1px solid var(--glass-b);background:transparent;border-radius:999px;padding:5px 12px;cursor:pointer;font-size:.84rem}
+.ptoast button:hover{background:var(--field)}
+.favs{margin-top:8px}
+.info .coords{font-size:.8rem;color:var(--ink2);font-variant-numeric:tabular-nums;margin:-8px 0 10px}
+.info .hint2{font-size:.78rem;color:var(--ink2);margin:8px 0 0}
+.primary{border:0;background:#ff4f87;color:#fff;font-weight:700;border-radius:11px;padding:9px 16px;cursor:pointer;font-size:.9rem}
+.primary:hover{background:#ff3474}
+@media (max-width:700px){.ptoast{top:auto;bottom:110px}}
