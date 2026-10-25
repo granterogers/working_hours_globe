@@ -16,7 +16,7 @@ Built for planning where to live and work as a remote worker on UK hours.
 - Search for any country, state or island (press `/`).
 - Street-level detail when you zoom in towards a country: OpenStreetMap tiles fade in, tinted by the time-zone colours, and the rough outlines fade away.
 - Favourites: press **Add a favourite**, click the map to drop a pin, and it's named after the nearest town or feature with its coordinates. Drag the pin to fine-tune it, add a note and save. A heart marks the spot, saved favourites can be dragged too, and they're kept in your browser between visits.
-- Add your own KML, KMZ or GeoJSON files as layers on top (the view stays where you are), then click any point, line or area to see its name, description, extended data and your working hours at that spot.
+- Add your own KML, KMZ or GeoJSON files as layers on top (the view stays where you are, and layers are kept between visits), then click any point, line or area to see its name, description, extended data and your working hours at that spot.
 - Dark and light themes, full-screen mode, keyboard controls (arrow keys to spin, `+` and `-` to zoom), and a layout that works on mobile.
 
 ## Run it locally
@@ -85,7 +85,7 @@ Street maps come from [OpenStreetMap](https://www.openstreetmap.org/copyright) a
 - A few very large regions that cross a time-zone line, such as Nunavut and some Russian and Brazilian states, get one label based on the zone at their centre. The colours underneath still show the split, and clicking a spot gives that spot's hours.
 - The borders are simplified to keep the data small, so coastlines are approximate when you zoom right in.
 - There is no satellite imagery.
-- Favourites live in your browser's local storage, so they don't sync between devices, and clearing site data removes them.
+- Favourites and added layers are stored in your browser (local storage and IndexedDB), so they don't sync between devices, and clearing site data removes them.
 
 ## Licence
 

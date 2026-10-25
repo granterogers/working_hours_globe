@@ -485,8 +485,21 @@ async function loadFile(f){let fc;const n=f.name.toLowerCase();
   else if(n.endsWith('.kml'))fc=kml2geo(await f.text());
   else{fc=JSON.parse(await f.text());if(fc.type==='Feature')fc={type:'FeatureCollection',features:[fc]};fc.features.forEach(x=>{if(!x.properties)x.properties={}})}
   if(!fc.features||!fc.features.length)throw new Error('it has no placemarks or features');
-  fc.features.forEach(x=>fixGeom(x.geometry));const L={name:f.name,fc,on:true,color:COLORS[overlays.length%COLORS.length]};overlays.push(L);renderLayers();
-  draw();}
+  fc.features.forEach(x=>fixGeom(x.geometry));
+  const used=new Set(overlays.map(o=>o.color)),color=COLORS.find(c=>!used.has(c))||COLORS[overlays.length%COLORS.length];
+  const L={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:f.name,fc,on:true,color,added:Date.now()};
+  overlays.push(L);renderLayers();draw();storeLayer(L);}
+// added layers are kept between visits in this browser's IndexedDB (room for large files, unlike localStorage)
+const layerDB=(()=>{let p=null;const open=()=>p||(p=new Promise((res,rej)=>{const r=indexedDB.open('working-hours-globe',1);
+  r.onupgradeneeded=()=>r.result.createObjectStore('layers',{keyPath:'id'});r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}));
+  const run=async(mode,fn)=>{const db=await open();return new Promise((res,rej)=>{const t=db.transaction('layers',mode),req=fn(t.objectStore('layers'));
+    t.oncomplete=()=>res(req&&req.result);t.onerror=t.onabort=()=>rej(t.error)})};
+  return{all:()=>run('readonly',s=>s.getAll()),put:v=>run('readwrite',s=>s.put(v)),del:id=>run('readwrite',s=>s.delete(id))};})();
+function storeLayer(L){layerDB.put({id:L.id,name:L.name,fc:L.fc,on:L.on,color:L.color,added:L.added}).catch(err=>{
+  if(err&&err.name==='QuotaExceededError')alert(L.name+' is shown now, but it is too large to keep for your next visit.')})}
+layerDB.all().then(list=>{if(!list||!list.length)return;list.sort((a,b)=>(a.added||0)-(b.added||0)).forEach(v=>{
+  if(v&&v.fc&&Array.isArray(v.fc.features)&&!overlays.some(o=>o.id===v.id))overlays.push({id:v.id,name:v.name,fc:v.fc,on:v.on!==false,color:v.color||COLORS[overlays.length%COLORS.length],added:v.added})});
+  renderLayers();draw();}).catch(()=>{});
 function kml2geo(txt){const doc=new DOMParser().parseFromString(txt,'text/xml'),out=[];
   const T=(el,t)=>Array.from(el.getElementsByTagNameNS('*',t));
   const C=el=>(el?el.textContent:'').trim().split(/\s+/).filter(Boolean).map(s=>s.split(',').slice(0,2).map(Number)).filter(p=>isFinite(p[0])&&isFinite(p[1]));
@@ -508,7 +521,7 @@ function kml2geo(txt){const doc=new DOMParser().parseFromString(txt,'text/xml'),
 function renderLayers(){const ul=document.getElementById('layers');ul.innerHTML='';
   overlays.forEach((L,i)=>{const li=document.createElement('li');
     li.innerHTML=`<input type="checkbox" ${L.on?'checked':''} aria-label="Show ${esc(L.name)}"><i style="width:10px;height:10px;border-radius:50%;background:${L.color};flex:none"></i><span title="${esc(L.name)}">${esc(L.name)}</span><button class="x" aria-label="Remove ${esc(L.name)}">×</button>`;
-    li.querySelector('input').onchange=e=>{L.on=e.target.checked;draw()};li.querySelector('.x').onclick=()=>{if(selected&&selected.L===L){selected=null;hideInfo()}overlays.splice(i,1);renderLayers();draw()};ul.appendChild(li)});}
+    li.querySelector('input').onchange=e=>{L.on=e.target.checked;draw();storeLayer(L)};li.querySelector('.x').onclick=()=>{if(selected&&selected.L===L){selected=null;hideInfo()}overlays.splice(i,1);renderLayers();draw();layerDB.del(L.id).catch(()=>{})};ul.appendChild(li)});}
 
 // start
 window.addEventListener('resize',resize);setSeason(season);theme();resize();
