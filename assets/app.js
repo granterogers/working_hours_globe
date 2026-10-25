@@ -108,15 +108,15 @@ function draw(){
   const tileA=clamp((k-TILE_K)/2.5,0,1),bA=1-tileA;
   if(bA>0.02){ctx.globalAlpha=bA;ctx.lineJoin='round';strokeFC(CB,pal.coast1,k>4?9:6);strokeFC(CB,pal.coast2,k>4?3.5:2.5);ctx.globalAlpha=1}
   fillBands(D.gaps);fillBands(TZ);
-  // street map tiles fade in as you zoom towards a country, tinted by the time-zone colours
-  const shown=tileA>0&&drawTiles();if(shown){ctx.globalAlpha=tileA*0.8;ctx.drawImage(tcv,0,0,W,H);ctx.globalAlpha=1}
-  if(shown)attrib.textContent=BASEMAPS[basemap].attr;attrib.classList.toggle('show',shown);
+  // street map fades in as you zoom towards a country, tinted by the time-zone colours
+  const shown=tileA>0&&drawTiles();if(shown){ctx.globalAlpha=tileA*0.78;ctx.drawImage(tcv,0,0,W,H);ctx.globalAlpha=1}
+  if(shown)attrib.textContent=VT_ATTR;attrib.classList.toggle('show',shown);
   if(bA>0.02){ctx.globalAlpha=bA;strokeFC(CB,pal.border,k>4?1.4:0.9);ctx.globalAlpha=1}
   // sphere shading for depth
   ctx.save();ctx.beginPath();path({type:'Sphere'});ctx.clip();
   const sg=ctx.createRadialGradient(cx-s*.42,cy-s*.48,0,cx,cy,s*1.02);sg.addColorStop(0,pal.shadeLite);sg.addColorStop(.55,'rgba(0,0,0,0)');sg.addColorStop(1,pal.shadeDark);
   ctx.fillStyle=sg;ctx.fillRect(0,0,W,H);ctx.restore();
-  drawOverlays();drawLabels();drawPin();
+  drawOverlays();drawLabels();if(shown)drawMapLabels(tileA);drawPin();
 }
 
 function drawOverlays(){overlays.forEach(L=>{if(!L.on)return;L.fc.features.forEach(f=>{const g=f.geometry;if(!g||/Point/.test(g.type))return;
@@ -225,22 +225,115 @@ function flyTo(lon,lat,sizeDeg,dur){
   fly={t0:performance.now(),dur:reduce?1:dur||1500,ir:d3.interpolate(r0,r1),ik:t=>ik0+(ik1-ik0)*t-Math.sin(Math.PI*t)*lift};vel=[0,0];kick();
 }
 
-// street map tiles (OpenStreetMap and CARTO), reprojected onto the globe
-const TILE_K=5.5;
-const BASEMAPS={
-  osm:{name:'OpenStreetMap',max:19,attr:'Map data © OpenStreetMap contributors',url:(z,x,y)=>`https://tile.openstreetmap.org/${z}/${x}/${y}.png`},
-  light:{name:'Light',max:20,attr:'© OpenStreetMap contributors © CARTO',url:(z,x,y)=>`https://${'abcd'[(x+y)&3]}.basemaps.cartocdn.com/light_all/${z}/${x}/${y}${dpr>1?'@2x':''}.png`},
-  dark:{name:'Dark',max:20,attr:'© OpenStreetMap contributors © CARTO',url:(z,x,y)=>`https://${'abcd'[(x+y)&3]}.basemaps.cartocdn.com/dark_all/${z}/${x}/${y}${dpr>1?'@2x':''}.png`},
-  off:null};
-const basemap='osm';
+// street map: OpenFreeMap vector tiles (OpenMapTiles schema). Each tile is painted to its own canvas and
+// reprojected onto the globe; place, road and water names are then set upright on top in screen space,
+// in English where OpenStreetMap has an English name (name:en), otherwise in the local name.
+const TILE_K=5.5,VT_JSON='https://tiles.openfreemap.org/planet',VT_DRAW_MAX=19;
+const VT_ATTR='OpenFreeMap · © OpenMapTiles · Data © OpenStreetMap contributors';
 const attrib=document.getElementById('attrib');
-const tiles=new Map();let tileDrawPending=false;const tcv=document.createElement('canvas'),tctx=tcv.getContext('2d');
+let tileDrawPending=false;const tcv=document.createElement('canvas'),tctx=tcv.getContext('2d');
 function tileRedraw(){if(tileDrawPending||running)return;tileDrawPending=true;requestAnimationFrame(()=>{tileDrawPending=false;if(!running)draw()})}
-function tile(z,x,y,load){const key=basemap+'/'+z+'/'+x+'/'+y;let t=tiles.get(key);
-  if(!t&&load){t={img:new Image(),ok:false};t.img.onload=()=>{t.ok=true;tileRedraw()};t.img.onerror=()=>{t.err=true};
-    t.img.src=BASEMAPS[basemap].url(z,x,y);tiles.set(key,t);
-    if(tiles.size>700){let n=tiles.size-600;for(const kk of tiles.keys()){tiles.delete(kk);if(--n<=0)break}}}
-  else if(t){tiles.delete(key);tiles.set(key,t)}
+// the tile URL changes with every weekly build, so read it from the TileJSON first
+const vt={url:null,max:14,state:0};
+function vtSource(){if(vt.state===0){vt.state=1;
+    fetch(VT_JSON).then(r=>{if(!r.ok)throw 0;return r.json()}).then(j=>{if(!j||!j.tiles||!j.tiles[0])throw 0;vt.url=j.tiles[0];if(j.maxzoom)vt.max=Math.min(j.maxzoom,16);vt.state=2;tileRedraw()})
+      .catch(()=>setTimeout(()=>{vt.state=0;tileRedraw()},15000));}
+  return vt.state===2;}
+// minimal Mapbox Vector Tile decoder: layers → features with properties and geometry parts in tile units
+const TD=new TextDecoder();
+function mvt(buf){const b=new Uint8Array(buf),dv=new DataView(buf);let p=0;const out={};
+  const vi=()=>{let r=0,s=1,c;do{c=b[p++];r+=(c&127)*s;s*=128}while(c&128);return r};
+  const skip=t=>{if(t===0)vi();else if(t===1)p+=8;else if(t===2)p+=vi();else if(t===5)p+=4};
+  const str=()=>{const l=vi(),s=TD.decode(b.subarray(p,p+l));p+=l;return s};
+  while(p<b.length){const tag=vi();if(tag===26){const end=vi()+p,L={name:'',e:4096,f:[]},keys=[],vals=[],raw=[];
+      while(p<end){const t=vi(),f=t>>3,w=t&7;
+        if(f===1)L.name=str();
+        else if(f===2){const fe=vi()+p,F={t:0,tags:null,g:[]};
+          while(p<fe){const t2=vi(),f2=t2>>3;
+            if(f2===2){const e2=vi()+p,a=[];while(p<e2)a.push(vi());F.tags=a}
+            else if(f2===3)F.t=vi();
+            else if(f2===4){const e2=vi()+p;let x=0,y=0,cur=null;
+              while(p<e2){const c=vi(),id=c&7,n=c>>3;if(id===1||id===2)for(let i=0;i<n;i++){const dx=vi(),dy=vi();x+=(dx>>>1)^-(dx&1);y+=(dy>>>1)^-(dy&1);if(id===1){cur=[];F.g.push(cur)}if(cur)cur.push(x,y)}}}
+            else skip(t2&7)}
+          raw.push(F)}
+        else if(f===3)keys.push(str());
+        else if(f===4){const ve=vi()+p;let v=null;
+          while(p<ve){const t2=vi(),f2=t2>>3;
+            if(f2===1)v=str();else if(f2===2){v=dv.getFloat32(p,true);p+=4}else if(f2===3){v=dv.getFloat64(p,true);p+=8}
+            else if(f2===4||f2===5)v=vi();else if(f2===6){const z=vi();v=z%2?-(z+1)/2:z/2}else if(f2===7)v=!!vi();else skip(t2&7)}
+          vals.push(v)}
+        else if(f===5)L.e=vi();
+        else skip(w)}
+      for(const F of raw){const pr={};if(F.tags)for(let i=0;i+1<F.tags.length;i+=2)pr[keys[F.tags[i]]]=vals[F.tags[i+1]];L.f.push({t:F.t,p:pr,g:F.g})}
+      out[L.name]=L;p=end}
+    else skip(tag&7)}
+  return out;}
+// downloaded tile data, least recently used dropped first
+const vdata=new Map();let vInflight=0;
+function vtData(z,x,y,load){const key=z+'/'+x+'/'+y;let d=vdata.get(key);
+  if(d){vdata.delete(key);vdata.set(key,d);if(d.err&&load&&performance.now()>d.retry){vdata.delete(key);d=null}else return d}
+  if(!load||vInflight>=16||!vtSource())return null;
+  d={ok:false};vdata.set(key,d);vInflight++;
+  fetch(vt.url.replace('{z}',z).replace('{x}',x).replace('{y}',y)).then(async r=>{
+      if(r.status===204||r.status===404)return new ArrayBuffer(0);if(!r.ok)throw new Error('HTTP '+r.status);
+      let ab=await r.arrayBuffer();const h=new Uint8Array(ab,0,Math.min(2,ab.byteLength));
+      if(h[0]===0x1f&&h[1]===0x8b)ab=await new Response(new Blob([ab]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+      return ab})
+    .then(ab=>{d.L=mvt(ab);d.ok=true;tileRedraw()})
+    .catch(()=>{d.err=true;d.retry=performance.now()+20000})
+    .finally(()=>{vInflight--});
+  if(vdata.size>260){let n=vdata.size-220;for(const kk of vdata.keys()){if(kk!==key){vdata.delete(kk);if(--n<=0)break}}}
+  return d;}
+// tile paint styles; tiles are opaque (so overlapping edges don't show) and laid over the time-zone colours
+// at partial opacity, which tints them
+const VS={
+  l:{land:'#f3efe6',wood:'rgba(150,196,128,.5)',grass:'rgba(186,222,150,.45)',farm:'rgba(236,232,200,.35)',sand:'rgba(245,230,180,.5)',ice:'rgba(250,252,255,.8)',wet:'rgba(170,210,190,.45)',
+     park:'rgba(150,210,140,.5)',res:'rgba(222,216,206,.4)',ind:'rgba(226,212,228,.45)',civic:'rgba(240,215,205,.45)',water:'#a8cdef',bld:'rgba(214,206,196,.95)',bldE:'rgba(180,170,160,.9)',
+     casing:'rgba(150,140,130,.85)',minor:'#ffffff',major:'#fde8ab',moto:'#f7bf85',path:'rgba(140,120,100,.8)',rail:'rgba(120,115,110,.75)',aero:'rgba(210,205,215,.8)',bound:'rgba(120,90,160,.65)'},
+  d:{land:'#161d31',wood:'rgba(40,80,60,.5)',grass:'rgba(46,86,60,.4)',farm:'rgba(60,66,50,.3)',sand:'rgba(90,80,55,.4)',ice:'rgba(200,215,235,.35)',wet:'rgba(40,80,80,.4)',
+     park:'rgba(40,90,60,.5)',res:'rgba(60,64,80,.4)',ind:'rgba(70,58,80,.4)',civic:'rgba(80,58,58,.4)',water:'#0e2a4d',bld:'rgba(58,64,84,.95)',bldE:'rgba(30,34,48,.9)',
+     casing:'rgba(4,7,16,.85)',minor:'#5a6480',major:'#8a7a52',moto:'#a87645',path:'rgba(150,150,170,.6)',rail:'rgba(150,150,170,.6)',aero:'rgba(70,70,90,.7)',bound:'rgba(190,160,230,.6)'}};
+const RW={motorway:3,trunk:2.7,primary:2.4,secondary:2,tertiary:1.6,minor:1.1,service:.7,track:.6,path:.6};
+const ROADS=['service','minor','tertiary','secondary','primary','trunk','motorway'];
+// paint one display tile (z/x/y) from data tile (z-d) into canvas context g of S device pixels
+function vtPaint(g,L,S,z,d,ox,oy){const V=VS[dark?'d':'l'],px=S/256,k2=2**d,tx=-ox*S,ty=-oy*S;
+  g.fillStyle=V.land;g.fillRect(0,0,S,S);g.lineCap='round';g.lineJoin='round';
+  const trace=(F,e,close)=>{const sc=S*k2/e;for(const a of F.g){g.moveTo(a[0]*sc+tx,a[1]*sc+ty);for(let i=2;i<a.length;i+=2)g.lineTo(a[i]*sc+tx,a[i+1]*sc+ty);if(close)g.closePath()}};
+  const fill=(name,pick)=>{const lay=L[name];if(!lay)return;const grp=new Map();
+    for(const F of lay.f){if(F.t!==3)continue;const c=pick(F.p);if(!c)continue;let a=grp.get(c);if(!a)grp.set(c,a=[]);a.push(F)}
+    for(const [c,a] of grp){g.beginPath();for(const F of a)trace(F,lay.e,true);g.fillStyle=c;g.fill()}};
+  const stroke=(lay,arr,col,w,dash)=>{if(!arr||!arr.length||w<0.2)return;g.beginPath();for(const F of arr)trace(F,lay.e,false);g.strokeStyle=col;g.lineWidth=w;g.setLineDash(dash||[]);g.stroke();g.setLineDash([])};
+  fill('landuse',p=>{const c=p.class||'';return/residential|suburb|neighbourhood/.test(c)?V.res:/industrial|commercial|retail|railway|garages|quarry/.test(c)?V.ind:
+    /hospital|school|college|university|kindergarten/.test(c)?V.civic:/cemetery|pitch|playground|stadium/.test(c)?V.park:null});
+  fill('landcover',p=>({wood:V.wood,forest:V.wood,grass:V.grass,farmland:V.farm,sand:V.sand,ice:V.ice,glacier:V.ice,wetland:V.wet})[p.class]);
+  fill('park',()=>V.park);
+  const zf=clamp(2**((z-12)*0.7),0.25,6)*px;
+  const ww=L.waterway;if(ww){const big=[],small=[];for(const F of ww.f)if(F.t===2)(F.p.class==='river'||F.p.class==='canal'?big:small).push(F);
+    stroke(ww,big,V.water,Math.max(0.8*px,1.6*zf));stroke(ww,small,V.water,Math.max(0.5*px,0.7*zf))}
+  fill('water',()=>V.water);
+  fill('aeroway',()=>V.aero);
+  const ar=L.aeroway;if(ar)stroke(ar,ar.f.filter(F=>F.t===2&&F.p.class==='runway'),V.aero,4*zf);
+  if(z>=13){fill('building',()=>V.bld);if(z>=15&&L.building){g.beginPath();for(const F of L.building.f)if(F.t===3)trace(F,L.building.e,true);g.strokeStyle=V.bldE;g.lineWidth=0.6*px;g.stroke()}}
+  const bd=L.boundary;if(bd)stroke(bd,bd.f.filter(F=>F.t===2&&!F.p.maritime&&F.p.admin_level<=4),V.bound,px*(z>=8?1.1:0.8),[4*px,3*px]);
+  const tr=L.transportation;if(tr){const by={};
+    for(const F of tr.f){if(F.t!==2)continue;let c=String(F.p.class||'').replace('_construction','');
+      if(c==='raceway'||c==='busway')c='minor';else if(c==='bus_guideway')c='service';(by[c]||(by[c]=[])).push(F)}
+    stroke(tr,(by.rail||[]).concat(by.transit||[]),V.rail,Math.max(0.6*px,0.8*zf),[3*px,2*px]);
+    stroke(tr,(by.path||[]).concat(by.track||[]),V.path,Math.max(0.6*px,RW.path*zf),[2*px,2*px]);
+    if(z>=11)for(const c of ROADS)stroke(tr,by[c],V.casing,RW[c]*zf+1.4*px);
+    for(const c of ROADS)stroke(tr,by[c],c==='motorway'||c==='trunk'?V.moto:c==='primary'||c==='secondary'?V.major:V.minor,RW[c]*zf)}}
+// painted tiles, least recently used dropped first; painting is spread over frames to keep motion smooth
+const vimg=new Map(),vtUsed=new Set();let vBudget=0;
+function tile(z,x,y,load){const key=(dark?'d':'l')+z+'/'+x+'/'+y;let t=vimg.get(key);
+  if(t){vimg.delete(key);vimg.set(key,t);return t}
+  if(!load)return null;
+  const dz=Math.min(z,vt.max),d=z-dz,dx=x>>d,dy=y>>d,dd=vtData(dz,dx,dy,true);
+  if(!dd||!dd.ok)return null;
+  if(performance.now()>vBudget){tileRedraw();return null}
+  const S=Math.round(256*Math.min(2,Math.max(1,dpr))),c=document.createElement('canvas');c.width=c.height=S;
+  vtPaint(c.getContext('2d'),dd.L,S,z,d,x-(dx<<d),y-(dy<<d));
+  t={img:c,ok:true,dk:dz+'/'+dx+'/'+dy};vimg.set(key,t);
+  if(vimg.size>150){let n=vimg.size-130;for(const kk of vimg.keys()){if(kk!==key){vimg.delete(kk);if(--n<=0)break}}}
   return t;}
 const inflate=1.2;
 const lon2x=(lon,n)=>(lon+180)/360*n;
@@ -248,20 +341,20 @@ const lat2y=(lat,n)=>{const r=clamp(lat,-85.05,85.05)*RAD;return(1-Math.log(Math
 const y2lat=(y,n)=>Math.atan(Math.sinh(Math.PI*(1-2*y/n)))*DEG;
 function drawTiles(){
   if(tcv.width!==cv.width||tcv.height!==cv.height){tcv.width=cv.width;tcv.height=cv.height}
-  tctx.setTransform(dpr,0,0,dpr,0,0);tctx.clearRect(0,0,W,H);let drew=0;
-  const B=BASEMAPS[basemap],c0=-rot[0];let r0=1e9,r1=-1e9,la0=90,la1=-90,hit=0;
+  tctx.setTransform(dpr,0,0,dpr,0,0);tctx.clearRect(0,0,W,H);let drew=0;vtUsed.clear();vBudget=performance.now()+(running?6:14);
+  const c0=-rot[0];let r0=1e9,r1=-1e9,la0=90,la1=-90,hit=0;
   for(let i=0;i<=8;i++)for(let j=0;j<=8;j++){const ll=proj.invert([W*i/8,H*j/8]);if(!ll||d3.geoDistance(ll,viewCap[0])>1.5)continue;hit++;
     const r=wrap(ll[0]-c0);r0=Math.min(r0,r);r1=Math.max(r1,r);la0=Math.min(la0,ll[1]);la1=Math.max(la1,ll[1]);}
   if(!hit)return false;const pad=(r1-r0)*0.08+0.01;r0-=pad;r1+=pad;la0=Math.max(-85,la0-pad);la1=Math.min(85,la1+pad);
   const ppd=base*k/DEG,lat=clamp(-rot[1],-80,80);
-  let z=clamp(Math.round(Math.log2(ppd*360*Math.cos(lat*RAD)/256*(dpr>1?1.25:1))),2,B.max),x0,x1,y0,y1,n;
+  let z=clamp(Math.round(Math.log2(ppd*360*Math.cos(lat*RAD)/256*(dpr>1?1.25:1))),2,VT_DRAW_MAX),x0,x1,y0,y1,n;
   for(;;){n=2**z;x0=Math.floor(lon2x(c0+r0,n));x1=Math.floor(lon2x(c0+r1,n));y0=Math.floor(lat2y(la1,n));y1=Math.floor(lat2y(la0,n));
     if((x1-x0+1)*(y1-y0+1)<=90||z<=2)break;z--;}
   const N=k<14?3:2;
   for(let ty=Math.max(0,y0);ty<=Math.min(n-1,y1);ty++)for(let tx=x0;tx<=x1;tx++){
     const wx=((tx%n)+n)%n;let t=tile(z,wx,ty,true),img=null,sx=0,sy=0,sz=256;
-    if(t&&t.ok){img=t.img;sz=img.naturalWidth}
-    else for(let d=1;d<=5&&z-d>=0;d++){const p=tile(z-d,wx>>d,ty>>d,false);if(p&&p.ok){img=p.img;const s=p.img.naturalWidth/(1<<d);sx=(wx-((wx>>d)<<d))*s;sy=(ty-((ty>>d)<<d))*s;sz=s;break}}
+    if(t&&t.ok){img=t.img;sz=img.width;vtUsed.add(t.dk)}
+    else for(let d=1;d<=5&&z-d>=0;d++){const p=tile(z-d,wx>>d,ty>>d,false);if(p&&p.ok){img=p.img;const s=p.img.width/(1<<d);sx=(wx-((wx>>d)<<d))*s;sy=(ty-((ty>>d)<<d))*s;sz=s;vtUsed.add(p.dk);break}}
     if(!img)continue;
     const cs=sz/N;
     for(let j=0;j<N;j++)for(let i=0;i<N;i++){
@@ -275,6 +368,62 @@ function drawTiles(){
       const e=1.2*cs/Math.max(1,Math.hypot(p1[0]-p0[0],p1[1]-p0[1]));tctx.drawImage(img,sx+i*cs,sy+j*cs,cs,cs,-e,-e,cs+2*e,cs+2*e);tctx.restore();drew++;}}
   return drew>0;
 }
+// map names, read once per data tile: English (name:en) where OpenStreetMap has it, else the local name.
+// Country and state names are left to the time-zone labels.
+const PLACE={city:900,town:800,island:700,village:600,suburb:500,quarter:420,hamlet:400,neighbourhood:300,islet:300,locality:200,isolated_dwelling:150};
+const ROADPRI={motorway:260,trunk:250,primary:240,secondary:220,tertiary:200,minor:150,service:100};
+const nameOf=p=>p['name:en']||p.name||'';
+function vtLabels(dk,dd){if(dd.labels)return dd.labels;const [z,x,y]=dk.split('/').map(Number),n=2**z,out=[];
+  const ll=(e,a,i)=>[(x+a[i]/e)/n*360-180,y2lat(y+a[i+1]/e,n)];
+  const pts=(lay,F,kind,cls,pri)=>{const name=nameOf(F.p);if(!name)return;
+    for(const a of F.g){if(a[0]<0||a[1]<0||a[0]>=lay.e||a[1]>=lay.e)continue;const q=ll(lay.e,a,0);out.push({kind,cls,name,v:vec(q[0],q[1]),pri})}};
+  const line=(lay,F,kind,cls,pri)=>{const name=nameOf(F.p);if(!name)return;let best=null,bl=0;
+    for(const a of F.g){let l=0;for(let i=2;i<a.length;i+=2)l+=Math.hypot(a[i]-a[i-2],a[i+1]-a[i-1]);if(l>bl){bl=l;best=a}}
+    if(!best||bl<lay.e*0.04)return;const step=Math.max(1,Math.floor(best.length/2/32)),vs=[];
+    for(let i=0;i<best.length;i+=2*step){const q=ll(lay.e,best,i);vs.push(vec(q[0],q[1]))}
+    if((best.length/2-1)%step){const q=ll(lay.e,best,best.length-2);vs.push(vec(q[0],q[1]))}
+    out.push({kind,cls,name,line:vs,pri})};
+  const L=dd.L;
+  if(L.place)for(const F of L.place.f){const w=PLACE[F.p.class];if(w&&F.t===1)pts(L.place,F,'place',F.p.class,w-(+F.p.rank||10))}
+  if(L.water_name)for(const F of L.water_name.f){const c=F.p.class,w=c==='ocean'?880:c==='sea'?760:c==='lake'||c==='bay'||c==='strait'?450:350;
+    if(F.t===1)pts(L.water_name,F,'water',c,w);else if(F.t===2)line(L.water_name,F,'water',c,w)}
+  if(L.aerodrome_label)for(const F of L.aerodrome_label.f)if(F.t===1)pts(L.aerodrome_label,F,'air','air',320);
+  if(L.transportation_name)for(const F of L.transportation_name.f){const c=String(F.p.class||'').replace('_construction',''),w=ROADPRI[c];if(w&&F.t===2)line(L.transportation_name,F,'road',c,w)}
+  return dd.labels=out;}
+const LF={city:'700 13.5px "Bricolage Grotesque", "Segoe UI", sans-serif',town:'600 12.5px "Bricolage Grotesque", "Segoe UI", sans-serif',
+  place:'500 11.5px "Bricolage Grotesque", "Segoe UI", sans-serif',small:'500 10.5px "Bricolage Grotesque", "Segoe UI", sans-serif',
+  water:'italic 500 12px Fraunces, Georgia, serif',road:'500 10.5px "Bricolage Grotesque", "Segoe UI", sans-serif'};
+function drawMapLabels(alpha){
+  const cand=[];for(const dk of vtUsed){const dd=vdata.get(dk);if(dd&&dd.ok)for(const L of vtLabels(dk,dd))cand.push(L)}
+  if(!cand.length)return;cand.sort((p,q)=>q.pri-p.pri);
+  const boxes=placed.map(r=>[r.x0,r.y0,r.x1,r.y1]),seen=new Map();
+  const free=bs=>!bs.some(b=>boxes.some(q=>b[0]<q[2]&&b[2]>q[0]&&b[1]<q[3]&&b[3]>q[1]));
+  const near=(name,x,y,gap)=>{const s=seen.get(name);return s&&s.some(q=>Math.hypot(q[0]-x,q[1]-y)<gap)};
+  const sp=v=>{if(M[0]*v[0]+M[1]*v[1]+M[2]*v[2]<0.07)return null;return[cx+SC*(M[3]*v[0]+M[4]*v[1]),cy-SC*(M[6]*v[0]+M[7]*v[1]+M[8]*v[2])]};
+  const waterInk=dark?'#8fc1f2':'#2c66a3';
+  ctx.save();ctx.globalAlpha=alpha;ctx.lineJoin='round';ctx.textAlign='center';ctx.textBaseline='middle';ctx.strokeStyle=pal.halo;let n=0;
+  for(const L of cand){if(n>=160)break;
+    if(L.line){const pp=[];for(const v of L.line){const q=sp(v);if(!q){if(pp.length>1)break;pp.length=0;continue}pp.push(q)}
+      if(pp.length<2)continue;const font=L.kind==='water'?LF.water:LF.road,w=tw(L.name,font)+8,h=L.kind==='water'?15:13;
+      const cum=[0];for(let i=1;i<pp.length;i++)cum.push(cum[i-1]+Math.hypot(pp[i][0]-pp[i-1][0],pp[i][1]-pp[i-1][1]));
+      const tot=cum[cum.length-1];if(tot<w+16)continue;
+      const at=s=>{let i=1;while(i<cum.length-1&&cum[i]<s)i++;const f=(s-cum[i-1])/((cum[i]-cum[i-1])||1);return[pp[i-1][0]+(pp[i][0]-pp[i-1][0])*f,pp[i-1][1]+(pp[i][1]-pp[i-1][1])*f]};
+      const m=at(tot/2),a=at(tot/2-w/2),b=at(tot/2+w/2),chord=Math.hypot(b[0]-a[0],b[1]-a[1]);
+      if(chord<w*0.85||m[0]<0||m[1]<0||m[0]>W||m[1]>H)continue;
+      if(near(L.name,m[0],m[1],L.kind==='water'?400:240))continue;
+      let ang=Math.atan2(b[1]-a[1],b[0]-a[0]);if(ang>Math.PI/2)ang-=Math.PI;else if(ang<-Math.PI/2)ang+=Math.PI;
+      const ux=Math.cos(ang),uy=Math.sin(ang),bs=[],nb=Math.max(1,Math.ceil(w/h));
+      for(let i=0;i<nb;i++){const o=(i+0.5)/nb*w-w/2,X=m[0]+ux*o,Y=m[1]+uy*o;bs.push([X-h/2,Y-h/2,X+h/2,Y+h/2])}
+      if(!free(bs))continue;boxes.push(...bs);if(!seen.has(L.name))seen.set(L.name,[]);seen.get(L.name).push(m);
+      ctx.save();ctx.translate(m[0],m[1]);ctx.rotate(ang);ctx.font=font;ctx.lineWidth=3.5;ctx.strokeText(L.name,0,0);
+      ctx.fillStyle=L.kind==='water'?waterInk:pal.ink2;ctx.fillText(L.name,0,0);ctx.restore();n++;}
+    else{const q=sp(L.v);if(!q)continue;const [x,y]=q;if(x<-40||y<-20||x>W+40||y>H+20)continue;
+      const font=L.kind==='water'?LF.water:L.cls==='city'?LF.city:L.cls==='town'?LF.town:L.kind==='air'||/hamlet|neighbourhood|locality|isolated|islet/.test(L.cls)?LF.small:LF.place;
+      const w=tw(L.name,font)+8,h=L.cls==='city'?18:16,bx=[x-w/2,y-h/2,x+w/2,y+h/2];
+      if(near(L.name,x,y,500)||!free([bx]))continue;boxes.push(bx);if(!seen.has(L.name))seen.set(L.name,[]);seen.get(L.name).push(q);
+      ctx.font=font;ctx.lineWidth=L.cls==='city'?4:3.5;ctx.strokeText(L.name,x,y);
+      ctx.fillStyle=L.kind==='water'?waterInk:L.cls==='city'||L.cls==='town'?pal.ink:pal.ink2;ctx.fillText(L.name,x,y);n++;}}
+  ctx.restore();}
 
 
 // favourites, kept in this browser between visits
