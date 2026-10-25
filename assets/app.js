@@ -13,7 +13,7 @@ const BANDS=[
   {lo:14,hi:17,name:"Afternoon into evening",sub:"starts 14:00–17:00",dark:"#ee7a5a",light:"#e0623f"},
   {lo:17,hi:21,name:"Evening into night",sub:"starts 17:00–21:00",dark:"#d8578f",light:"#c63e78"},
   {lo:21,hi:29,name:"Overnight",sub:"starts 21:00–05:00",dark:"#5a6bdc",light:"#4656c8"}];
-const DEG=180/Math.PI, MINK=0.85, MAXK=260;
+const DEG=180/Math.PI, MINK=0.85, MAXK=9000;
 let S=12,E=20,season=0,W=0,H=0,dpr=1,base=300,cx=0,cy=0;
 let rot=[-8,-36,0],k=0.7,kT=1,vel=[0,0],anchor=null,dragging=false,running=false,fly=null,overlays=[],placed=[],dark=true,pal={};
 try{if(new Date().toLocaleString('en-GB',{timeZone:'Europe/London',timeZoneName:'short'}).includes('BST'))season=1}catch(e){}
@@ -108,8 +108,8 @@ function draw(){
   const tileA=clamp((k-TILE_K)/2.5,0,1),bA=1-tileA;
   if(bA>0.02){ctx.globalAlpha=bA;ctx.lineJoin='round';strokeFC(CB,pal.coast1,k>4?9:6);strokeFC(CB,pal.coast2,k>4?3.5:2.5);ctx.globalAlpha=1}
   fillBands(D.gaps);fillBands(TZ);
-  // street map fades in as you zoom towards a country, tinted by the time-zone colours
-  const shown=tileA>0&&drawTiles();if(shown){ctx.globalAlpha=tileA*0.78;ctx.drawImage(tcv,0,0,W,H);ctx.globalAlpha=1}
+  // street map fades in as you zoom towards a country, replacing the time-zone colours once fully in
+  const shown=tileA>0&&drawTiles();if(shown){ctx.globalAlpha=tileA;ctx.drawImage(tcv,0,0,W,H);ctx.globalAlpha=1}
   if(shown)attrib.textContent=VT_ATTR;attrib.classList.toggle('show',shown);
   if(bA>0.02){ctx.globalAlpha=bA;strokeFC(CB,pal.border,k>4?1.4:0.9);ctx.globalAlpha=1}
   // sphere shading for depth
@@ -284,47 +284,64 @@ function vtData(z,x,y,load){const key=z+'/'+x+'/'+y;let d=vdata.get(key);
     .finally(()=>{vInflight--});
   if(vdata.size>260){let n=vdata.size-220;for(const kk of vdata.keys()){if(kk!==key){vdata.delete(kk);if(--n<=0)break}}}
   return d;}
-// tile paint styles; tiles are opaque (so overlapping edges don't show) and laid over the time-zone colours
-// at partial opacity, which tints them
-const VS={
-  l:{land:'#f3efe6',wood:'rgba(150,196,128,.5)',grass:'rgba(186,222,150,.45)',farm:'rgba(236,232,200,.35)',sand:'rgba(245,230,180,.5)',ice:'rgba(250,252,255,.8)',wet:'rgba(170,210,190,.45)',
-     park:'rgba(150,210,140,.5)',res:'rgba(222,216,206,.4)',ind:'rgba(226,212,228,.45)',civic:'rgba(240,215,205,.45)',water:'#a8cdef',bld:'rgba(214,206,196,.95)',bldE:'rgba(180,170,160,.9)',
-     casing:'rgba(150,140,130,.85)',minor:'#ffffff',major:'#fde8ab',moto:'#f7bf85',path:'rgba(140,120,100,.8)',rail:'rgba(120,115,110,.75)',aero:'rgba(210,205,215,.8)',bound:'rgba(120,90,160,.65)'},
-  d:{land:'#161d31',wood:'rgba(40,80,60,.5)',grass:'rgba(46,86,60,.4)',farm:'rgba(60,66,50,.3)',sand:'rgba(90,80,55,.4)',ice:'rgba(200,215,235,.35)',wet:'rgba(40,80,80,.4)',
-     park:'rgba(40,90,60,.5)',res:'rgba(60,64,80,.4)',ind:'rgba(70,58,80,.4)',civic:'rgba(80,58,58,.4)',water:'#0e2a4d',bld:'rgba(58,64,84,.95)',bldE:'rgba(30,34,48,.9)',
-     casing:'rgba(4,7,16,.85)',minor:'#5a6480',major:'#8a7a52',moto:'#a87645',path:'rgba(150,150,170,.6)',rail:'rgba(150,150,170,.6)',aero:'rgba(70,70,90,.7)',bound:'rgba(190,160,230,.6)'}};
-const RW={motorway:3,trunk:2.7,primary:2.4,secondary:2,tertiary:1.6,minor:1.1,service:.7,track:.6,path:.6};
+// tile paint styles, modelled on the standard OpenStreetMap map (openstreetmap-carto) so it reads the same
+// in light and dark mode. Tiles are opaque, so once fully faded in the time-zone shapes no longer show through.
+const OC={land:'#f2efe9',water:'#aad3df',res:'#e0dfdf',com:'#f2dad9',retail:'#ffd6d1',ind:'#ebdbe8',garages:'#dfddce',quarry:'#c5c3c3',
+  cemetery:'#aacbaf',civic:'#ffffe5',military:'#f6d4cf',sports:'#dffce2',pitch:'#aae0cb',park:'#c8facc',wood:'#add19e',scrub:'#c8d7ab',
+  heath:'#d6d99f',grass:'#cdebb0',farm:'#eef0d5',orchard:'#aedfa3',rock:'#eee5dc',scree:'#ede4dc',sand:'#f5e9c6',beach:'#fff1ba',ice:'#ddecec',
+  wet:'#d0e6d2',aerodrome:'#e9e7e2',apron:'#dadae0',runway:'#bbbbcc',bld:'#d9d0c9',bldE:'#c4b6ab',bound:'#8d618b',nature:'rgba(0,128,0,',
+  rail:'#707070',path:'#fa8072',track:'#996600'};
+const ROADC={motorway:['#e892a2','#dc2a67'],trunk:['#f9b29c','#c84e2f'],primary:['#fcd6a4','#a06b00'],secondary:['#f7fabf','#707d05'],
+  tertiary:['#ffffff','#8f8f8f'],minor:['#ffffff','#bbbbbb'],service:['#ffffff','#bbbbbb']};
+const RW={motorway:7,trunk:7,primary:6.5,secondary:6,tertiary:5,minor:3.6,service:2.2};
 const ROADS=['service','minor','tertiary','secondary','primary','trunk','motorway'];
+const LCOVER={wood:OC.wood,forest:OC.wood,scrub:OC.scrub,heath:OC.heath,grass:OC.grass,grassland:OC.grass,meadow:OC.grass,fell:OC.heath,park:OC.park,garden:OC.park,
+  farmland:OC.farm,farm:OC.farm,orchard:OC.orchard,vineyard:OC.orchard,plant_nursery:OC.orchard,allotments:OC.orchard,bare_rock:OC.rock,rock:OC.rock,scree:OC.scree,shingle:OC.scree,
+  sand:OC.sand,dune:OC.sand,beach:OC.beach,glacier:OC.ice,ice:OC.ice,wetland:OC.wet,marsh:OC.wet,bog:OC.wet,swamp:OC.wet,wet_meadow:OC.wet,reedbed:OC.wet,golf_course:OC.grass};
+const LUSE={residential:OC.res,commercial:OC.com,retail:OC.retail,industrial:OC.ind,railway:OC.ind,garages:OC.garages,quarry:OC.quarry,cemetery:OC.cemetery,
+  hospital:OC.civic,school:OC.civic,college:OC.civic,university:OC.civic,kindergarten:OC.civic,library:OC.civic,military:OC.military,stadium:OC.sports,
+  pitch:OC.pitch,track:OC.pitch,playground:OC.sports,theme_park:OC.sports,zoo:OC.sports,bus_station:OC.com,dam:OC.rock};
 // paint one display tile (z/x/y) from data tile (z-d) into canvas context g of S device pixels
-function vtPaint(g,L,S,z,d,ox,oy){const V=VS[dark?'d':'l'],px=S/256,k2=2**d,tx=-ox*S,ty=-oy*S;
-  g.fillStyle=V.land;g.fillRect(0,0,S,S);g.lineCap='round';g.lineJoin='round';
+function vtPaint(g,L,S,z,d,ox,oy){const px=S/256,k2=2**d,tx=-ox*S,ty=-oy*S;
+  g.fillStyle=OC.land;g.fillRect(0,0,S,S);g.lineCap='round';g.lineJoin='round';
   const trace=(F,e,close)=>{const sc=S*k2/e;for(const a of F.g){g.moveTo(a[0]*sc+tx,a[1]*sc+ty);for(let i=2;i<a.length;i+=2)g.lineTo(a[i]*sc+tx,a[i+1]*sc+ty);if(close)g.closePath()}};
   const fill=(name,pick)=>{const lay=L[name];if(!lay)return;const grp=new Map();
     for(const F of lay.f){if(F.t!==3)continue;const c=pick(F.p);if(!c)continue;let a=grp.get(c);if(!a)grp.set(c,a=[]);a.push(F)}
     for(const [c,a] of grp){g.beginPath();for(const F of a)trace(F,lay.e,true);g.fillStyle=c;g.fill()}};
-  const stroke=(lay,arr,col,w,dash)=>{if(!arr||!arr.length||w<0.2)return;g.beginPath();for(const F of arr)trace(F,lay.e,false);g.strokeStyle=col;g.lineWidth=w;g.setLineDash(dash||[]);g.stroke();g.setLineDash([])};
-  fill('landuse',p=>{const c=p.class||'';return/residential|suburb|neighbourhood/.test(c)?V.res:/industrial|commercial|retail|railway|garages|quarry/.test(c)?V.ind:
-    /hospital|school|college|university|kindergarten/.test(c)?V.civic:/cemetery|pitch|playground|stadium/.test(c)?V.park:null});
-  fill('landcover',p=>({wood:V.wood,forest:V.wood,grass:V.grass,farmland:V.farm,sand:V.sand,ice:V.ice,glacier:V.ice,wetland:V.wet})[p.class]);
-  fill('park',()=>V.park);
-  const zf=clamp(2**((z-12)*0.7),0.25,6)*px;
-  const ww=L.waterway;if(ww){const big=[],small=[];for(const F of ww.f)if(F.t===2)(F.p.class==='river'||F.p.class==='canal'?big:small).push(F);
-    stroke(ww,big,V.water,Math.max(0.8*px,1.6*zf));stroke(ww,small,V.water,Math.max(0.5*px,0.7*zf))}
-  fill('water',()=>V.water);
-  fill('aeroway',()=>V.aero);
-  const ar=L.aeroway;if(ar)stroke(ar,ar.f.filter(F=>F.t===2&&F.p.class==='runway'),V.aero,4*zf);
-  if(z>=13){fill('building',()=>V.bld);if(z>=15&&L.building){g.beginPath();for(const F of L.building.f)if(F.t===3)trace(F,L.building.e,true);g.strokeStyle=V.bldE;g.lineWidth=0.6*px;g.stroke()}}
-  const bd=L.boundary;if(bd)stroke(bd,bd.f.filter(F=>F.t===2&&!F.p.maritime&&F.p.admin_level<=4),V.bound,px*(z>=8?1.1:0.8),[4*px,3*px]);
+  const stroke=(lay,arr,col,w,dash,cap)=>{if(!arr||!arr.length||w<0.2)return;g.beginPath();for(const F of arr)trace(F,lay.e,false);g.strokeStyle=col;g.lineWidth=w;
+    g.setLineDash(dash||[]);g.lineCap=cap||'round';g.stroke();g.setLineDash([]);g.lineCap='round'};
+  const zr=2**((z-14)*0.62);   // road width scale: about 0.4 at z12, 1 at z14, 3.5 at z17
+  fill('landcover',p=>LCOVER[p.subclass]||LCOVER[p.class]);
+  fill('landuse',p=>LUSE[p.class]);
+  // parks are filled; national parks and nature reserves get openstreetmap-carto's green edge band instead
+  const pk=L.park;if(pk){const parks=[],nat=[];for(const F of pk.f)if(F.t===3)(F.p.class==='park'||F.p.class==='garden'?parks:nat).push(F);
+    if(parks.length){g.beginPath();for(const F of parks)trace(F,pk.e,true);g.fillStyle=OC.park;g.fill()}
+    if(nat.length&&z>=8){g.save();g.beginPath();for(const F of nat)trace(F,pk.e,true);g.clip();g.strokeStyle=OC.nature+'.16)';g.lineWidth=(z>=12?10:6)*px;g.stroke();
+      g.strokeStyle=OC.nature+'.38)';g.lineWidth=1.6*px;g.stroke();g.restore()}}
+  const ar=L.aeroway;if(ar){fill('aeroway',p=>p.class==='aerodrome'?OC.aerodrome:p.class==='apron'?OC.apron:p.class==='runway'||p.class==='taxiway'?OC.runway:null);
+    stroke(ar,ar.f.filter(F=>F.t===2&&F.p.class==='runway'),OC.runway,Math.max(2*px,9*zr*px),null,'butt');
+    if(z>=13)stroke(ar,ar.f.filter(F=>F.t===2&&F.p.class==='taxiway'),OC.runway,Math.max(1*px,3*zr*px),null,'butt')}
+  const ww=L.waterway;if(ww){const big=[],small=[];for(const F of ww.f)if(F.t===2&&F.p.brunnel!=='tunnel')(F.p.class==='river'||F.p.class==='canal'?big:small).push(F);
+    stroke(ww,big,OC.water,Math.max(1*px,3.4*zr*px));if(z>=13)stroke(ww,small,OC.water,Math.max(0.7*px,1.4*zr*px))}
+  fill('water',()=>OC.water);
+  if(z>=13&&L.building){fill('building',()=>OC.bld);if(z>=15){g.beginPath();for(const F of L.building.f)if(F.t===3)trace(F,L.building.e,true);g.strokeStyle=OC.bldE;g.lineWidth=0.7*px;g.stroke()}}
   const tr=L.transportation;if(tr){const by={};
-    for(const F of tr.f){if(F.t!==2)continue;let c=String(F.p.class||'').replace('_construction','');
-      if(c==='raceway'||c==='busway')c='minor';else if(c==='bus_guideway')c='service';(by[c]||(by[c]=[])).push(F)}
-    stroke(tr,(by.rail||[]).concat(by.transit||[]),V.rail,Math.max(0.6*px,0.8*zf),[3*px,2*px]);
-    stroke(tr,(by.path||[]).concat(by.track||[]),V.path,Math.max(0.6*px,RW.path*zf),[2*px,2*px]);
-    if(z>=11)for(const c of ROADS)stroke(tr,by[c],V.casing,RW[c]*zf+1.4*px);
-    for(const c of ROADS)stroke(tr,by[c],c==='motorway'||c==='trunk'?V.moto:c==='primary'||c==='secondary'?V.major:V.minor,RW[c]*zf)}}
+    for(const F of tr.f){if(F.t!==2||F.p.class==='ferry')continue;let c=String(F.p.class||'').replace('_construction','');
+      if(c==='raceway'||c==='busway')c='minor';else if(c==='bus_guideway')c='service';
+      if(c==='path'&&/^(cycleway)$/.test(F.p.subclass))c='cycle';(by[c]||(by[c]=[])).push(F)}
+    if(z>=14){stroke(tr,by.path,OC.path,Math.max(1*px,1.4*px*Math.min(zr,1.6)),[2.5*px,2*px],'butt');stroke(tr,by.cycle,'#0000ff',Math.max(0.9*px,1.2*px*Math.min(zr,1.6)),[2.5*px,2*px],'butt');
+      stroke(tr,by.track,OC.track,Math.max(1*px,1.4*px*Math.min(zr,1.6)),[4*px,2.5*px],'butt')}
+    const rails=(by.rail||[]).concat(by.transit||[]);
+    if(z>=13){stroke(tr,rails,OC.rail,3*px);stroke(tr,rails,'#ffffff',1.2*px,[5*px,5*px],'butt')}else stroke(tr,rails,OC.rail,Math.max(0.8*px,1.2*px*zr*2));
+    const vis=c=>by[c]&&(z>=13||!(c==='service')),w=c=>Math.min(20,Math.max(c==='minor'||c==='service'?0.6:0.9,RW[c]*zr))*px;
+    const casing=c=>z>=12&&(z>=13||!/minor|service/.test(c));
+    for(const c of ROADS)if(vis(c)&&casing(c))stroke(tr,by[c],ROADC[c][1],w(c)+(z>=15?2:1.3)*px);
+    for(const c of ROADS)if(vis(c))stroke(tr,by[c],casing(c)||c==='motorway'||c==='trunk'||c==='primary'||c==='secondary'?ROADC[c][0]:(c==='tertiary'?'#c7c7c7':'#d4d4d4'),w(c))}
+  const bd=L.boundary;if(bd){const a2=[],a4=[];for(const F of bd.f)if(F.t===2&&!F.p.maritime)(F.p.admin_level<=2?a2:F.p.admin_level<=4?a4:[]).push(F);
+    stroke(bd,a2,OC.bound,(z>=10?2:1.4)*px,[6*px,3*px,1.5*px,3*px],'butt');if(z>=8)stroke(bd,a4,OC.bound,1*px,[5*px,3*px],'butt')}}
 // painted tiles, least recently used dropped first; painting is spread over frames to keep motion smooth
 const vimg=new Map(),vtUsed=new Set();let vBudget=0;
-function tile(z,x,y,load){const key=(dark?'d':'l')+z+'/'+x+'/'+y;let t=vimg.get(key);
+function tile(z,x,y,load){const key=z+'/'+x+'/'+y;let t=vimg.get(key);
   if(t){vimg.delete(key);vimg.set(key,t);return t}
   if(!load)return null;
   const dz=Math.min(z,vt.max),d=z-dz,dx=x>>d,dy=y>>d,dd=vtData(dz,dx,dy,true);
@@ -350,6 +367,7 @@ function drawTiles(){
   let z=clamp(Math.round(Math.log2(ppd*360*Math.cos(lat*RAD)/256*(dpr>1?1.25:1))),2,VT_DRAW_MAX),x0,x1,y0,y1,n;
   for(;;){n=2**z;x0=Math.floor(lon2x(c0+r0,n));x1=Math.floor(lon2x(c0+r1,n));y0=Math.floor(lat2y(la1,n));y1=Math.floor(lat2y(la0,n));
     if((x1-x0+1)*(y1-y0+1)<=90||z<=2)break;z--;}
+  vtZ=z;
   const N=k<14?3:2;
   for(let ty=Math.max(0,y0);ty<=Math.min(n-1,y1);ty++)for(let tx=x0;tx<=x1;tx++){
     const wx=((tx%n)+n)%n;let t=tile(z,wx,ty,true),img=null,sx=0,sy=0,sz=256;
@@ -369,60 +387,74 @@ function drawTiles(){
   return drew>0;
 }
 // map names, read once per data tile: English (name:en) where OpenStreetMap has it, else the local name.
-// Country and state names are left to the time-zone labels.
-const PLACE={city:900,town:800,island:700,village:600,suburb:500,quarter:420,hamlet:400,neighbourhood:300,islet:300,locality:200,isolated_dwelling:150};
-const ROADPRI={motorway:260,trunk:250,primary:240,secondary:220,tertiary:200,minor:150,service:100};
+// Country and state names are left to the time-zone labels. Each kind of name appears from the zoom
+// openstreetmap-carto shows it at, so villages, hamlets and points of interest wait until you're close.
+const PLACE={city:[900,6],town:[800,9],island:[700,9],village:[600,12],suburb:[500,12],quarter:[420,14],hamlet:[400,14],islet:[300,13],
+  neighbourhood:[300,15],locality:[200,15],isolated_dwelling:[150,16]};
+const ROADPRI={motorway:[260,11],trunk:[250,11],primary:[240,12],secondary:[220,13],tertiary:[200,14],minor:[150,15],service:[100,17]};
+const POIC=c=>/restaurant|fast_food|cafe|bar|pub|ice_cream|beer|food|bakery/.test(c)?'#c77400':/lodging|hotel|hostel|motel|camp|bus|railway|harbor|ferry|fuel|parking|aerialway|airport|car/.test(c)?'#0092da':
+  /hospital|doctor|dentist|pharmacy|clinic/.test(c)?'#bf0000':/park|garden|playground|pitch|sports|stadium|golf|beach|swimming|zoo/.test(c)?'#0e8517':/shop|grocery|clothing|supermarket|mall/.test(c)?'#ac39ac':'#734a08';
 const nameOf=p=>p['name:en']||p.name||'';
 function vtLabels(dk,dd){if(dd.labels)return dd.labels;const [z,x,y]=dk.split('/').map(Number),n=2**z,out=[];
   const ll=(e,a,i)=>[(x+a[i]/e)/n*360-180,y2lat(y+a[i+1]/e,n)];
-  const pts=(lay,F,kind,cls,pri)=>{const name=nameOf(F.p);if(!name)return;
-    for(const a of F.g){if(a[0]<0||a[1]<0||a[0]>=lay.e||a[1]>=lay.e)continue;const q=ll(lay.e,a,0);out.push({kind,cls,name,v:vec(q[0],q[1]),pri})}};
-  const line=(lay,F,kind,cls,pri)=>{const name=nameOf(F.p);if(!name)return;let best=null,bl=0;
+  const pts=(lay,F,o)=>{const name=nameOf(F.p);if(!name)return;
+    for(const a of F.g){if(a[0]<0||a[1]<0||a[0]>=lay.e||a[1]>=lay.e)continue;const q=ll(lay.e,a,0);out.push(Object.assign({name,v:vec(q[0],q[1])},o))}};
+  const line=(lay,F,o)=>{const name=nameOf(F.p);if(!name)return;let best=null,bl=0;
     for(const a of F.g){let l=0;for(let i=2;i<a.length;i+=2)l+=Math.hypot(a[i]-a[i-2],a[i+1]-a[i-1]);if(l>bl){bl=l;best=a}}
     if(!best||bl<lay.e*0.04)return;const step=Math.max(1,Math.floor(best.length/2/32)),vs=[];
     for(let i=0;i<best.length;i+=2*step){const q=ll(lay.e,best,i);vs.push(vec(q[0],q[1]))}
     if((best.length/2-1)%step){const q=ll(lay.e,best,best.length-2);vs.push(vec(q[0],q[1]))}
-    out.push({kind,cls,name,line:vs,pri})};
+    out.push(Object.assign({name,line:vs},o))};
   const L=dd.L;
-  if(L.place)for(const F of L.place.f){const w=PLACE[F.p.class];if(w&&F.t===1)pts(L.place,F,'place',F.p.class,w-(+F.p.rank||10))}
-  if(L.water_name)for(const F of L.water_name.f){const c=F.p.class,w=c==='ocean'?880:c==='sea'?760:c==='lake'||c==='bay'||c==='strait'?450:350;
-    if(F.t===1)pts(L.water_name,F,'water',c,w);else if(F.t===2)line(L.water_name,F,'water',c,w)}
-  if(L.aerodrome_label)for(const F of L.aerodrome_label.f)if(F.t===1)pts(L.aerodrome_label,F,'air','air',320);
-  if(L.transportation_name)for(const F of L.transportation_name.f){const c=String(F.p.class||'').replace('_construction',''),w=ROADPRI[c];if(w&&F.t===2)line(L.transportation_name,F,'road',c,w)}
+  if(L.place)for(const F of L.place.f){const P=PLACE[F.p.class];if(P&&F.t===1)pts(L.place,F,{kind:'place',cls:F.p.class,pri:P[0]-(+F.p.rank||10),minz:P[1]})}
+  if(L.water_name)for(const F of L.water_name.f){const c=F.p.class,w=c==='ocean'?880:c==='sea'?760:450,mz=c==='ocean'||c==='sea'?0:c==='bay'||c==='strait'?10:12;
+    if(F.t===1)pts(L.water_name,F,{kind:'water',cls:c,pri:w,minz:mz});else if(F.t===2)line(L.water_name,F,{kind:'water',cls:c,pri:w,minz:mz})}
+  if(L.waterway)for(const F of L.waterway.f)if(F.t===2&&(F.p.class==='river'||F.p.class==='canal'))line(L.waterway,F,{kind:'water',cls:'river',pri:300,minz:13});
+  if(L.mountain_peak)for(const F of L.mountain_peak.f)if(F.t===1&&F.p.class!=='saddle')pts(L.mountain_peak,F,{kind:'peak',cls:'peak',ele:F.p.ele,pri:560-(+F.p.rank||10),minz:F.p.class==='volcano'||(+F.p.ele>2500)?10:12});
+  if(L.aerodrome_label)for(const F of L.aerodrome_label.f)if(F.t===1)pts(L.aerodrome_label,F,{kind:'poi',cls:'airport',color:'#0092da',pri:520,minz:11});
+  if(L.poi)for(const F of L.poi.f){if(F.t!==1)continue;const r=+F.p.rank||30;pts(L.poi,F,{kind:'poi',cls:F.p.class,color:POIC(F.p.class+' '+(F.p.subclass||'')),pri:120-r,minz:r<=5?15:r<=15?16:17})}
+  if(L.transportation_name)for(const F of L.transportation_name.f){const c=String(F.p.class||'').replace('_construction',''),R=ROADPRI[c];if(R&&F.t===2)line(L.transportation_name,F,{kind:'road',cls:c,pri:R[0],minz:R[1]})}
   return dd.labels=out;}
-const LF={city:'700 13.5px "Bricolage Grotesque", "Segoe UI", sans-serif',town:'600 12.5px "Bricolage Grotesque", "Segoe UI", sans-serif',
-  place:'500 11.5px "Bricolage Grotesque", "Segoe UI", sans-serif',small:'500 10.5px "Bricolage Grotesque", "Segoe UI", sans-serif',
-  water:'italic 500 12px Fraunces, Georgia, serif',road:'500 10.5px "Bricolage Grotesque", "Segoe UI", sans-serif'};
+const FONT='"Bricolage Grotesque", "Segoe UI", sans-serif';
+const LF={city:'700 14px '+FONT,town:'600 12.5px '+FONT,place:'500 11.5px '+FONT,small:'500 10.5px '+FONT,poi:'500 10.5px '+FONT,
+  water:'italic 500 12px Fraunces, Georgia, serif',road:'500 10.5px '+FONT,peak:'500 11px '+FONT};
+const LINK={place:'#000000',small:'#333333',water:'#4d80b3',road:'#222222',peak:'#3a2a10'};
+let vtZ=0;
 function drawMapLabels(alpha){
-  const cand=[];for(const dk of vtUsed){const dd=vdata.get(dk);if(dd&&dd.ok)for(const L of vtLabels(dk,dd))cand.push(L)}
+  const cand=[];for(const dk of vtUsed){const dd=vdata.get(dk);if(dd&&dd.ok)for(const L of vtLabels(dk,dd))if(vtZ>=L.minz)cand.push(L)}
   if(!cand.length)return;cand.sort((p,q)=>q.pri-p.pri);
   const boxes=placed.map(r=>[r.x0,r.y0,r.x1,r.y1]),seen=new Map();
-  const free=bs=>!bs.some(b=>boxes.some(q=>b[0]<q[2]&&b[2]>q[0]&&b[1]<q[3]&&b[3]>q[1]));
+  const free=bs=>!bs.some(b=>b[0]<0||b[1]<0||b[2]>W||b[3]>H||boxes.some(q=>b[0]-3<q[2]&&b[2]+3>q[0]&&b[1]-2<q[3]&&b[3]+2>q[1]));
   const near=(name,x,y,gap)=>{const s=seen.get(name);return s&&s.some(q=>Math.hypot(q[0]-x,q[1]-y)<gap)};
+  const mark=(name,q)=>{if(!seen.has(name))seen.set(name,[]);seen.get(name).push(q)};
   const sp=v=>{if(M[0]*v[0]+M[1]*v[1]+M[2]*v[2]<0.07)return null;return[cx+SC*(M[3]*v[0]+M[4]*v[1]),cy-SC*(M[6]*v[0]+M[7]*v[1]+M[8]*v[2])]};
-  const waterInk=dark?'#8fc1f2':'#2c66a3';
-  ctx.save();ctx.globalAlpha=alpha;ctx.lineJoin='round';ctx.textAlign='center';ctx.textBaseline='middle';ctx.strokeStyle=pal.halo;let n=0;
-  for(const L of cand){if(n>=160)break;
+  const text=(s,x,y,font,col,hw)=>{ctx.font=font;ctx.lineWidth=hw||3;ctx.strokeText(s,x,y);ctx.fillStyle=col;ctx.fillText(s,x,y)};
+  ctx.save();ctx.globalAlpha=alpha;ctx.lineJoin='round';ctx.textAlign='center';ctx.textBaseline='middle';ctx.strokeStyle='rgba(255,255,255,.9)';let n=0;
+  const cap=clamp(Math.round(W*H/9000),40,140);
+  for(const L of cand){if(n>=cap)break;
     if(L.line){const pp=[];for(const v of L.line){const q=sp(v);if(!q){if(pp.length>1)break;pp.length=0;continue}pp.push(q)}
-      if(pp.length<2)continue;const font=L.kind==='water'?LF.water:LF.road,w=tw(L.name,font)+8,h=L.kind==='water'?15:13;
+      if(pp.length<2)continue;const font=L.kind==='water'?LF.water:LF.road,w=tw(L.name,font)+6,h=L.kind==='water'?15:13;
       const cum=[0];for(let i=1;i<pp.length;i++)cum.push(cum[i-1]+Math.hypot(pp[i][0]-pp[i-1][0],pp[i][1]-pp[i-1][1]));
       const tot=cum[cum.length-1];if(tot<w+16)continue;
       const at=s=>{let i=1;while(i<cum.length-1&&cum[i]<s)i++;const f=(s-cum[i-1])/((cum[i]-cum[i-1])||1);return[pp[i-1][0]+(pp[i][0]-pp[i-1][0])*f,pp[i-1][1]+(pp[i][1]-pp[i-1][1])*f]};
       const m=at(tot/2),a=at(tot/2-w/2),b=at(tot/2+w/2),chord=Math.hypot(b[0]-a[0],b[1]-a[1]);
-      if(chord<w*0.85||m[0]<0||m[1]<0||m[0]>W||m[1]>H)continue;
-      if(near(L.name,m[0],m[1],L.kind==='water'?400:240))continue;
+      if(chord<w*0.88||near(L.name,m[0],m[1],L.kind==='water'?420:280))continue;
       let ang=Math.atan2(b[1]-a[1],b[0]-a[0]);if(ang>Math.PI/2)ang-=Math.PI;else if(ang<-Math.PI/2)ang+=Math.PI;
       const ux=Math.cos(ang),uy=Math.sin(ang),bs=[],nb=Math.max(1,Math.ceil(w/h));
       for(let i=0;i<nb;i++){const o=(i+0.5)/nb*w-w/2,X=m[0]+ux*o,Y=m[1]+uy*o;bs.push([X-h/2,Y-h/2,X+h/2,Y+h/2])}
-      if(!free(bs))continue;boxes.push(...bs);if(!seen.has(L.name))seen.set(L.name,[]);seen.get(L.name).push(m);
-      ctx.save();ctx.translate(m[0],m[1]);ctx.rotate(ang);ctx.font=font;ctx.lineWidth=3.5;ctx.strokeText(L.name,0,0);
-      ctx.fillStyle=L.kind==='water'?waterInk:pal.ink2;ctx.fillText(L.name,0,0);ctx.restore();n++;}
-    else{const q=sp(L.v);if(!q)continue;const [x,y]=q;if(x<-40||y<-20||x>W+40||y>H+20)continue;
-      const font=L.kind==='water'?LF.water:L.cls==='city'?LF.city:L.cls==='town'?LF.town:L.kind==='air'||/hamlet|neighbourhood|locality|isolated|islet/.test(L.cls)?LF.small:LF.place;
-      const w=tw(L.name,font)+8,h=L.cls==='city'?18:16,bx=[x-w/2,y-h/2,x+w/2,y+h/2];
-      if(near(L.name,x,y,500)||!free([bx]))continue;boxes.push(bx);if(!seen.has(L.name))seen.set(L.name,[]);seen.get(L.name).push(q);
-      ctx.font=font;ctx.lineWidth=L.cls==='city'?4:3.5;ctx.strokeText(L.name,x,y);
-      ctx.fillStyle=L.kind==='water'?waterInk:L.cls==='city'||L.cls==='town'?pal.ink:pal.ink2;ctx.fillText(L.name,x,y);n++;}}
+      if(!free(bs))continue;boxes.push(...bs);mark(L.name,m);
+      ctx.save();ctx.translate(m[0],m[1]);ctx.rotate(ang);text(L.name,0,0,font,L.kind==='water'?LINK.water:LINK.road);ctx.restore();n++;continue}
+    const q=sp(L.v);if(!q)continue;const [x,y]=q;if(x<0||y<0||x>W||y>H)continue;
+    if(L.kind==='peak'||L.kind==='poi'){
+      const ele=L.kind==='peak'&&+L.ele>0?Math.round(+L.ele).toLocaleString('en-GB')+' m':'',font=L.kind==='peak'?LF.peak:LF.poi,w=Math.max(tw(L.name,font),ele?tw(ele,LF.small):0)+6;
+      const bx=[x-w/2,y-7,x+w/2,y+(ele?32:20)];if(near(L.name,x,y,300)||!free([bx]))continue;boxes.push(bx);mark(L.name,q);
+      ctx.beginPath();if(L.kind==='peak'){ctx.moveTo(x,y-5);ctx.lineTo(x+5,y+4);ctx.lineTo(x-5,y+4);ctx.closePath();ctx.fillStyle='#d08f55'}else{ctx.arc(x,y,3.5,0,7);ctx.fillStyle=L.color}
+      ctx.lineWidth=1.5;ctx.stroke();ctx.fill();
+      text(L.name,x,y+13,font,L.kind==='peak'?LINK.peak:L.color);if(ele)text(ele,x,y+26,LF.small,LINK.peak);n++;continue}
+    const font=L.kind==='water'?LF.water:L.cls==='city'?LF.city:L.cls==='town'?LF.town:/hamlet|neighbourhood|locality|isolated|islet/.test(L.cls)?LF.small:LF.place;
+    const w=tw(L.name,font)+6,h=L.cls==='city'?18:15,bx=[x-w/2,y-h/2,x+w/2,y+h/2];
+    if(near(L.name,x,y,600)||!free([bx]))continue;boxes.push(bx);mark(L.name,q);
+    text(L.name,x,y,font,L.kind==='water'?LINK.water:/city|town|village|island/.test(L.cls)?LINK.place:LINK.small,L.cls==='city'?3.5:3);n++;}
   ctx.restore();}
 
 
