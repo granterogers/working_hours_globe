@@ -790,7 +790,7 @@ function kml2geo(txt){const doc=new DOMParser().parseFromString(txt,'text/xml'),
 function renderLayers(){const ul=document.getElementById('layers');ul.innerHTML='';
   // the built-in working-hours colours and labels, which can be switched off to see only your own layers
   const wh=document.createElement('li');wh.className='builtin';
-  wh.innerHTML=`<input type="checkbox" ${showHours?'checked':''} aria-label="Show working hours"><i class="sw" style="background:linear-gradient(90deg,${BANDS.map((b,i)=>pal['b'+i]).join(',')})"></i><span>Working hours</span>`;
+  wh.innerHTML=`<input type="checkbox" ${showHours?'checked':''} aria-label="Show working hours"><span>Working hours</span>`;
   wh.querySelector('input').onchange=e=>{showHours=e.target.checked;try{localStorage.setItem('whg.hours',showHours?'on':'off')}catch(err){}ui();draw()};ul.appendChild(wh);
   if(typeof clRow==='function'&&CL.data.length)ul.appendChild(clRow());
   overlays.forEach((L,i)=>{const li=document.createElement('li');
