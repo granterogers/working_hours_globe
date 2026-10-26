@@ -18,6 +18,7 @@ Built for planning where to live and work as a remote worker on UK hours.
 - Flights from any place's details card: pick where you're flying from (your last six are kept as one-tap choices, alongside Europe's busiest airports), choose one of the nearest airports and a date, then open a one-way search on Google Flights or Skyscanner's cheapest-days month calendar with everything filled in.
 - Favourites: press **Add a favourite**, click the map to drop a pin, and it's named after the nearest town or feature with its coordinates. Drag the pin to fine-tune it, add a note and save. A heart marks the spot, saved favourites can be dragged too, and they're kept in your browser between visits.
 - Add your own KML, KMZ or GeoJSON files as layers on top (the view stays where you are, and layers are kept between visits), then click any point, line or area to see its name, description, extended data and your working hours at that spot.
+- Rename any added layer (pencil button, or double-click its name) and switch layers on or off, including the built-in working-hours colours and times, for a plain globe with just your own layers.
 - Dark and light themes, full-screen mode, keyboard controls (arrow keys to spin, `+` and `-` to zoom), and a layout that works on mobile.
 
 ## Run it locally

@@ -15,6 +15,7 @@ const BANDS=[
   {lo:21,hi:29,name:"Overnight",sub:"starts 21:00–05:00",dark:"#5a6bdc",light:"#4656c8"}];
 const DEG=180/Math.PI, MINK=0.85, MAXK=9000;
 let S=12,E=20,season=0,W=0,H=0,dpr=1,base=300,cx=0,cy=0;
+let showHours=(()=>{try{return localStorage.getItem('whg.hours')!=='off'}catch(e){return true}})();
 let rot=[-8,-36,0],k=0.7,kT=1,vel=[0,0],anchor=null,dragging=false,running=false,fly=null,overlays=[],placed=[],dark=true,pal={};
 try{if(new Date().toLocaleString('en-GB',{timeZone:'Europe/London',timeZoneName:'short'}).includes('BST'))season=1}catch(e){}
 
@@ -41,9 +42,9 @@ const proj=d3.geoOrthographic().clipAngle(90).precision(0.35),path=d3.geoPath(pr
 function theme(){dark=!matchMedia('(prefers-color-scheme: light)').matches;
   if(document.documentElement.dataset.theme)dark=document.documentElement.dataset.theme==='dark';
   pal=dark?{oceanIn:'#163a68',oceanOut:'#071630',glow:'rgba(110,170,255,',grat:'rgba(170,200,255,.07)',border:'rgba(8,14,30,.55)',pb:'rgba(8,14,30,.28)',
-            ink:'#f6f7fb',ink2:'rgba(226,232,246,.82)',halo:'rgba(5,10,24,.82)',shadeLite:'rgba(255,255,255,.10)',shadeDark:'rgba(0,4,16,.55)',coast1:'rgba(120,190,255,.07)',coast2:'rgba(140,200,255,.14)',pbTile:'rgba(40,30,80,.45)',borderTile:'rgba(30,20,70,.75)'}
+            land:'#2b3854',ink:'#f6f7fb',ink2:'rgba(226,232,246,.82)',halo:'rgba(5,10,24,.82)',shadeLite:'rgba(255,255,255,.10)',shadeDark:'rgba(0,4,16,.55)',coast1:'rgba(120,190,255,.07)',coast2:'rgba(140,200,255,.14)',pbTile:'rgba(40,30,80,.45)',borderTile:'rgba(30,20,70,.75)'}
           :{oceanIn:'#d4e6f8',oceanOut:'#9dbfe2',glow:'rgba(120,170,235,',grat:'rgba(30,70,130,.08)',border:'rgba(255,255,255,.85)',pb:'rgba(255,255,255,.55)',
-            ink:'#111a30',ink2:'rgba(30,42,70,.85)',halo:'rgba(255,255,255,.9)',shadeLite:'rgba(255,255,255,.22)',shadeDark:'rgba(20,40,80,.22)',coast1:'rgba(255,255,255,.25)',coast2:'rgba(255,255,255,.45)',pbTile:'rgba(40,30,80,.4)',borderTile:'rgba(30,20,70,.7)'};
+            land:'#e9e3d6',ink:'#111a30',ink2:'rgba(30,42,70,.85)',halo:'rgba(255,255,255,.9)',shadeLite:'rgba(255,255,255,.22)',shadeDark:'rgba(20,40,80,.22)',coast1:'rgba(255,255,255,.25)',coast2:'rgba(255,255,255,.45)',pbTile:'rgba(40,30,80,.4)',borderTile:'rgba(30,20,70,.7)'};
   BANDS.forEach((b,i)=>pal['b'+i]=dark?b.dark:b.light);stars();ui();draw();}
 matchMedia('(prefers-color-scheme: light)').addEventListener('change',theme);
 
@@ -87,7 +88,7 @@ function ring(a,fill){const n=a.length/3;let pen=false;
   if(fill)ctx.closePath();}
 function fillBands(fc){const g=[[],[],[],[],[],[]];
   for(const f of fc.features){if(f.rings&&inView(f))g[band(off(f.properties.z))].push(f)}
-  g.forEach((arr,i)=>{if(!arr.length)return;ctx.beginPath();for(const f of arr)for(const r of f.rings)ring(r,true);ctx.fillStyle=pal['b'+i];ctx.fill('evenodd')});}
+  g.forEach((arr,i)=>{if(!arr.length)return;ctx.beginPath();for(const f of arr)for(const r of f.rings)ring(r,true);ctx.fillStyle=showHours?pal['b'+i]:pal.land;ctx.fill('evenodd')});}
 function strokeFC(fc,style,w){ctx.beginPath();for(const f of fc.features)if(f.rings&&inView(f))for(const r of f.rings)ring(r,false);ctx.strokeStyle=style;ctx.lineWidth=w;ctx.stroke();}
 
 function draw(){
@@ -155,7 +156,7 @@ function drawLabels(){
       if(placed.some(q=>r.x0<q.x1&&r.x1>q.x0&&r.y0<q.y1&&r.y1>q.y0)&&L.fav!==activeFav)continue;r.L=L;placed.push(r);
       heart(x,y,L.fav===activeFav?9:7.5,FAVC,pal.halo);ctx.font=F.ov;ctx.lineWidth=4;ctx.strokeStyle=pal.halo;ctx.strokeText(L.name,x,y-14);ctx.fillStyle=pal.ink;ctx.fillText(L.name,x,y-14);continue;}
     let nf,hr=null,bi=0;
-    if(L.ov){nf=F.ov}else{const o=off(L.tz);nf=L.kind==='c'?F.cn:F.pn;hr=hours(o)+(L.star?'*':'');bi=band(o)}
+    if(L.ov){nf=F.ov}else{const o=off(L.tz);nf=L.kind==='c'?F.cn:F.pn;if(showHours){hr=hours(o)+(L.star?'*':'');bi=band(o)}}
     const nw=tw(L.name,nf),hw=hr?tw(hr,F.hr)+14:0,w=Math.max(nw,hw)+8,h=hr?32:18;
     const r={x0:x-w/2,y0:y-(hr?23:22),x1:x+w/2,y1:y-(hr?23:22)+h};
     if(L.key&&seen.some(s=>s.key===L.key&&Math.hypot(s.x-x,s.y-y)<L.gap))continue;
@@ -166,8 +167,8 @@ function drawLabels(){
     if(L.ov){ctx.beginPath();ctx.arc(x,y,4.5,0,7);ctx.fillStyle=L.ov.color;ctx.fill();ctx.lineWidth=2;ctx.strokeStyle=pal.halo;ctx.stroke();
       ctx.font=nf;ctx.lineWidth=4;ctx.strokeText(L.name,x,y-9);ctx.fillStyle=pal.ink;ctx.fillText(L.name,x,y-9);ctx.globalAlpha=1;continue;}
     ctx.font=nf;ctx.lineWidth=4;ctx.strokeStyle=pal.halo;ctx.strokeText(L.name,x,y-9);ctx.fillStyle=L.kind==='c'?pal.ink:pal.ink2;ctx.fillText(L.name,x,y-9);
-    const hx=x+7;ctx.font=F.hr;ctx.strokeText(hr,hx,y+6);ctx.fillStyle=pal.ink;ctx.fillText(hr,hx,y+6);
-    const dx=hx-tw(hr,F.hr)/2-8;ctx.beginPath();ctx.arc(dx,y+1.5,4,0,7);ctx.fillStyle=pal['b'+bi];ctx.fill();ctx.lineWidth=1.5;ctx.strokeStyle=pal.halo;ctx.stroke();
+    if(hr){const hx=x+7;ctx.font=F.hr;ctx.strokeText(hr,hx,y+6);ctx.fillStyle=pal.ink;ctx.fillText(hr,hx,y+6);
+    const dx=hx-tw(hr,F.hr)/2-8;ctx.beginPath();ctx.arc(dx,y+1.5,4,0,7);ctx.fillStyle=pal['b'+bi];ctx.fill();ctx.lineWidth=1.5;ctx.strokeStyle=pal.halo;ctx.stroke();}
     ctx.globalAlpha=1;if(++n>450)break;
   }
 }
@@ -712,9 +713,10 @@ document.getElementById('e').oninput=e=>{if(e.target.value){E=tval(e.target.valu
 const bw=document.getElementById('w'),bs=document.getElementById('su');
 function setSeason(v){season=v;bw.setAttribute('aria-pressed',String(v===0));bs.setAttribute('aria-pressed',String(v===1));ui();draw();hideInfo()}
 bw.onclick=()=>setSeason(0);bs.onclick=()=>setSeason(1);
-function ui(){renderFavs();document.getElementById('sum').textContent=`${hhmm(S)}–${hhmm(E)} UK, ${season?'summer':'winter'}`;
+function ui(){renderFavs();renderLayers();document.getElementById('sum').textContent=`${hhmm(S)}–${hhmm(E)} UK, ${season?'summer':'winter'}`;
   document.getElementById('snote').textContent=season?'Late March to late October, while the UK is on BST.':'Late October to late March, while the UK is on GMT.';
   document.getElementById('key').innerHTML=BANDS.map((b,i)=>`<li><i style="background:${pal['b'+i]}"></i>${b.name} <small>${b.sub}</small></li>`).join('');
+  document.getElementById('strip').classList.toggle('off',!showHours);
   document.getElementById('strip').innerHTML=BANDS.map((b,i)=>`<span><i style="background:${pal['b'+i]}"></i>${b.name}</span>`).join('');}
 document.getElementById('fs').onclick=()=>{try{if(document.fullscreenElement)document.exitFullscreen();else document.documentElement.requestFullscreen()}catch(e){}};
 if(!document.documentElement.requestFullscreen)document.getElementById('fs').style.display='none';
@@ -780,9 +782,20 @@ function kml2geo(txt){const doc=new DOMParser().parseFromString(txt,'text/xml'),
       if(rings[0]&&rings[0].length>3)out.push({type:'Feature',properties:props,geometry:{type:'Polygon',coordinates:rings}})});});
   return{type:'FeatureCollection',features:out}}
 function renderLayers(){const ul=document.getElementById('layers');ul.innerHTML='';
+  // the built-in working-hours colours and labels, which can be switched off to see only your own layers
+  const wh=document.createElement('li');wh.className='builtin';
+  wh.innerHTML=`<input type="checkbox" ${showHours?'checked':''} aria-label="Show working hours"><i class="sw" style="background:linear-gradient(90deg,${BANDS.map((b,i)=>pal['b'+i]).join(',')})"></i><span>Working hours</span>`;
+  wh.querySelector('input').onchange=e=>{showHours=e.target.checked;try{localStorage.setItem('whg.hours',showHours?'on':'off')}catch(err){}ui();draw()};ul.appendChild(wh);
   overlays.forEach((L,i)=>{const li=document.createElement('li');
-    li.innerHTML=`<input type="checkbox" ${L.on?'checked':''} aria-label="Show ${esc(L.name)}"><i style="width:10px;height:10px;border-radius:50%;background:${L.color};flex:none"></i><span title="${esc(L.name)}">${esc(L.name)}</span><button class="x" aria-label="Remove ${esc(L.name)}">×</button>`;
-    li.querySelector('input').onchange=e=>{L.on=e.target.checked;draw();storeLayer(L)};li.querySelector('.x').onclick=()=>{if(selected&&selected.L===L){selected=null;hideInfo()}overlays.splice(i,1);renderLayers();draw();layerDB.del(L.id).catch(()=>{})};ul.appendChild(li)});}
+    li.innerHTML=`<input type="checkbox" ${L.on?'checked':''} aria-label="Show ${esc(L.name)}"><i class="sw" style="background:${L.color}"></i><span class="ln" title="${esc(L.name)} (double-click to rename)">${esc(L.name)}</span>`+
+      `<button class="ed" aria-label="Rename ${esc(L.name)}" title="Rename"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button><button class="x" aria-label="Remove ${esc(L.name)}" title="Remove">×</button>`;
+    li.querySelector('input').onchange=e=>{L.on=e.target.checked;draw();storeLayer(L)};
+    li.querySelector('.x').onclick=()=>{if(selected&&selected.L===L){selected=null;hideInfo()}overlays.splice(i,1);renderLayers();draw();layerDB.del(L.id).catch(()=>{})};
+    const rename=()=>{const sp=li.querySelector('.ln');if(!sp)return;const inp=document.createElement('input');inp.type='text';inp.className='lnin';inp.value=L.name;inp.maxLength=80;
+      inp.setAttribute('aria-label','Layer name');sp.replaceWith(inp);inp.focus();inp.select();let done=false;
+      const finish=keep=>{if(done)return;done=true;const v=inp.value.trim();if(keep&&v&&v!==L.name){L.name=v;storeLayer(L);draw()}renderLayers()};
+      inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();finish(true)}else if(e.key==='Escape'){e.preventDefault();finish(false)}};inp.onblur=()=>finish(true)};
+    li.querySelector('.ed').onclick=rename;li.querySelector('.ln').ondblclick=rename;ul.appendChild(li)});}
 
 // start
 window.addEventListener('resize',resize);setSeason(season);theme();resize();
