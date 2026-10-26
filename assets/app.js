@@ -73,7 +73,7 @@ function computeView(){const s=base*k;const far=Math.max(Math.hypot(cx,cy),Math.
 let VC=[1,0,0],VR=1,CR=0,SR=1;
 const inView=f=>{if(f.cr+VR>=Math.PI)return true;return f.v[0]*VC[0]+f.v[1]*VC[1]+f.v[2]*VC[2]>f.ccr*CR-f.scr*SR};
 
-const F={cn:'600 13.5px Fraunces, Georgia, serif',pn:'500 11.5px "Bricolage Grotesque", "Segoe UI", sans-serif',hr:'700 12.5px "Bricolage Grotesque", "Segoe UI", sans-serif',ov:'600 12px "Bricolage Grotesque", "Segoe UI", sans-serif'};
+const F={cn:'600 13.5px Fraunces, Georgia, serif',pn:'500 11.5px "Bricolage Grotesque", "Segoe UI", sans-serif',hr:'700 12.5px "Bricolage Grotesque", "Segoe UI", sans-serif',ov:'600 12px "Bricolage Grotesque", "Segoe UI", sans-serif',cl:'600 11px "Bricolage Grotesque", "Segoe UI", sans-serif'};
 const mcache={};const tw=(t,f)=>{const key=f+'|'+t;let v=mcache[key];if(v==null){ctx.font=f;v=mcache[key]=ctx.measureText(t).width}return v};
 
 // fast orthographic: rotate unit vectors, push hidden points onto the limb for fills, lift the pen for strokes
@@ -117,7 +117,7 @@ function draw(){
   ctx.save();ctx.beginPath();path({type:'Sphere'});ctx.clip();
   const sg=ctx.createRadialGradient(cx-s*.42,cy-s*.48,0,cx,cy,s*1.02);sg.addColorStop(0,pal.shadeLite);sg.addColorStop(.55,'rgba(0,0,0,0)');sg.addColorStop(1,pal.shadeDark);
   ctx.fillStyle=sg;ctx.fillRect(0,0,W,H);ctx.restore();
-  drawOverlays();drawLabels();if(shown)drawMapLabels(tileA);drawPin();
+  drawOverlays();if(typeof clDraw==='function')clDraw();drawLabels();if(shown)drawMapLabels(tileA);drawPin();
 }
 
 function drawOverlays(){overlays.forEach(L=>{if(!L.on)return;L.fc.features.forEach(f=>{const g=f.geometry;if(!g||/Point/.test(g.type))return;
@@ -135,6 +135,7 @@ function drawLabels(){
   overlays.forEach(L=>{if(!L.on)return;L.fc.features.forEach(f=>{const g=f.geometry;if(!g)return;
     (g.type==='Point'?[g.coordinates]:g.type==='MultiPoint'?g.coordinates:[]).forEach(p=>cand.push({ov:L,f,lon:p[0],lat:p[1],name:(f.properties&&f.properties.name)||'',pri:4e9,a:1}))})});
   for(const f of favs)cand.push({fav:f,v:f.v,lon:f.lon,lat:f.lat,name:f.name,pri:5e9,a:1});
+  if(typeof clLabels==='function')clLabels(cand);
   // One label per country, then extra labels only where they add something: a region on a different
   // clock, a separate island, or a repeat of the country's hours once the last one is far off screen.
   const gap=clamp(Math.min(W,H)*0.45,260,480);
@@ -155,6 +156,9 @@ function drawLabels(){
     if(L.fav){const nw=tw(L.name,F.ov)+8,r={x0:x-Math.max(nw,22)/2,y0:y-30,x1:x+Math.max(nw,22)/2,y1:y+9};
       if(placed.some(q=>r.x0<q.x1&&r.x1>q.x0&&r.y0<q.y1&&r.y1>q.y0)&&L.fav!==activeFav)continue;r.L=L;placed.push(r);
       heart(x,y,L.fav===activeFav?9:7.5,FAVC,pal.halo);ctx.font=F.ov;ctx.lineWidth=4;ctx.strokeStyle=pal.halo;ctx.strokeText(L.name,x,y-14);ctx.fillStyle=pal.ink;ctx.fillText(L.name,x,y-14);continue;}
+    if(L.cl){const s=L.name.length>30?L.name.slice(0,28)+'…':L.name,nw=tw(s,F.cl)+6,r={x0:x-nw/2,y0:y-22,x1:x+nw/2,y1:y-6};
+      if(placed.some(q=>r.x0<q.x1&&r.x1>q.x0&&r.y0<q.y1&&r.y1>q.y0))continue;r.L=L;placed.push(r);
+      ctx.font=F.cl;ctx.lineWidth=3.5;ctx.strokeStyle=pal.halo;ctx.strokeText(s,x,y-10);ctx.fillStyle=pal.ink;ctx.fillText(s,x,y-10);if(++n>450)break;continue;}
     let nf,hr=null,bi=0;
     if(L.ov){nf=F.ov}else{const o=off(L.tz);nf=L.kind==='c'?F.cn:F.pn;if(showHours){hr=hours(o)+(L.star?'*':'');bi=band(o)}}
     const nw=tw(L.name,nf),hw=hr?tw(hr,F.hr)+14:0,w=Math.max(nw,hw)+8,h=hr?32:18;
@@ -669,6 +673,8 @@ function clickAt(x,y){
   const fh=placed.find(q=>q.L.fav&&x>=q.x0&&x<=q.x1&&y>=q.y0&&y<=q.y1);
   if(fh){if(selected)selected=null;showFav(fh.L.fav);draw();return}
   if(activeFav){activeFav=null;draw()}
+  const ch=typeof clHit==='function'?clHit(x,y):null;if(ch){clShow(ch);draw();return}
+  if(typeof CL!=='undefined'&&CL.sel){CL.sel=null;draw()}
   const oh=overlays.length?overlayHit(x,y):null;
   if(oh){selected=oh;showFeature(oh.L,oh.f,proj.invert([x,y]));draw();return}
   if(selected){selected=null;draw()}
@@ -701,7 +707,7 @@ function showInfo(title,where,tz,ll){activeFav=null;draft=null;infoTok++;const z
   <div class="big"><i style="background:${pal['b'+b]}"></i>${hours(o)}</div><p class="bandname">${BANDS[b].name}, ${season?'summer':'winter'}</p>
   <dl><dt>${season?'Winter':'Summer'}</dt><dd>${hours(other)}</dd><dt>Difference</dt><dd>${vsUK(o)}</dd><dt>Time zone</dt><dd>${utc(o)}</dd></dl>${ll?flightsBlock():''}`;
   wireFlights(ll);document.getElementById('info').classList.add('show');}
-function hideInfo(){document.getElementById('info').classList.remove('show');if(selected||activeFav||draft){selected=null;activeFav=null;draft=null;draw()}}
+function hideInfo(){document.getElementById('info').classList.remove('show');if(typeof CL!=='undefined'&&CL.sel){CL.sel=null;draw()}if(selected||activeFav||draft){selected=null;activeFav=null;draft=null;draw()}}
 document.getElementById('infox').onclick=hideInfo;
 
 // panel & controls
@@ -786,6 +792,7 @@ function renderLayers(){const ul=document.getElementById('layers');ul.innerHTML=
   const wh=document.createElement('li');wh.className='builtin';
   wh.innerHTML=`<input type="checkbox" ${showHours?'checked':''} aria-label="Show working hours"><i class="sw" style="background:linear-gradient(90deg,${BANDS.map((b,i)=>pal['b'+i]).join(',')})"></i><span>Working hours</span>`;
   wh.querySelector('input').onchange=e=>{showHours=e.target.checked;try{localStorage.setItem('whg.hours',showHours?'on':'off')}catch(err){}ui();draw()};ul.appendChild(wh);
+  if(typeof clRow==='function'&&CL.data.length)ul.appendChild(clRow());
   overlays.forEach((L,i)=>{const li=document.createElement('li');
     li.innerHTML=`<input type="checkbox" ${L.on?'checked':''} aria-label="Show ${esc(L.name)}"><i class="sw" style="background:${L.color}"></i><span class="ln" title="${esc(L.name)} (double-click to rename)">${esc(L.name)}</span>`+
       `<button class="ed" aria-label="Rename ${esc(L.name)}" title="Rename"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button><button class="x" aria-label="Remove ${esc(L.name)}" title="Remove">×</button>`;
@@ -796,6 +803,148 @@ function renderLayers(){const ul=document.getElementById('layers');ul.innerHTML=
       const finish=keep=>{if(done)return;done=true;const v=inp.value.trim();if(keep&&v&&v!==L.name){L.name=v;storeLayer(L);draw()}renderLayers()};
       inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();finish(true)}else if(e.key==='Escape'){e.preventDefault();finish(false)}};inp.onblur=()=>finish(true)};
     li.querySelector('.ed').onclick=rename;li.querySelector('.ln').ondblclick=rename;ul.appendChild(li)});}
+
+// Colivings layer: every listing from colivingDB (https://colivingdb.com) as a dot on the globe, with filters
+// tucked behind one button in Map layers, a details card per listing, and a check for new additions.
+// data/coliving.json is refreshed by .github/workflows/coliving.yml (scripts/coliving.py update).
+const CL={data:[],vis:[],byId:new Map(),on:true,sel:null,meta:null,f:null};
+const CLT={p:{name:'Permanent coliving',short:'Permanent',col:'#2fb36a'},u:{name:'Pop-up or dated edition',short:'Pop-up',col:'#f08a24'},f:{name:'Nomad festival',short:'Festival',col:'#a35bd6'}};
+const CL_MAX=3000,CL_STEP=50;
+const CL_DEF={q:'',types:['p','u','f'],min:0,max:CL_MAX,nop:true,rooms:[],stay:0,rating:0,tags:[],vibes:[],region:'',month:''};
+const CL_TAGS=['community','coworking','wellness','city','beach','rural','surf','island','mountain','eco','startup','ski'];
+const CL_VIBES=['social','quiet','focused','creative','adventure','entrepreneur','luxury','budget','family-friendly','fitness','party','spiritual'];
+const CL_NOT=new Set(['beach','surf','island','mountain','community','coworking','wellness','city','rural','eco','startup','ski','family','index','all','pop-ups','festivals']);
+const clStore={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+CL.f=Object.assign({},CL_DEF,clStore.get('whg.clF',{}));CL.on=clStore.get('whg.clOn',true);
+const clToday=()=>new Date().toISOString().slice(0,10);
+const clEur=v=>'€'+Math.round(v).toLocaleString('en-GB');
+const clActive=f=>JSON.stringify(Object.assign({},f,{q:f.q.trim()}))!==JSON.stringify(CL_DEF);
+
+function clPass(x,f,now){
+  if(!f.types.includes(x.t))return false;
+  if(x.dr.length&&x.dr.every(r=>r[1]<now))return false;   // editions that have already finished
+  if(f.q.trim()){const s=(x.n+' '+x.a+' '+x.c).toLowerCase();if(!f.q.trim().toLowerCase().split(/\s+/).every(w=>s.includes(w)))return false}
+  if(f.region&&x.rg!==f.region)return false;
+  if(f.min>0||f.max<CL_MAX){if(x.eur==null){if(!f.nop)return false}else if(x.eur<f.min||(f.max<CL_MAX&&x.eur>f.max))return false}
+  if(f.rooms.length&&!f.rooms.some(r=>r==='dorm'?x.dorm:r==='private'?x.rm.some(m=>/private|apartment|studio/.test(m)):x.rm.includes(r)))return false;
+  if(f.stay&&(x.ms==null||x.ms>f.stay))return false;
+  if(f.rating&&(x.rt==null||x.rt<f.rating))return false;
+  if(f.tags.length&&!f.tags.some(t=>x.tg.includes(t)))return false;
+  if(f.vibes.length&&!f.vibes.some(t=>x.vb.includes(t)||(t==='wellness'&&x.tg.includes(t))))return false;
+  if(f.month&&x.t!=='p'&&x.dr.length){const [y,m]=f.month.split('-').map(Number),s=f.month+'-01',e=f.month+'-'+String(new Date(y,m,0).getDate()).padStart(2,'0');
+    if(!x.dr.some(r=>r[0]<=e&&r[1]>=s))return false}
+  return true;}
+function clApply(){const now=clToday();CL.vis=CL.data.filter(x=>clPass(x,CL.f,now));CL.total=CL.data.filter(x=>!(x.dr.length&&x.dr.every(r=>r[1]<now))).length;clStore.set('whg.clF',CL.f);
+  if(CL.sel&&!CL.vis.includes(CL.sel))CL.sel=null;clCounts();if(typeof draw==='function')draw();}
+function clSetData(list,meta){CL.data=list.filter(x=>isFinite(x.lat)&&isFinite(x.lon)).map(x=>Object.assign(x,{v:vec(x.lon,x.lat),rm:x.rm||[],tg:x.tg||[],vb:x.vb||[],dr:x.dr||[]}));
+  CL.byId=new Map(CL.data.map(x=>[x.id,x]));if(meta)CL.meta=meta;
+  if(!clStore.get('whg.clSeen',null))clStore.set('whg.clSeen',CL.data.map(x=>x.id));   // first visit: nothing counts as new
+  if(CL.sel)CL.sel=CL.byId.get(CL.sel.id)||null;clApply();clUpdText();}
+
+// drawing: dots always (cheap, no overlap test), names once zoomed in close
+function clProj(v){if(M[0]*v[0]+M[1]*v[1]+M[2]*v[2]<0.02)return null;return[cx+SC*(M[3]*v[0]+M[4]*v[1]),cy-SC*(M[6]*v[0]+M[7]*v[1]+M[8]*v[2])]}
+function clDraw(){if(!CL.on||!CL.vis.length)return;const r=k<2?3:k<6?3.6:k<30?4.4:5.4;ctx.lineWidth=1.4;ctx.strokeStyle=pal.halo;
+  for(const t of['p','u','f']){ctx.beginPath();let any=false;
+    for(const x of CL.vis){if(x.t!==t)continue;const s=clProj(x.v);if(!s||s[0]<-8||s[1]<-8||s[0]>W+8||s[1]>H+8)continue;ctx.moveTo(s[0]+r,s[1]);ctx.arc(s[0],s[1],r,0,7);any=true}
+    if(any){ctx.fillStyle=CLT[t].col;ctx.fill();ctx.stroke()}}
+  if(CL.sel){const s=clProj(CL.sel.v);if(s){ctx.beginPath();ctx.arc(s[0],s[1],r+5,0,7);ctx.lineWidth=5;ctx.stroke();ctx.strokeStyle=CLT[CL.sel.t].col;ctx.lineWidth=2.5;ctx.stroke()}}}
+function clLabels(cand){if(!CL.on||k<9)return;for(const x of CL.vis)cand.push({cl:x,v:x.v,lon:x.lon,lat:x.lat,name:x.n,pri:x===CL.sel?6e9:3e9+(x.rt||0),a:1})}
+function clHit(x,y){if(!CL.on)return null;const lab=placed.find(q=>q.L.cl&&x>=q.x0&&x<=q.x1&&y>=q.y0&&y<=q.y1);if(lab)return lab.L.cl;
+  let best=null,bd=11;for(const it of CL.vis){const s=clProj(it.v);if(!s)continue;const d=Math.hypot(s[0]-x,s[1]-y);if(d<bd){bd=d;best=it}}return best}
+
+// details card
+function clShow(x){activeFav=null;draft=null;selected=null;CL.sel=x;if(typeof infoTok!=='undefined')infoTok++;
+  const T=CLT[x.t],isNew=x.add&&(Date.now()-new Date(x.add))/864e5<21,stay=x.ms==null?'':x.ms===1?'1 night':x.ms+' nights';
+  const rows=[['Price',x.pr||(x.eur!=null?'≈ '+clEur(x.eur)+'/month':'')],['Rating',x.rt!=null?`${x.rt} ★${x.rv?` (${x.rv} review${x.rv===1?'':'s'})`:''}`:''],
+    ['Rooms',x.rm.join(', ')],['Min stay',stay],['Dates',x.dt],['Opening',x.op],['WiFi',x.wf?x.wf+' Mbps':''],
+    ['Interests',x.tg.join(', ')],['Vibe',x.vb.join(', ')]].filter(r=>r[1]);
+  const links=[x.w&&`<a class="clbtn" href="${esc(x.w)}" target="_blank" rel="noopener noreferrer">Website ↗</a>`,x.db&&`<a class="clbtn" href="${esc(x.db)}" target="_blank" rel="noopener noreferrer">colivingDB ↗</a>`,
+    x.sch&&x.sch!==x.w&&`<a class="clbtn" href="${esc(x.sch)}" target="_blank" rel="noopener noreferrer">Schedule ↗</a>`].filter(Boolean).join('');
+  document.getElementById('infob').innerHTML=`<p class="cltype"><i style="background:${T.col}"></i>${T.name}${isNew?' <b class="clnew">New</b>':''}</p>
+    <h2>${esc(x.n)}</h2><p class="where">${esc([x.a,x.c].filter(Boolean).join(', '))}</p>
+    <dl class="meta">${rows.map(([a,b])=>`<dt>${a}</dt><dd>${esc(b)}</dd>`).join('')}</dl>
+    ${x.src==='estimate'&&x.eur!=null?'<p class="clsmall">Price is colivingDB’s estimate; check with the host.</p>':''}
+    <div class="cllinks">${links}</div><div>${hoursBlock(tzAt([x.lon,x.lat]))}</div>${flightsBlock()}`;
+  wireFlights([x.lon,x.lat]);document.getElementById('info').classList.add('show');}
+function clGo(x){if(!CL.vis.includes(x)){CL.f=Object.assign({},CL_DEF);clSync();clApply()}flyTo(x.lon,x.lat,0.6);clShow(x);draw()}
+
+// Map layers row and the filter card
+const FUNNEL='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>';
+function clRow(){const li=document.createElement('li');li.className='builtin clrowli';
+  li.innerHTML=`<input type="checkbox" ${CL.on?'checked':''} aria-label="Show colivings"><i class="sw" style="background:conic-gradient(${CLT.p.col} 0 50%,${CLT.u.col} 0 80%,${CLT.f.col} 0)"></i><span>Colivings</span><small class="clcnt" id="clcnt"></small>`+
+    `<button class="ed clfb${clActive(CL.f)?' on':''}" id="clfb" aria-label="Filter colivings" title="Filter and updates" aria-expanded="${!document.getElementById('clf')?.hidden}">${FUNNEL}</button>`;
+  li.querySelector('input').onchange=e=>{CL.on=e.target.checked;clStore.set('whg.clOn',CL.on);if(!CL.on&&CL.sel){CL.sel=null;hideInfo()}draw()};
+  li.querySelector('.clfb').onclick=()=>clToggle();setTimeout(clCounts);return li}
+function clCounts(){const c=document.getElementById('clcnt');if(c)c.textContent=CL.data.length?(CL.vis.length===CL.total?CL.total:`${CL.vis.length}/${CL.total}`):'';
+  const b=document.getElementById('clfb');if(b)b.classList.toggle('on',clActive(CL.f));
+  const s=document.getElementById('clshow');if(s)s.textContent=CL.vis.length?`Show ${CL.vis.length}`:'None match'}
+function clToggle(open){let el=document.getElementById('clf');if(!el)el=clBuild();const show=open==null?el.hidden:open;el.hidden=!show;
+  const b=document.getElementById('clfb');if(b)b.setAttribute('aria-expanded',String(show));if(show){clSync();el.querySelector('#clq').focus({preventScroll:true})}}
+const chip=(k,v,label,dot)=>`<button type="button" class="clchip" data-k="${k}" data-v="${v}" aria-pressed="false">${dot?`<i style="background:${dot}"></i>`:''}${label}</button>`;
+function clBuild(){const el=document.createElement('aside');el.className='clf glass';el.id='clf';el.hidden=true;el.setAttribute('aria-label','Coliving filters');
+  const months=[...Array(12)].map((_,i)=>{const d=new Date();d.setDate(1);d.setMonth(d.getMonth()+i);return[d.toISOString().slice(0,7),d.toLocaleDateString('en-GB',{month:'long',year:'numeric'})]});
+  const regions=[...new Set(CL.data.map(x=>x.rg).filter(Boolean))].sort();
+  const pv=v=>`<option value="${v[0]}">${v[1]}</option>`;
+  el.innerHTML=`<div class="clfh"><b>Colivings</b><button class="x" id="clfx" aria-label="Close filters">×</button></div>
+    <input id="clq" class="flin" type="search" placeholder="Search name, town or country" autocomplete="off">
+    <div class="clg"><span class="cll">Type</span><div class="clchips">${['p','u','f'].map(t=>chip('types',t,CLT[t].short,CLT[t].col)).join('')}</div></div>
+    <div class="clg"><span class="cll">Price per month <output id="clpv"></output></span>
+      <div class="dual"><div class="dtrack"><i id="clfill"></i></div><input type="range" id="clmin" min="0" max="${CL_MAX}" step="${CL_STEP}" aria-label="Minimum price per month"><input type="range" id="clmax" min="0" max="${CL_MAX}" step="${CL_STEP}" aria-label="Maximum price per month"></div>
+      <label class="clchk"><input type="checkbox" id="clnop"> Include places without a monthly price</label></div>
+    <div class="clg"><span class="cll">Rooms</span><div class="clchips">${chip('rooms','private','Private')}${chip('rooms','shared','Shared')}${chip('rooms','dorm','Dorm')}</div></div>
+    <div class="clpair"><label><span class="cll">Minimum stay</span><select id="clstay" class="flin">${[[0,'Any'],[3,'Up to 3 nights'],[7,'Up to a week'],[14,'Up to 2 weeks'],[30,'Up to a month']].map(pv).join('')}</select></label>
+      <label><span class="cll">Rating</span><select id="clrt" class="flin">${[[0,'Any'],[4.5,'4.5 ★ and up'],[4,'4 ★ and up'],[3.5,'3.5 ★ and up']].map(pv).join('')}</select></label></div>
+    <div class="clpair"><label><span class="cll">Region</span><select id="clrg" class="flin"><option value="">Anywhere</option>${regions.map(r=>`<option>${esc(r)}</option>`).join('')}</select></label>
+      <label><span class="cll">Pop-ups running in</span><select id="clmo" class="flin"><option value="">Any month</option>${months.map(pv).join('')}</select></label></div>
+    <details class="clmore"><summary>Interests and vibe</summary><span class="cll">Interests</span><div class="clchips">${CL_TAGS.map(t=>chip('tags',t,t)).join('')}</div>
+      <span class="cll">Vibe</span><div class="clchips">${CL_VIBES.map(t=>chip('vibes',t,t)).join('')}</div></details>
+    <div class="clfoot"><button type="button" class="flb2" id="clreset">Reset</button><button type="button" class="primary" id="clshow"></button></div>
+    <div class="clupd"><span class="cll">Updates from colivingDB</span><p class="clsmall" id="clupdtxt"></p>
+      <button type="button" class="add" id="clchk">Check for new colivings</button><div id="clres" aria-live="polite"></div></div>`;
+  document.body.appendChild(el);
+  const $=id=>el.querySelector('#'+id),set=(k,v)=>{CL.f[k]=v;clApply();clSync()};
+  $('clfx').onclick=()=>clToggle(false);$('clshow').onclick=()=>clToggle(false);
+  $('clreset').onclick=()=>{CL.f=Object.assign({},CL_DEF);clApply();clSync()};
+  $('clq').oninput=e=>{CL.f.q=e.target.value;clApply()};
+  const rng=()=>{let a=+$('clmin').value,b=+$('clmax').value;if(a>b-CL_STEP){if(document.activeElement===$('clmin'))a=b-CL_STEP;else b=a+CL_STEP}CL.f.min=Math.max(0,a);CL.f.max=Math.min(CL_MAX,b);clApply();clSync()};
+  $('clmin').oninput=rng;$('clmax').oninput=rng;$('clnop').onchange=e=>set('nop',e.target.checked);
+  $('clstay').onchange=e=>set('stay',+e.target.value);$('clrt').onchange=e=>set('rating',+e.target.value);$('clrg').onchange=e=>set('region',e.target.value);$('clmo').onchange=e=>set('month',e.target.value);
+  el.addEventListener('click',e=>{const c=e.target.closest('.clchip');if(!c)return;const k=c.dataset.k,v=c.dataset.v,a=CL.f[k].slice(),i=a.indexOf(v);
+    if(i>=0)a.splice(i,1);else a.push(v);if(k==='types'&&!a.length)return;set(k,a)});
+  $('clchk').onclick=clCheck;
+  el.addEventListener('keydown',e=>{if(e.key==='Escape'){clToggle(false);document.getElementById('clfb')?.focus()}});
+  return el}
+function clSync(){const el=document.getElementById('clf');if(!el)return;const f=CL.f,$=id=>el.querySelector('#'+id);
+  if($('clq').value!==f.q)$('clq').value=f.q;$('clmin').value=f.min;$('clmax').value=f.max;$('clnop').checked=f.nop;
+  $('clpv').textContent=f.min<=0&&f.max>=CL_MAX?'any':f.max>=CL_MAX?`${clEur(f.min)}+`:f.min<=0?`up to ${clEur(f.max)}`:`${clEur(f.min)}–${clEur(f.max)}`;
+  $('clfill').style.left=(f.min/CL_MAX*100)+'%';$('clfill').style.right=(100-f.max/CL_MAX*100)+'%';
+  $('clnop').closest('label').style.opacity=f.min>0||f.max<CL_MAX?1:.5;
+  $('clstay').value=String(f.stay);$('clrt').value=String(f.rating);$('clrg').value=f.region;$('clmo').value=f.month;
+  el.querySelectorAll('.clchip').forEach(c=>c.setAttribute('aria-pressed',String(f[c.dataset.k].includes(c.dataset.v))));
+  if(f.tags.length||f.vibes.length)el.querySelector('.clmore').open=true;clCounts();clUpdText()}
+function clUpdText(){const p=document.getElementById('clupdtxt');if(!p||!CL.meta)return;const m=CL.meta,d=new Date(m.checked);
+  p.textContent=`${m.source==='KML export'?'List from your colivingDB export of':'Last scanned'} ${d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}. A scan runs every Monday.`+(m.error?' The last scan couldn’t read colivingDB, so nothing changed.':'')}
+function clRepo(){const h=location.hostname,p=location.pathname.split('/').filter(Boolean);return h.endsWith('.github.io')&&p[0]?`https://github.com/${h.split('.')[0]}/${p[0]}`:'https://github.com/granterogers/working_hours_globe'}
+async function clCheck(){const res=document.getElementById('clres'),btn=document.getElementById('clchk');btn.disabled=true;res.innerHTML='<p class="clsmall">Checking…</p>';
+  let fresh,meta;
+  try{const nc={cache:'no-store'},t=Date.now();[fresh,meta]=await Promise.all([fetch('data/coliving.json?t='+t,nc).then(r=>{if(!r.ok)throw 0;return r.json()}),fetch('data/coliving-updates.json?t='+t,nc).then(r=>r.ok?r.json():null).catch(()=>null)])}
+  catch(e){res.innerHTML='<p class="clsmall">Couldn’t load the coliving list. Try again in a moment.</p>';btn.disabled=false;return}
+  const seen=new Set(clStore.get('whg.clSeen',[])),newer=fresh.filter(x=>!seen.has(x.id)).map(x=>x.id),gone=[...seen].filter(id=>!fresh.some(x=>x.id===id)).length;
+  clSetData(fresh,meta);clStore.set('whg.clSeen',fresh.map(x=>x.id));
+  // a direct look at colivingDB too, for listings newer than the last scan (only works if colivingDB allows it)
+  let live=null;try{const r=await fetch('https://colivingdb.com/sitemap.xml',{cache:'no-store'});if(r.ok){const xml=await r.text();
+    if(/\/coliving\//.test(xml))live=[...new Set([...xml.matchAll(/\/coliving\/([a-z0-9-]+)\//g)].map(m=>m[1]))].filter(s=>!CL_NOT.has(s)&&!CL.byId.has(s))}}catch(e){}
+  const items=newer.map(id=>CL.byId.get(id)).filter(Boolean);
+  let h=items.length?`<p class="clsum"><b>${items.length} new</b> since you last checked:</p><ul class="cllist">${items.map(x=>`<li><button type="button" data-id="${esc(x.id)}"><i style="background:${CLT[x.t].col}"></i><span><b>${esc(x.n)}</b><small>${esc([x.a,x.c].filter(Boolean).join(', '))}${x.eur!=null?' · ≈ '+clEur(x.eur)+'/month':''}</small></span></button></li>`).join('')}</ul>`
+    :'<p class="clsum">No new colivings since you last checked.</p>';
+  if(gone)h+=`<p class="clsmall">${gone} listing${gone===1?' has':'s have'} been dropped by colivingDB and removed from the map.</p>`;
+  if(live&&live.length&&live.length<60)h+=`<p class="clsmall">colivingDB also lists ${live.length} not on the map yet; they’ll appear with full details after the next scan:</p><ul class="cllist">${live.map(s=>`<li><a href="https://colivingdb.com/coliving/${s}/" target="_blank" rel="noopener noreferrer">${esc(s.replace(/-/g,' '))} ↗</a></li>`).join('')}</ul>`;
+  h+=`<p class="clsmall">Want a fresh scan now? <a href="${clRepo()}/actions/workflows/coliving.yml" target="_blank" rel="noopener noreferrer">Run it on GitHub ↗</a> (press “Run workflow”, then check again in a few minutes).</p>`;
+  res.innerHTML=h;btn.disabled=false;
+  res.querySelectorAll('button[data-id]').forEach(b=>b.onclick=()=>{const x=CL.byId.get(b.dataset.id);if(x)clGo(x)})}
+
+Promise.all([fetch('data/coliving.json').then(r=>{if(!r.ok)throw new Error(r.status);return r.json()}),fetch('data/coliving-updates.json').then(r=>r.ok?r.json():null).catch(()=>null)])
+  .then(([list,meta])=>{clSetData(list,meta);if(typeof renderLayers==='function')renderLayers()}).catch(()=>{});
 
 // start
 window.addEventListener('resize',resize);setSeason(season);theme();resize();

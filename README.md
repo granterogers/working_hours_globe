@@ -19,6 +19,8 @@ Built for planning where to live and work as a remote worker on UK hours.
 - Favourites: press **Add a favourite**, click the map to drop a pin, and it's named after the nearest town or feature with its coordinates. Drag the pin to fine-tune it, add a note and save. A heart marks the spot, saved favourites can be dragged too, and they're kept in your browser between visits.
 - Add your own KML, KMZ or GeoJSON files as layers on top (the view stays where you are, and layers are kept between visits), then click any point, line or area to see its name, description, extended data and your working hours at that spot.
 - Rename any added layer (pencil button, or double-click its name) and switch layers on or off, including the built-in working-hours colours and times, for a plain globe with just your own layers.
+- A built-in **Colivings** layer with every listing from [colivingDB](https://colivingdb.com): green for permanent colivings, orange for pop-ups and dated editions, purple for nomad festivals. Click a dot for prices, rating, rooms, minimum stay, dates, links and your hours there. The filter button next to the layer opens search, type, price per month, rooms, minimum stay, rating, region, the month a pop-up runs, interests and vibe; your filters are remembered. Finished editions are hidden automatically.
+- **Check for new colivings** (in the coliving filters) reports listings added since you last looked and lets you jump to each. A GitHub Action scans colivingDB every Monday, or whenever you run it from the Actions tab.
 - Dark and light themes, full-screen mode, keyboard controls (arrow keys to spin, `+` and `-` to zoom), and a layout that works on mobile.
 
 ## Run it locally
@@ -66,6 +68,10 @@ The script downloads the source data into `scripts/cache/` (ignored by git), com
 index.html              Page markup
 assets/style.css        Styles and themes
 assets/app.js           Globe rendering, interaction, search and layers
+data/coliving.json      Coliving listings from colivingDB (built by scripts/coliving.py)
+data/coliving-updates.json  When colivingDB was last scanned and what changed
+scripts/coliving.py     Import a colivingDB KML export, or scan colivingDB for changes
+.github/workflows/coliving.yml  Weekly and on-demand colivingDB scan
 data/globe-data.json    Prebuilt map data (time zones, country borders, label points)
 data/airports.json      Airports with scheduled flights, for flight searches
 data/LICENSE-DATA.md    Data sources and licence
