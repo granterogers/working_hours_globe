@@ -1,0 +1,37 @@
+name: Coliving layer update
+
+# Scans colivingDB for new colivings (and ones it has dropped), updates data/coliving.json and
+# records what changed in data/coliving-updates.json, which the globe's "Check for new colivings"
+# button reads. Runs every Monday morning, or press "Run workflow" on the Actions tab.
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: coliving-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Scan colivingDB
+        run: python scripts/coliving.py update
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/coliving.json data/coliving-updates.json
+          if git diff --cached --quiet; then echo "No changes"; exit 0; fi
+          added=$(python -c "import json;print(len(json.load(open('data/coliving-updates.json')).get('added',[])))")
+          git commit -m "Coliving layer: scan colivingDB (${added} new)"
+          git push
