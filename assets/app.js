@@ -161,7 +161,7 @@ function drawLabels(){
       ctx.font=F.cl;ctx.lineWidth=3.5;ctx.strokeStyle=pal.halo;ctx.strokeText(s,x,y-10);ctx.fillStyle=pal.ink;ctx.fillText(s,x,y-10);if(++n>450)break;continue;}
     let nf,hr=null,bi=0;
     if(L.ov){nf=F.ov}else{const o=off(L.tz);nf=L.kind==='c'?F.cn:F.pn;if(showHours){hr=hours(o)+(L.star?'*':'');bi=band(o)}}
-    const nw=tw(L.name,nf),hw=hr?tw(hr,F.hr)+14:0,w=Math.max(nw,hw)+8,h=hr?32:18;
+    const nw=tw(L.name,nf),hw=hr?tw(hr,F.hr):0,w=Math.max(nw,hw)+8,h=hr?32:18;
     const r={x0:x-w/2,y0:y-(hr?23:22),x1:x+w/2,y1:y-(hr?23:22)+h};
     if(L.key&&seen.some(s=>s.key===L.key&&Math.hypot(s.x-x,s.y-y)<L.gap))continue;
     const P=6;if(placed.some(q=>r.x0-P<q.x1&&r.x1+P>q.x0&&r.y0-P/2<q.y1&&r.y1+P/2>q.y0))continue;
@@ -171,8 +171,7 @@ function drawLabels(){
     if(L.ov){ctx.beginPath();ctx.arc(x,y,4.5,0,7);ctx.fillStyle=L.ov.color;ctx.fill();ctx.lineWidth=2;ctx.strokeStyle=pal.halo;ctx.stroke();
       ctx.font=nf;ctx.lineWidth=4;ctx.strokeText(L.name,x,y-9);ctx.fillStyle=pal.ink;ctx.fillText(L.name,x,y-9);ctx.globalAlpha=1;continue;}
     ctx.font=nf;ctx.lineWidth=4;ctx.strokeStyle=pal.halo;ctx.strokeText(L.name,x,y-9);ctx.fillStyle=L.kind==='c'?pal.ink:pal.ink2;ctx.fillText(L.name,x,y-9);
-    if(hr){const hx=x+7;ctx.font=F.hr;ctx.strokeText(hr,hx,y+6);ctx.fillStyle=pal.ink;ctx.fillText(hr,hx,y+6);
-    const dx=hx-tw(hr,F.hr)/2-8;ctx.beginPath();ctx.arc(dx,y+1.5,4,0,7);ctx.fillStyle=pal['b'+bi];ctx.fill();ctx.lineWidth=1.5;ctx.strokeStyle=pal.halo;ctx.stroke();}
+    if(hr){ctx.font=F.hr;ctx.strokeText(hr,x,y+6);ctx.fillStyle=pal.ink;ctx.fillText(hr,x,y+6);}
     ctx.globalAlpha=1;if(++n>450)break;
   }
 }
@@ -790,7 +789,7 @@ function kml2geo(txt){const doc=new DOMParser().parseFromString(txt,'text/xml'),
 function renderLayers(){const ul=document.getElementById('layers');ul.innerHTML='';
   // the built-in working-hours colours and labels, which can be switched off to see only your own layers
   const wh=document.createElement('li');wh.className='builtin';
-  wh.innerHTML=`<input type="checkbox" ${showHours?'checked':''} aria-label="Show working hours"><span>Working hours</span>`;
+  wh.innerHTML=`<input type="checkbox" ${showHours?'checked':''} aria-label="Show working hours"><i class="sw" style="background:linear-gradient(90deg,${BANDS.map((b,i)=>pal['b'+i]).join(',')})"></i><span>Working hours</span>`;
   wh.querySelector('input').onchange=e=>{showHours=e.target.checked;try{localStorage.setItem('whg.hours',showHours?'on':'off')}catch(err){}ui();draw()};ul.appendChild(wh);
   if(typeof clRow==='function'&&CL.data.length)ul.appendChild(clRow());
   overlays.forEach((L,i)=>{const li=document.createElement('li');
