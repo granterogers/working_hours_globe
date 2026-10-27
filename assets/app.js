@@ -602,7 +602,13 @@ function showDraft(){const d=draft;activeFav=null;selected=null;
 function updateDraft(){const d=draft;if(!d)return;const nm=document.getElementById('dname');if(!nm)return;
   if(!d.edited)nm.value=d.name;document.getElementById('dwhere').textContent=d.where;document.getElementById('dcoords').textContent=coordStr(d);
   document.getElementById('dhrs').innerHTML=hoursBlock(tzAt([d.lon,d.lat]));}
-function drawPin(){if(!draft)return;const s=scr([draft.lon,draft.lat]);if(!s)return;const x=s[0],y=s[1];
+let clickPin=null;
+function pinShape(x,y,col){ctx.save();ctx.shadowColor='rgba(0,0,0,.35)';ctx.shadowBlur=8;ctx.shadowOffsetY=3;
+  ctx.beginPath();ctx.moveTo(x,y);ctx.bezierCurveTo(x-3,y-7,x-11,y-13,x-11,y-22);ctx.arc(x,y-22,11,Math.PI,0);ctx.bezierCurveTo(x+11,y-13,x+3,y-7,x,y);ctx.closePath();
+  ctx.fillStyle=col;ctx.fill();ctx.restore();ctx.lineWidth=1.5;ctx.strokeStyle='rgba(255,255,255,.85)';ctx.stroke();
+  ctx.beginPath();ctx.arc(x,y-22,4.2,0,7);ctx.fillStyle='#fff';ctx.fill();}
+function drawPin(){if(clickPin&&!draft){const s=scr(clickPin);if(s)pinShape(s[0],s[1],'#2f7df6')}
+  if(!draft)return;const s=scr([draft.lon,draft.lat]);if(!s)return;const x=s[0],y=s[1];
   ctx.save();ctx.shadowColor='rgba(0,0,0,.35)';ctx.shadowBlur=8;ctx.shadowOffsetY=3;
   ctx.beginPath();ctx.moveTo(x,y);ctx.bezierCurveTo(x-3,y-7,x-11,y-13,x-11,y-22);ctx.arc(x,y-22,11,Math.PI,0);ctx.bezierCurveTo(x+11,y-13,x+3,y-7,x,y);ctx.closePath();
   ctx.fillStyle=FAVC;ctx.fill();ctx.restore();ctx.lineWidth=1.5;ctx.strokeStyle='rgba(255,255,255,.85)';ctx.stroke();
@@ -687,6 +693,7 @@ function clickAt(x,y){
     // until the lookup answers: the nearest town on the street map if one is close, otherwise a placeholder
     fallback=title;const mp=nearestMapPlace(ll);title=mp||'Looking up this spot…';where=mp?'':where;}
   if(hit)tz=tzAt(at)||tz;
+  clickPin=hit&&k<TILE_K?null:at;
   showInfo(title,where,tz,at);
   // a country or region label clicked on the zoomed-out globe keeps its name; anywhere else, look up
   // the actual spot clicked (nearest village, town or feature, at a detail matching the zoom)
@@ -706,7 +713,7 @@ function showInfo(title,where,tz,ll){activeFav=null;draft=null;infoTok++;const z
   <div class="big"><i style="background:${pal['b'+b]}"></i>${hours(o)}</div><p class="bandname">${BANDS[b].name}, ${season?'summer':'winter'}</p>
   <dl><dt>${season?'Winter':'Summer'}</dt><dd>${hours(other)}</dd><dt>Difference</dt><dd>${vsUK(o)}</dd><dt>Time zone</dt><dd>${utc(o)}</dd></dl>${ll?photosBlock():''}${ll?flightsBlock():''}`;
   wireFlights(ll);photosLoad(ll);document.getElementById('info').classList.add('show');}
-function hideInfo(){document.getElementById('info').classList.remove('show');PH.tok++;if(typeof CL!=='undefined'&&CL.sel){CL.sel=null;draw()}if(selected||activeFav||draft){selected=null;activeFav=null;draft=null;draw()}}
+function hideInfo(){document.getElementById('info').classList.remove('show');PH.tok++;if(clickPin){clickPin=null;draw()}if(typeof CL!=='undefined'&&CL.sel){CL.sel=null;draw()}if(selected||activeFav||draft){selected=null;activeFav=null;draft=null;draw()}}
 document.getElementById('infox').onclick=hideInfo;
 
 // panel & controls
@@ -852,7 +859,7 @@ function clHit(x,y){if(!CL.on)return null;const lab=placed.find(q=>q.L.cl&&x>=q.
   let best=null,bd=11;for(const it of CL.vis){const s=clProj(it.v);if(!s)continue;const d=Math.hypot(s[0]-x,s[1]-y);if(d<bd){bd=d;best=it}}return best}
 
 // details card
-function clShow(x){activeFav=null;draft=null;selected=null;CL.sel=x;if(typeof infoTok!=='undefined')infoTok++;
+function clShow(x){activeFav=null;draft=null;selected=null;CL.sel=x;clickPin=null;if(typeof infoTok!=='undefined')infoTok++;
   const T=CLT[x.t],isNew=x.add&&(Date.now()-new Date(x.add))/864e5<21,stay=x.ms==null?'':x.ms===1?'1 night':x.ms+' nights';
   const rows=[['Price',x.pr||(x.eur!=null?'≈ '+clEur(x.eur)+'/month':'')],['Rating',x.rt!=null?`${x.rt} ★${x.rv?` (${x.rv} review${x.rv===1?'':'s'})`:''}`:''],
     ['Rooms',x.rm.join(', ')],['Min stay',stay],['Dates',x.dt],['Opening',x.op],['WiFi',x.wf?x.wf+' Mbps':''],
@@ -950,8 +957,10 @@ Promise.all([fetch('data/coliving.json').then(r=>{if(!r.ok)throw new Error(r.sta
 // sorted nearest first. The search widens (500 m → 2 km → 10 km → 50 km) until about ten photos turn up.
 // Any source that fails is skipped. Mapillary is used too if a token is set in this browser
 // (localStorage 'whg.mapillary'); none is built in, since a public page would expose it.
-const PH={cache:new Map(),list:[],tok:0,box:null,i:0};
-const PH_RADII=[500,2000,10000,50000],PH_WANT=10,PH_SHOW=9;
+const PH={cache:new Map(),list:[],tok:0,box:null,grid:null,i:0};
+(()=>{const m=/[#&]mapillary=([^&]+)/.exec(location.hash);if(!m)return;try{localStorage.setItem('whg.mapillary',decodeURIComponent(m[1]))}catch(e){}
+  history.replaceState(null,'',location.pathname+location.search)})();
+const PH_RADII=[500,2000,10000,50000],PH_WANT=10,PH_SHOW=6;
 const phDist=(a,b,c,d)=>{const R=6371000,r=Math.PI/180,x=Math.sin((c-a)*r/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin((d-b)*r/2)**2;return 2*R*Math.asin(Math.sqrt(x))};
 const phFmtD=m=>m<10?'<10 m':m<1000?Math.round(m/10)*10+' m':m<10000?(m/1000).toFixed(1)+' km':Math.round(m/1000)+' km';
 const phStrip=h=>{const d=document.createElement('div');d.innerHTML=String(h||'');return d.textContent.replace(/\s+/g,' ').trim()};
@@ -965,6 +974,7 @@ function phBox(lat,lon,m){const dl=m/111320,dn=m/(111320*Math.max(0.2,Math.cos(l
 async function phCommons(lat,lon,r){const rad=Math.min(r,10000);
   const u=`https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=geosearch&ggscoord=${lat}|${lon}&ggsradius=${rad}&ggsnamespace=6&ggslimit=50&prop=imageinfo|coordinates&iiprop=url|extmetadata|size|mime&iiurlwidth=400&iiextmetadatafilter=Artist|LicenseShortName|DateTimeOriginal|ObjectName`;
   const j=await phJSON(u);return Object.values((j.query||{}).pages||{}).map(p=>{const ii=(p.imageinfo||[])[0],c=(p.coordinates||[])[0];if(!ii||!c||!/^image\/(jpeg|png|webp)/.test(ii.mime||''))return null;const m=ii.extmetadata||{};
+    if(PH_NATURE.test(phFile(p.title)))return null;
     return{key:'c:'+phFile(p.title),thumb:ii.thumburl||ii.url,full:ii.width>1600?(ii.thumburl||'').replace(/\/\d+px-/,'/1600px-'):ii.url,lat:c.lat,lon:c.lon,src:'Wikimedia Commons',
       author:phStrip(m.Artist&&m.Artist.value),lic:phStrip(m.LicenseShortName&&m.LicenseShortName.value),date:phStrip(m.DateTimeOriginal&&m.DateTimeOriginal.value).slice(0,10),link:ii.descriptionurl,title:phStrip(m.ObjectName&&m.ObjectName.value)||phFile(p.title).replace(/\.\w+$/,'')}}).filter(Boolean)}
 async function phWikidata(lat,lon,r){const km=Math.min(r,50000)/1000;
@@ -1005,7 +1015,10 @@ async function phMapillary(lat,lon,r){let tok='';try{tok=localStorage.getItem('w
   return res.flatMap(j=>j.data||[]).map(p=>{const g=p.geometry&&p.geometry.coordinates;if(!g)return null;
     return{key:'m:'+p.id,thumb:p.thumb_256_url,full:p.thumb_1024_url||p.thumb_256_url,lat:g[1],lon:g[0],src:'Mapillary',author:(p.creator&&p.creator.username)||'',lic:'CC BY-SA (© Mapillary contributors)',
       date:p.captured_at?new Date(p.captured_at).toISOString().slice(0,10):'',link:`https://www.mapillary.com/app/?pKey=${p.id}`,title:'Street-level photo'}}).filter(Boolean)}
-const PH_SOURCES=[phCommons,phWikidata,phINat,phPanoramax,phKarta,phOverpass,phMapillary];
+// iNaturalist is left out: its photos are close-ups of plants and animals rather than the place itself
+const PH_SOURCES=[phCommons,phWikidata,phPanoramax,phKarta,phOverpass,phMapillary];
+const PH_NATURE=/\b(bird|insect|butterfl|moth|beetle|bee|wasp|spider|dragonfl|lizard|gecko|snake|frog|caterpillar|larva|fung|lichen|moss|seed|leaf|leaves|flower|petal|specimen|herbarium|ant|fly|snail|crab|mushroom)s?\b|\b[A-Z][a-z]+ [a-z]{4,} \(|\b[A-Z][a-z]+_[a-z]{4,}\b/i;
+const PH_STREET=new Set(['Panoramax','KartaView','Mapillary']);
 // author and licence for Commons files found through Wikidata or OpenStreetMap
 async function phFillCommons(list){const need=list.filter(p=>p.file&&!p.lic).slice(0,50);if(!need.length)return;
   try{const j=await phTimeout(phJSON('https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&prop=imageinfo&iiprop=extmetadata|url&iiextmetadatafilter=Artist|LicenseShortName|DateTimeOriginal&titles='+encodeURIComponent(need.map(p=>'File:'+p.file).join('|'))),8000);
@@ -1022,7 +1035,11 @@ async function phSearch(lat,lon,onStep){const seen=new Map();let radius=0;
       const prev=seen.get(k);if(!prev||(prev.src==='Wikidata'||prev.src==='OpenStreetMap')&&p.src==='Wikimedia Commons')seen.set(k,Object.assign({},p,{d}))}
     if(onStep&&onStep(r)===false)return null;
     if(seen.size>=PH_WANT)break;}
-  const list=[...seen.values()].sort((a,b)=>a.d-b.d);await phFillCommons(list);return{list,radius}}
+  // street-level cameras take a frame every few metres; keep one per ~60 m so the same road doesn't fill the grid,
+  // and rank them after photos of the place itself (landmarks, views, buildings) at a similar distance
+  const all=[...seen.values()].sort((a,b)=>a.d-b.d),kept=[],street=[];
+  for(const p of all){if(PH_STREET.has(p.src)){if(street.some(q=>phDist(p.lat,p.lon,q.lat,q.lon)<60))continue;street.push(p)}kept.push(p)}
+  const list=kept.sort((a,b)=>a.d*(PH_STREET.has(a.src)?2:1)-b.d*(PH_STREET.has(b.src)?2:1));await phFillCommons(list);return{list,radius}}
 
 // --- card section ---
 const photosBlock=()=>`<div class="phs" id="phs"><div class="phh">Photos nearby <small id="phst">Searching…</small></div><div class="phg" id="phg"></div></div>`;
@@ -1036,19 +1053,30 @@ function photosLoad(ll){if(!ll)return;const tok=++PH.tok,st=()=>document.getElem
     g().innerHTML=shown.map((p,i)=>{const more=i===PH_SHOW-1&&n>PH_SHOW;
       return`<button type="button" class="pht" data-i="${i}" title="${esc([p.title,phFmtD(p.d)+' away',p.src,p.author&&'© '+p.author,p.lic,p.date].filter(Boolean).join(' · '))}" aria-label="${esc((p.title||'Photo')+', '+phFmtD(p.d)+' away, '+p.src)}">`+
         `<img src="${esc(p.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.pht').classList.add('bad')">`+
-        (more?`<b class="phmore">+${n-PH_SHOW+1}</b>`:`<small>${phFmtD(p.d)}</small>`)+`</button>`}).join('');
-    g().querySelectorAll('.pht').forEach(b=>b.onclick=()=>phOpen(+b.dataset.i))})}
+        (more?`<b class="phmore">+${n-PH_SHOW+1}</b>`:'')+`</button>`}).join('');
+    g().querySelectorAll('.pht').forEach(b=>b.onclick=()=>{const i=+b.dataset.i;if(i===PH_SHOW-1&&n>PH_SHOW)phGrid();else phOpen(i)})})}
 
 // --- full-size gallery: 80% of the screen, arrows by click, keyboard or swipe ---
-function phOpen(i){if(!PH.list.length)return;let el=PH.box;
+function phBlur(on){document.body.classList.toggle('ph-open',on)}
+function phGrid(){if(!PH.list.length)return;let el=PH.grid;
+  if(!el){el=PH.grid=document.createElement('div');el.className='phgrid';el.setAttribute('role','dialog');el.setAttribute('aria-modal','true');el.setAttribute('aria-label','All photos nearby');
+    el.innerHTML=`<div class="phgp"><div class="phgh"><b></b><button class="phx" aria-label="Close">×</button></div><div class="phgl"></div></div>`;document.body.appendChild(el);
+    el.querySelector('.phx').onclick=phGridClose;el.addEventListener('click',e=>{if(e.target===el)phGridClose()})}
+  el.querySelector('.phgh b').textContent=`${PH.list.length} photos nearby`;
+  el.querySelector('.phgl').innerHTML=PH.list.map((p,i)=>`<button type="button" class="pht" data-i="${i}" title="${esc([p.title,phFmtD(p.d)+' away',p.src].filter(Boolean).join(' · '))}" aria-label="${esc((p.title||'Photo')+', '+p.src)}"><img src="${esc(p.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.pht').classList.add('bad')"></button>`).join('');
+  el.querySelectorAll('.pht').forEach(b=>b.onclick=()=>phOpen(+b.dataset.i,true));
+  el.hidden=false;phBlur(true);PH.prevFocus=PH.prevFocus&&PH.box&&!PH.box.hidden?PH.prevFocus:document.activeElement;document.addEventListener('keydown',phGridKey,true);el.querySelector('.pht')?.focus({preventScroll:true})}
+function phGridClose(){if(!PH.grid)return;PH.grid.hidden=true;document.removeEventListener('keydown',phGridKey,true);if(!PH.box||PH.box.hidden){phBlur(false);if(PH.prevFocus&&PH.prevFocus.focus)PH.prevFocus.focus({preventScroll:true})}}
+function phGridKey(e){if(PH.box&&!PH.box.hidden)return;if(e.key==='Escape'){e.preventDefault();e.stopPropagation();phGridClose()}}
+function phOpen(i,fromGrid){if(!PH.list.length)return;let el=PH.box;PH.fromGrid=!!fromGrid;
   if(!el){el=PH.box=document.createElement('div');el.className='phbox';el.setAttribute('role','dialog');el.setAttribute('aria-modal','true');el.setAttribute('aria-label','Photo gallery');
-    el.innerHTML=`<button class="phx" aria-label="Close gallery">×</button><button class="pha phprev" aria-label="Previous photo">‹</button><figure><div class="phimg"><img alt="" referrerpolicy="no-referrer"><span class="phspin"></span></div><figcaption></figcaption></figure><button class="pha phnext" aria-label="Next photo">›</button>`;
+    el.innerHTML=`<button class="phx" aria-label="Close gallery">×</button><button class="pha phprev" aria-label="Previous photo">‹</button><figure><div class="phimg"><img alt="" referrerpolicy="no-referrer"><span class="phspin"></span></div><figcaption></figcaption></figure><button class="pha phnext" aria-label="Next photo">›</button><button class="phall" aria-label="Show all photos">▦ All photos</button>`;
     document.body.appendChild(el);
-    el.querySelector('.phx').onclick=phClose;el.querySelector('.phprev').onclick=()=>phGo(-1);el.querySelector('.phnext').onclick=()=>phGo(1);
+    el.querySelector('.phx').onclick=phClose;el.querySelector('.phall').onclick=()=>{phClose(true);phGrid()};el.querySelector('.phprev').onclick=()=>phGo(-1);el.querySelector('.phnext').onclick=()=>phGo(1);
     el.addEventListener('click',e=>{if(e.target===el)phClose()});
     const img=el.querySelector('img');img.onload=()=>el.classList.remove('loading');img.onerror=()=>{const p=PH.list[PH.i];if(p&&img.src!==p.thumb){img.src=p.thumb}else el.classList.remove('loading')};
     let sx=null;el.addEventListener('touchstart',e=>{sx=e.touches[0].clientX},{passive:true});el.addEventListener('touchend',e=>{if(sx==null)return;const dx=e.changedTouches[0].clientX-sx;if(Math.abs(dx)>50)phGo(dx<0?1:-1);sx=null})}
-  PH.prevFocus=document.activeElement;el.hidden=false;document.addEventListener('keydown',phKey,true);phShow(i);el.querySelector('.phnext').focus({preventScroll:true})}
+  if(!PH.fromGrid)PH.prevFocus=document.activeElement;if(PH.grid)PH.grid.hidden=true;el.hidden=false;phBlur(true);document.addEventListener('keydown',phKey,true);phShow(i);el.querySelector('.phnext').focus({preventScroll:true})}
 function phShow(i){const n=PH.list.length;PH.i=(i+n)%n;const p=PH.list[PH.i],el=PH.box,img=el.querySelector('img');el.classList.add('loading');img.src=p.full;img.alt=p.title||'Photo';
   const credit=[p.author?'© '+p.author:'',p.lic].filter(Boolean).join(' · ')||'Licence: see source';
   el.querySelector('figcaption').innerHTML=`<b>${esc(p.title||'Photo')}</b><span>${phFmtD(p.d)} away · ${esc(p.src)}${p.date?' · '+esc(p.date):''}</span><span>${esc(credit)}</span>`+
@@ -1056,7 +1084,8 @@ function phShow(i){const n=PH.list.length;PH.i=(i+n)%n;const p=PH.list[PH.i],el=
   el.querySelectorAll('.pha').forEach(b=>b.hidden=n<2);
   for(const d of[1,-1]){const q=PH.list[(PH.i+d+n)%n];if(q){const im=new Image();im.referrerPolicy='no-referrer';im.src=q.full}}}
 function phGo(d){phShow(PH.i+d)}
-function phClose(){if(!PH.box)return;PH.box.hidden=true;document.removeEventListener('keydown',phKey,true);if(PH.prevFocus&&PH.prevFocus.focus)PH.prevFocus.focus({preventScroll:true})}
+function phClose(toGrid){if(!PH.box)return;PH.box.hidden=true;document.removeEventListener('keydown',phKey,true);
+  if(toGrid!==true&&PH.fromGrid){phGrid();return}if(toGrid!==true){phBlur(false);if(PH.prevFocus&&PH.prevFocus.focus)PH.prevFocus.focus({preventScroll:true})}}
 function phKey(e){if(e.key==='ArrowRight'){phGo(1)}else if(e.key==='ArrowLeft'){phGo(-1)}else if(e.key==='Escape'){phClose()}
   else if(e.key==='Tab'){const f=[...PH.box.querySelectorAll('button:not([hidden]),a')];const a=f.indexOf(document.activeElement);e.preventDefault();f[(a+(e.shiftKey?-1:1)+f.length)%f.length].focus()}
   else return;e.preventDefault();e.stopPropagation()}
