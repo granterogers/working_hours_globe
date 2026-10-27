@@ -26,7 +26,8 @@ import urllib.request
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, 'data', 'coworking')
 CELL = 10
-UA = {'User-Agent': 'working_hours_globe coworking layer (github.com/granterogers/working_hours_globe)'}
+OSM_BUDGET = 900  # seconds for all Overpass attempts together; the weekly job is capped at 45 minutes
+UA ={'User-Agent': 'working_hours_globe coworking layer (github.com/granterogers/working_hours_globe)'}
 
 
 def http(url, data=None, timeout=300):
@@ -88,14 +89,20 @@ def overture(source=None):
 
 def osm():
     q = '[out:json][timeout:600];(nwr["amenity"="coworking_space"];nwr["office"="coworking"];);out center tags;'
+    deadline = time.time() + OSM_BUDGET
+    j = None
     for attempt in range(3):
+        left = deadline - time.time()
+        if left < 60:
+            break
         try:
-            j = json.loads(http('https://overpass-api.de/api/interpreter', data=('data=' + urllib.parse.quote(q)).encode(), timeout=900))
+            j = json.loads(http('https://overpass-api.de/api/interpreter', data=('data=' + urllib.parse.quote(q)).encode(), timeout=left))
             break
         except Exception as e:  # noqa: BLE001
             print('Overpass attempt failed:', e)
-            time.sleep(60)
-    else:
+            time.sleep(30)
+    if j is None:
+        print('Overpass gave no data within', OSM_BUDGET, 'seconds')
         return []
     out = []
     for e in j.get('elements', []):
