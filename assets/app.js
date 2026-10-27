@@ -15,6 +15,7 @@ const BANDS=[
   {lo:21,hi:29,name:"Overnight",sub:"starts 21:00–05:00",dark:"#5a6bdc",light:"#4656c8"}];
 const DEG=180/Math.PI, MINK=0.85, MAXK=9000;
 let S=12,E=20,season=0,W=0,H=0,dpr=1,base=300,cx=0,cy=0;
+let showNames=(()=>{try{return localStorage.getItem('whg.names')!=='off'}catch(e){return true}})();
 let showHours=(()=>{try{return localStorage.getItem('whg.hours')!=='off'}catch(e){return true}})();
 let rot=[-8,-36,0],k=0.7,kT=1,vel=[0,0],anchor=null,dragging=false,running=false,fly=null,overlays=[],placed=[],dark=true,pal={};
 try{if(new Date().toLocaleString('en-GB',{timeZone:'Europe/London',timeZoneName:'short'}).includes('BST'))season=1}catch(e){}
@@ -124,7 +125,7 @@ function draw(){
   ctx.save();ctx.beginPath();path({type:'Sphere'});ctx.clip();
   const sg=ctx.createRadialGradient(cx-s*.42,cy-s*.48,0,cx,cy,s*1.02);sg.addColorStop(0,pal.shadeLite);sg.addColorStop(.55,'rgba(0,0,0,0)');sg.addColorStop(1,pal.shadeDark);
   ctx.fillStyle=sg;ctx.fillRect(0,0,W,H);ctx.restore();
-  drawOverlays();if(typeof clDraw==='function')clDraw();drawLabels();if(shown&&(!raster||BM().labels))drawMapLabels(raster?Math.max(tileA,k>=4?1:0):tileA);drawPin();
+  drawOverlays();if(typeof clDraw==='function')clDraw();drawLabels();if(showNames&&shown&&(!raster||BM().labels))drawMapLabels(raster?Math.max(tileA,k>=4?1:0):tileA);drawPin();
 }
 
 function drawOverlays(){overlays.forEach(L=>{if(!L.on)return;L.fc.features.forEach(f=>{const g=f.geometry;if(!g||/Point/.test(g.type))return;
@@ -168,7 +169,8 @@ function drawLabels(){
       ctx.font=F.cl;ctx.lineWidth=3.5;ctx.strokeStyle=pal.halo;ctx.strokeText(s,x,y-10);ctx.fillStyle=pal.ink;ctx.fillText(s,x,y-10);if(++n>450)break;continue;}
     let nf,hr=null,bi=0;
     if(L.ov){nf=F.ov}else{const o=off(L.tz);nf=L.kind==='c'?F.cn:F.pn;if(showHours){hr=hours(o)+(L.star?'*':'');bi=band(o)}}
-    const nw=tw(L.name,nf),hw=hr?tw(hr,F.hr):0,w=Math.max(nw,hw)+8,h=hr?32:18;
+    if(!L.ov&&!showNames&&!hr)continue;const nm=L.ov||showNames;
+    const nw=nm?tw(L.name,nf):0,hw=hr?tw(hr,F.hr):0,w=Math.max(nw,hw)+8,h=hr?32:18;
     const r={x0:x-w/2,y0:y-(hr?23:22),x1:x+w/2,y1:y-(hr?23:22)+h};
     if(L.key&&seen.some(s=>s.key===L.key&&Math.hypot(s.x-x,s.y-y)<L.gap))continue;
     const P=6;if(placed.some(q=>r.x0-P<q.x1&&r.x1+P>q.x0&&r.y0-P/2<q.y1&&r.y1+P/2>q.y0))continue;
@@ -177,7 +179,8 @@ function drawLabels(){
     ctx.globalAlpha=L.a;
     if(L.ov){ctx.beginPath();ctx.arc(x,y,4.5,0,7);ctx.fillStyle=L.ov.color;ctx.fill();ctx.lineWidth=2;ctx.strokeStyle=pal.halo;ctx.stroke();
       ctx.font=nf;ctx.lineWidth=4;ctx.strokeText(L.name,x,y-9);ctx.fillStyle=pal.ink;ctx.fillText(L.name,x,y-9);ctx.globalAlpha=1;continue;}
-    ctx.font=nf;ctx.lineWidth=4;ctx.strokeStyle=pal.halo;ctx.strokeText(L.name,x,y-9);ctx.fillStyle=L.kind==='c'?pal.ink:pal.ink2;ctx.fillText(L.name,x,y-9);
+    ctx.lineWidth=4;ctx.strokeStyle=pal.halo;
+    if(nm){ctx.font=nf;ctx.strokeText(L.name,x,y-9);ctx.fillStyle=L.kind==='c'?pal.ink:pal.ink2;ctx.fillText(L.name,x,y-9)}
     if(hr){ctx.font=F.hr;ctx.strokeText(hr,x,y+6);ctx.fillStyle=pal.ink;ctx.fillText(hr,x,y+6);}
     ctx.globalAlpha=1;if(++n>450)break;
   }
@@ -361,7 +364,6 @@ const BASEMAPS={
     attr:'Imagery © Esri, Maxar, Earthstar Geographics and the GIS User Community · Names © OpenStreetMap contributors'},
   s2:{name:'Sentinel-2 cloudless',sub:'Cloud-free satellite mosaic, EOX',url:'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg',max:15,labels:true,dark:true,
     attr:'Sentinel-2 cloudless by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2020) · Names © OpenStreetMap contributors'},
-  osm:{name:'OpenStreetMap',sub:'The standard openstreetmap.org map, local names',url:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',max:19,attr:'© OpenStreetMap contributors'},
   topo:{name:'Topographic',sub:'Contours and relief, OpenTopoMap',url:'https://tile.opentopomap.org/{z}/{x}/{y}.png',max:17,attr:'Map data © OpenStreetMap contributors, SRTM · Style © OpenTopoMap (CC BY-SA)'},
   ocean:{name:'Ocean',sub:'Sea-floor relief and bathymetry, Esri',url:'https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}',max:13,labels:true,
     attr:'Tiles © Esri: GEBCO, NOAA, CHS, OSU, UNH, CSUMB, National Geographic, DeLorme, NAVTEQ · Names © OpenStreetMap contributors'},
@@ -764,19 +766,28 @@ document.getElementById('e').oninput=e=>{if(e.target.value){E=tval(e.target.valu
 const bw=document.getElementById('w'),bs=document.getElementById('su');
 function setSeason(v){season=v;bw.setAttribute('aria-pressed',String(v===0));bs.setAttribute('aria-pressed',String(v===1));ui();draw();hideInfo()}
 bw.onclick=()=>setSeason(0);bs.onclick=()=>setSeason(1);
-function ui(){renderFavs();renderLayers();document.getElementById('sum').textContent=`${hhmm(S)}–${hhmm(E)} UK, ${season?'summer':'winter'}`;
+function ui(){renderFavs();renderLayers();if(typeof m3dSync==='function')m3dSync();document.getElementById('sum').textContent=`${hhmm(S)}–${hhmm(E)} UK, ${season?'summer':'winter'}`;
   document.getElementById('snote').textContent=season?'Late March to late October, while the UK is on BST.':'Late October to late March, while the UK is on GMT.';
   document.getElementById('key').innerHTML=BANDS.map((b,i)=>`<li><i style="background:${pal['b'+i]}"></i>${b.name} <small>${b.sub}</small></li>`).join('');
   document.getElementById('strip').classList.toggle('off',!showHours);
   document.getElementById('strip').innerHTML=BANDS.map((b,i)=>`<span><i style="background:${pal['b'+i]}"></i>${b.name}</span>`).join('');}
 // base map menu (top right)
+function setShow(k,v){if(k==='hours'){showHours=v;try{localStorage.setItem('whg.hours',v?'on':'off')}catch(e){}ui()}
+  else if(k==='names'){showNames=v;try{localStorage.setItem('whg.names',v?'on':'off')}catch(e){}}
+  else if(k==='cl'){CL.on=v;clStore.set('whg.clOn',v);if(!v&&CL.sel){CL.sel=null;hideInfo()}}
+  draw();m3dSync()}
 function bmRender(){const m=document.getElementById('bmmenu');
-  m.innerHTML=`<div class="bmh">Base map</div>`+Object.entries(BASEMAPS).map(([id,b])=>`<button type="button" role="menuitemradio" aria-checked="${id===basemap}" data-id="${id}"><i class="bmdot"></i><span><b>${b.name}</b><small>${b.sub}</small></span></button>`).join('')+
+  const tick=(k,on,label,extra)=>`<label class="bmtick"><input type="checkbox" data-show="${k}" ${on?'checked':''}><span>${label}</span>${extra||''}</label>`;
+  m.innerHTML=`<div class="bmh">Show</div>`+tick('hours',showHours,'Working hours')+
+    (CL.data.length?tick('cl',CL.on,'Colivings',`<small class="clcnt" id="clcnt"></small><button type="button" class="clfb${clActive(CL.f)?' on':''}" id="clfb" aria-label="Filter colivings" title="Filter and updates">${FUNNEL}</button>`):'')+
+    tick('names',showNames,'Place names')+`<div class="bmh bmh2">Base map</div>`+Object.entries(BASEMAPS).map(([id,b])=>`<button type="button" role="menuitemradio" aria-checked="${id===basemap}" data-id="${id}"><i class="bmdot"></i><span><b>${b.name}</b><small>${b.sub}</small></span></button>`).join('')+
     `<button type="button" class="bm3d" data-3d="1"><b>3D view</b><small>Fly around in 3D with terrain</small></button>`;
-  m.querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>{setBasemap(b.dataset.id);bmToggle(false)});m.querySelector('[data-3d]').onclick=()=>{bmToggle(false);open3D()}}
-function setBasemap(id){if(!BASEMAPS[id]||id===basemap)return;basemap=id;try{localStorage.setItem('whg.basemap',id)}catch(e){}vtUsed.clear();if(typeof m3d!=='undefined'&&m3d.map)m3dStyle();draw()}
+  m.querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>{setBasemap(b.dataset.id);bmToggle(false)});
+  m.querySelectorAll('[data-show]').forEach(c=>c.onchange=()=>setShow(c.dataset.show,c.checked));
+  const fb=m.querySelector('#clfb');if(fb)fb.onclick=e=>{e.preventDefault();e.stopPropagation();bmToggle(false);clToggle(true)};clCounts();m.querySelector('[data-3d]').onclick=()=>{bmToggle(false);open3D()}}
+function setBasemap(id){if(!BASEMAPS[id]||id===basemap)return;basemap=id;try{localStorage.setItem('whg.basemap',id)}catch(e){}vtUsed.clear();if(m3d.map)m3dStyle();draw()}
 function bmToggle(open){const m=document.getElementById('bmmenu'),b=document.getElementById('bmbtn');const show=open==null?m.hidden:open;if(show)bmRender();m.hidden=!show;b.setAttribute('aria-expanded',String(show));
-  if(show)setTimeout(()=>{const f=m.querySelector('[aria-checked=true]');if(f)f.focus()})}
+  if(show)setTimeout(()=>{const f=m.querySelector('input,[aria-checked=true]');if(f)f.focus()})}
 document.getElementById('bmbtn').onclick=e=>{e.stopPropagation();bmToggle()};
 document.addEventListener('click',e=>{const m=document.getElementById('bmmenu');if(!m.hidden&&!e.target.closest('.bmwrap'))bmToggle(false)});
 document.getElementById('bmmenu').addEventListener('keydown',e=>{if(e.key==='Escape'){bmToggle(false);document.getElementById('bmbtn').focus()}});
@@ -785,9 +796,9 @@ document.getElementById('b3d').onclick=()=>open3D();
 // 3D view: MapLibre GL with terrain, opened over the globe at the same spot; left-drag pans, right-drag (or
 // Ctrl+drag) tilts and turns, the wheel zooms. Uses the current base map; satellite gets English place names.
 const M3D_JS='https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js',M3D_CSS='https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css';
-const m3d={map:null,el:null,lib:null};
+var m3d={map:null,el:null,lib:null,pin:null};
 function m3dLoad(){if(m3d.lib)return m3d.lib;m3d.lib=new Promise((ok,fail)=>{const l=document.createElement('link');l.rel='stylesheet';l.href=M3D_CSS;document.head.appendChild(l);
-  const sc=document.createElement('script');sc.src=M3D_JS;sc.onload=()=>window.maplibregl?ok(window.maplibregl):fail(new Error('MapLibre missing'));sc.onerror=()=>{m3d.lib=null;fail(new Error('load'))};document.head.appendChild(sc)});return m3d.lib}
+  const sc=document.createElement('script');sc.src=M3D_JS;sc.onload=()=>{if(!window.maplibregl)return fail(new Error('MapLibre missing'));m3d.libRef=window.maplibregl;ok(window.maplibregl)};sc.onerror=()=>{m3d.lib=null;fail(new Error('load'))};document.head.appendChild(sc)});return m3d.lib}
 const NAME_EN=['coalesce',['get','name:en'],['get','name']];
 function m3dStyleDef(){const B=BM();
   if(basemap==='street')return'https://tiles.openfreemap.org/styles/liberty';
@@ -810,21 +821,87 @@ function m3dExtras(map){
   // street style: every name label in English where OpenStreetMap has one (road numbers and house numbers left alone)
   if(basemap==='street')for(const l of map.getStyle().layers)if(l.type==='symbol'&&l.layout&&/"name|\{name/.test(JSON.stringify(l.layout['text-field']||'')))try{map.setLayoutProperty(l.id,'text-field',NAME_EN)}catch(e){}}
 function m3dStyle(){const map=m3d.map;if(map)map.setStyle(m3dStyleDef(),{diff:false})}
+// 2D zoom k <-> MapLibre zoom: same on-screen scale at the centre of the view
+const k2z=(kk,lat)=>clamp(Math.log2(2*Math.PI*base*kk*Math.cos(lat*RAD)/512),0,20);
+const z2k=(z,lat)=>clamp(512*2**z/(2*Math.PI*base*Math.cos(lat*RAD)),MINK,MAXK);
 async function open3D(){let el=m3d.el;
-  if(!el){el=m3d.el=document.createElement('div');el.className='m3d';el.innerHTML=`<div class="m3dmap" id="m3dmap"></div><div class="m3dbar glass"><b>3D</b><small>Drag to move · right-drag or Ctrl+drag to tilt and turn · wheel to zoom</small><button type="button" class="flb2" id="m3dlayers">Base map ▾</button><button type="button" class="primary" id="m3dx">Back to globe</button></div><p class="m3dmsg" id="m3dmsg" hidden></p>`;document.body.appendChild(el);
-    el.querySelector('#m3dx').onclick=close3D;el.querySelector('#m3dlayers').onclick=e=>{e.stopPropagation();bmToggle()}}
+  if(!el){el=m3d.el=document.createElement('div');el.className='m3d';el.innerHTML=`<div class="m3dmap" id="m3dmap"></div><div class="m3dbar glass"><b>3D</b><small>Drag to move · wheel to zoom · hold the wheel down and drag to turn and tilt</small><button type="button" class="primary" id="m3dx">Back to globe</button></div><p class="m3dmsg" id="m3dmsg" hidden></p>`;document.body.appendChild(el);
+    el.querySelector('#m3dx').onclick=close3D}
   el.hidden=false;document.body.classList.add('in3d');const msg=el.querySelector('#m3dmsg');msg.hidden=true;
   let lib;try{lib=await m3dLoad()}catch(e){msg.textContent='The 3D view couldn’t load. Check your connection and try again.';msg.hidden=false;return}
-  const lon=-rot[0],lat=clamp(-rot[1],-80,80),ppd=base*k/DEG,zoom=clamp(Math.log2(ppd*360/512),1,17);
-  if(m3d.map){m3d.map.jumpTo({center:[lon,lat],zoom});m3d.map.resize();return}
-  try{const map=m3d.map=new lib.Map({container:'m3dmap',style:m3dStyleDef(),center:[lon,lat],zoom,pitch:zoom>6?60:0,bearing:0,maxPitch:85,attributionControl:{compact:true},hash:false});
+  // start exactly where the globe was: same centre, same scale, looking straight down
+  const lon=-rot[0],lat=clamp(-rot[1],-85,85),zoom=k2z(k,lat);
+  if(m3d.map){m3d.map.jumpTo({center:[lon,lat],zoom,pitch:0,bearing:0});m3d.map.resize();m3dSync();return}
+  try{const map=m3d.map=new lib.Map({container:'m3dmap',style:m3dStyleDef(),center:[lon,lat],zoom,pitch:0,bearing:0,maxPitch:85,attributionControl:{compact:true},hash:false,dragRotate:true,pitchWithRotate:true});
     map.addControl(new lib.NavigationControl({visualizePitch:true}),'bottom-right');
-    map.on('style.load',()=>{try{map.setProjection({type:'globe'})}catch(e){}m3dExtras(map)});
+    map.on('style.load',()=>{try{map.setProjection({type:'globe'})}catch(e){}m3dExtras(map);m3dSync()});
+    map.on('click',m3dClick);
+    m3dWheelButton(map);
     map.on('error',e=>{if(e&&e.error&&/webgl/i.test(String(e.error.message)))msg.textContent='3D needs WebGL, which this browser has switched off.',msg.hidden=false})}
   catch(e){msg.textContent='3D needs WebGL, which this browser has switched off.';msg.hidden=false}}
+// hold the wheel (middle button) and drag: sideways turns, up and down tilts. No keys needed.
+function m3dWheelButton(map){const c=map.getCanvasContainer();let st=null;
+  c.addEventListener('mousedown',e=>{if(e.button!==1)return;e.preventDefault();st={x:e.clientX,y:e.clientY,b:map.getBearing(),p:map.getPitch()};c.style.cursor='grabbing'});
+  window.addEventListener('mousemove',e=>{if(!st)return;map.jumpTo({bearing:st.b-(e.clientX-st.x)*0.35,pitch:clamp(st.p-(e.clientY-st.y)*0.3,0,85)})});
+  window.addEventListener('mouseup',e=>{if(st&&e.button===1){st=null;c.style.cursor=''}});
+  c.addEventListener('auxclick',e=>{if(e.button===1)e.preventDefault()})}
 function close3D(){if(!m3d.el)return;const map=m3d.map;
-  if(map){const c=map.getCenter(),z=map.getZoom();rot=[-c.lng,-clamp(c.lat,-85,85),0];k=kT=clamp(512*2**z/360*DEG/base,MINK,MAXK);fly=null;vel=[0,0]}
-  m3d.el.hidden=true;document.body.classList.remove('in3d');bmToggle(false);draw()}
+  if(map){const c=map.getCenter(),lat=clamp(c.lat,-85,85);rot=[-c.lng,-lat,0];k=kT=z2k(map.getZoom(),lat);fly=null;vel=[0,0]}
+  if(m3d.pin){m3d.pin.remove();m3d.pin=null}
+  m3d.el.hidden=true;document.body.classList.remove('in3d');bmToggle(false);hideInfo();draw()}
+
+// everything from the globe drawn into the 3D view as map layers, kept in step with the app
+const M3D_OWN='m3d-';
+function m3dGeo(){
+  const tz={type:'FeatureCollection',features:[]};
+  if(showHours)for(const f of TZHIT.features.concat(D.gaps.features))tz.features.push({type:'Feature',properties:{c:pal['b'+band(off(f.properties.z))]},geometry:f.geometry});
+  const lab={type:'FeatureCollection',features:[]};
+  // country and region labels carry the hours; with hours off the base map's own names are enough
+  if(showHours){const seen=new Set();
+    for(const c of D.countries){const o=off(c[3]);lab.features.push({type:'Feature',properties:{t:(showNames?c[0]:'')+(showHours?(showNames?'\n':'')+hours(o)+(c[6]?'*':''):''),r:1},geometry:{type:'Point',coordinates:[c[1],c[2]]}});seen.add(c[4]+'|'+o)}
+    for(const p of D.prov){const o=off(p[3]),key=p[4]+'|'+o;if(seen.has(key))continue;seen.add(key);
+      lab.features.push({type:'Feature',properties:{t:(showNames?p[0]:'')+(showHours?(showNames?'\n':'')+hours(o):''),r:2},geometry:{type:'Point',coordinates:[p[1],p[2]]}})}}
+  const cl={type:'FeatureCollection',features:CL.on?CL.vis.map(x=>({type:'Feature',properties:{id:x.id,n:x.n,c:CLT[x.t].col},geometry:{type:'Point',coordinates:[x.lon,x.lat]}})):[]};
+  const fv={type:'FeatureCollection',features:favs.map((f,i)=>({type:'Feature',properties:{i,n:f.name},geometry:{type:'Point',coordinates:[f.lon,f.lat]}}))};
+  const ov={type:'FeatureCollection',features:[]};
+  overlays.forEach((L,li)=>{if(L.on)L.fc.features.forEach((f,fi)=>{if(f.geometry)ov.features.push({type:'Feature',properties:{li,fi,c:L.color,n:(f.properties&&f.properties.name)||''},geometry:f.geometry})})});
+  return{tz,lab,cl,fv,ov}}
+function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.getStyle())return}catch(e){return}
+  try{g=m3dGeo()}catch(e){return}
+  const src=(id,data)=>{const s=map.getSource(M3D_OWN+id);if(s)s.setData(data);else map.addSource(M3D_OWN+id,{type:'geojson',data})};
+  try{src('tz',g.tz);src('lab',g.lab);src('cl',g.cl);src('fv',g.fv);src('ov',g.ov)}catch(e){return}
+  const font=['Noto Sans Bold'],dk=BM().dark||false;
+  const lay=(def,before)=>{if(!map.getLayer(def.id))map.addLayer(def,before)};
+  // working-hours colours fade out as you zoom in, like on the globe
+  // same fade as on the globe: full colour until the street-map zoom, gone 4.5 zoom steps later
+  const la=map.getCenter().lat,zA=k2z(TILE_K,la),zB=Math.max(zA+0.5,k2z(TILE_K+4.5,la)),op=basemap==='street'?0.8:0.5;
+  lay({id:M3D_OWN+'tz',type:'fill',source:M3D_OWN+'tz',paint:{'fill-color':['get','c'],'fill-opacity':op}},
+    (map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
+  map.setPaintProperty(M3D_OWN+'tz','fill-opacity',['interpolate',['linear'],['zoom'],zA,op,zB,0]);
+  lay({id:M3D_OWN+'ovf',type:'fill',source:M3D_OWN+'ov',filter:['==',['geometry-type'],'Polygon'],paint:{'fill-color':['get','c'],'fill-opacity':0.2}});
+  lay({id:M3D_OWN+'ovl',type:'line',source:M3D_OWN+'ov',filter:['in',['geometry-type'],['literal',['LineString','Polygon']]],paint:{'line-color':['get','c'],'line-width':2.5}});
+  lay({id:M3D_OWN+'ovp',type:'circle',source:M3D_OWN+'ov',filter:['==',['geometry-type'],'Point'],paint:{'circle-color':['get','c'],'circle-radius':5,'circle-stroke-color':'#fff','circle-stroke-width':1.5}});
+  lay({id:M3D_OWN+'cl',type:'circle',source:M3D_OWN+'cl',paint:{'circle-color':['get','c'],'circle-radius':['interpolate',['linear'],['zoom'],2,3,8,5,14,7],'circle-stroke-color':'#fff','circle-stroke-width':1.3}});
+  lay({id:M3D_OWN+'cln',type:'symbol',source:M3D_OWN+'cl',minzoom:9,layout:{'text-field':['get','n'],'text-font':font,'text-size':11,'text-offset':[0,-1.2],'text-anchor':'bottom','text-optional':true},paint:{'text-color':dk?'#fff':'#14213d','text-halo-color':dk?'rgba(0,0,0,.75)':'#fff','text-halo-width':1.4}});
+  lay({id:M3D_OWN+'fv',type:'circle',source:M3D_OWN+'fv',paint:{'circle-color':FAVC,'circle-radius':7,'circle-stroke-color':'#fff','circle-stroke-width':2}});
+  lay({id:M3D_OWN+'fvn',type:'symbol',source:M3D_OWN+'fv',layout:{'text-field':['get','n'],'text-font':font,'text-size':12,'text-offset':[0,-1.3],'text-anchor':'bottom'},paint:{'text-color':dk?'#fff':'#14213d','text-halo-color':dk?'rgba(0,0,0,.75)':'#fff','text-halo-width':1.5}});
+  lay({id:M3D_OWN+'lab',type:'symbol',source:M3D_OWN+'lab',layout:{'text-field':['get','t'],'text-font':font,'text-size':['match',['get','r'],1,13,11.5],'text-line-height':1.25,'text-padding':6},
+    paint:{'text-color':dk||basemap==='street'?'#ffffff':'#ffffff','text-halo-color':'rgba(10,16,30,.8)','text-halo-width':1.6}});
+  // the base map's own names follow the Place names switch
+  for(const l of map.getStyle().layers)if(l.type==='symbol'&&!l.id.startsWith(M3D_OWN))try{map.setLayoutProperty(l.id,'visibility',showNames?'visible':'none')}catch(e){}}
+// clicks in 3D open the same cards as on the globe
+function m3dClick(e){const map=m3d.map,hits=map.queryRenderedFeatures(e.point,{layers:[M3D_OWN+'fv',M3D_OWN+'cl',M3D_OWN+'ovp',M3D_OWN+'ovl',M3D_OWN+'ovf'].filter(id=>map.getLayer(id))});
+  const ll=[e.lngLat.lng,e.lngLat.lat];if(m3d.pin){m3d.pin.remove();m3d.pin=null}
+  const h=hits[0];
+  if(h&&h.layer.id===M3D_OWN+'fv'){const f=favs[h.properties.i];if(f){showFav(f);return}}
+  if(h&&h.layer.id===M3D_OWN+'cl'){const x=CL.byId.get(h.properties.id);if(x){clShow(x);return}}
+  if(h&&h.layer.id.startsWith(M3D_OWN+'ov')){const L=overlays[h.properties.li],f=L&&L.fc.features[h.properties.fi];if(f){selected={L,f};showFeature(L,f,ll);return}}
+  k=z2k(map.getZoom(),ll[1]);   // lookup detail follows the 3D zoom
+  const tz=tzAt(ll);if(!tz){hideInfo();return}
+  m3d.pin=new m3d.libRef.Marker({color:'#2f7df6'}).setLngLat(ll).addTo(map);
+  showInfo('Looking up this spot…',' ',tz,ll);
+  const hEl=document.querySelector('#infob h2'),w=document.querySelector('#infob .where'),tok=infoTok;hEl.classList.add('pending');
+  geocode({lon:ll[0],lat:ll[1]},res=>{if(tok!==infoTok)return;hEl.classList.remove('pending');hEl.textContent=res.name;w.textContent=res.where||' '})}
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&m3d.el&&!m3d.el.hidden&&document.getElementById('bmmenu').hidden&&!(PH.box&&!PH.box.hidden)&&!(PH.grid&&!PH.grid.hidden))close3D()});
 
 document.getElementById('fs').onclick=()=>{try{if(document.fullscreenElement)document.exitFullscreen();else document.documentElement.requestFullscreen()}catch(e){}};
@@ -860,7 +937,7 @@ async function loadFile(f){let fc;const n=f.name.toLowerCase();
   fc.features.forEach(x=>fixGeom(x.geometry));
   const used=new Set(overlays.map(o=>o.color)),color=COLORS.find(c=>!used.has(c))||COLORS[overlays.length%COLORS.length];
   const L={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:f.name,fc,on:true,color,added:Date.now()};
-  overlays.push(L);renderLayers();draw();storeLayer(L);}
+  overlays.push(L);renderLayers();draw();m3dSync();storeLayer(L);}
 // added layers are kept between visits in this browser's IndexedDB (room for large files, unlike localStorage)
 const layerDB=(()=>{let p=null;const open=()=>p||(p=new Promise((res,rej)=>{const r=indexedDB.open('working-hours-globe',1);
   r.onupgradeneeded=()=>r.result.createObjectStore('layers',{keyPath:'id'});r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}));
@@ -892,10 +969,7 @@ function kml2geo(txt){const doc=new DOMParser().parseFromString(txt,'text/xml'),
   return{type:'FeatureCollection',features:out}}
 function renderLayers(){const ul=document.getElementById('layers');ul.innerHTML='';
   // the built-in working-hours colours and labels, which can be switched off to see only your own layers
-  const wh=document.createElement('li');wh.className='builtin';
-  wh.innerHTML=`<input type="checkbox" ${showHours?'checked':''} aria-label="Show working hours"><i class="sw" style="background:linear-gradient(90deg,${BANDS.map((b,i)=>pal['b'+i]).join(',')})"></i><span>Working hours</span>`;
-  wh.querySelector('input').onchange=e=>{showHours=e.target.checked;try{localStorage.setItem('whg.hours',showHours?'on':'off')}catch(err){}ui();draw()};ul.appendChild(wh);
-  if(typeof clRow==='function'&&CL.data.length)ul.appendChild(clRow());
+
   overlays.forEach((L,i)=>{const li=document.createElement('li');
     li.innerHTML=`<input type="checkbox" ${L.on?'checked':''} aria-label="Show ${esc(L.name)}"><i class="sw" style="background:${L.color}"></i><span class="ln" title="${esc(L.name)} (double-click to rename)">${esc(L.name)}</span>`+
       `<button class="ed" aria-label="Rename ${esc(L.name)}" title="Rename"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button><button class="x" aria-label="Remove ${esc(L.name)}" title="Remove">×</button>`;
@@ -938,7 +1012,7 @@ function clPass(x,f,now){
     if(!x.dr.some(r=>r[0]<=e&&r[1]>=s))return false}
   return true;}
 function clApply(){const now=clToday();CL.vis=CL.data.filter(x=>clPass(x,CL.f,now));CL.total=CL.data.filter(x=>!(x.dr.length&&x.dr.every(r=>r[1]<now))).length;clStore.set('whg.clF',CL.f);
-  if(CL.sel&&!CL.vis.includes(CL.sel))CL.sel=null;clCounts();if(typeof draw==='function')draw();}
+  if(CL.sel&&!CL.vis.includes(CL.sel))CL.sel=null;clCounts();if(typeof draw==='function')draw();if(typeof m3dSync==='function')m3dSync();}
 function clSetData(list,meta){CL.data=list.filter(x=>isFinite(x.lat)&&isFinite(x.lon)).map(x=>Object.assign(x,{v:vec(x.lon,x.lat),rm:x.rm||[],tg:x.tg||[],vb:x.vb||[],dr:x.dr||[]}));
   CL.byId=new Map(CL.data.map(x=>[x.id,x]));if(meta)CL.meta=meta;
   if(!clStore.get('whg.clSeen',null))clStore.set('whg.clSeen',CL.data.map(x=>x.id));   // first visit: nothing counts as new
