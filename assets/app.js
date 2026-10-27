@@ -1085,7 +1085,22 @@ function photosRender(force){const st=document.getElementById('phst'),g=document
   g.querySelectorAll('.pht').forEach(b=>b.onclick=()=>{const i=+b.dataset.i;if(i===PH_SHOW-1&&PH.list.length>PH_SHOW)phGrid();else phOpen(i)})}
 
 // --- full-size gallery: 80% of the screen, arrows by click, keyboard or swipe ---
-function phBlur(on){document.body.classList.toggle('ph-open',on)}
+// The app behind the gallery is shown softened by painting a blurred snapshot of the globe onto one plain canvas
+// under the gallery. (Blurring the live page with CSS filters made Edge/Chrome draw the gallery in the wrong
+// place on high-DPI screens.) The snapshot is a downscale-then-upscale, which blurs in every browser.
+function phBlur(on){let bg=document.getElementById('phbg');
+  if(!on){if(bg)bg.hidden=true;window.removeEventListener('resize',phBgPaint);return}
+  if(!bg){bg=document.createElement('div');bg.id='phbg';bg.setAttribute('aria-hidden','true');document.body.appendChild(bg)}
+  bg.hidden=false;phBgPaint();window.addEventListener('resize',phBgPaint)}
+function phBgPaint(){const bg=document.getElementById('phbg');if(!bg||bg.hidden)return;const w=innerWidth,h=innerHeight;
+  const big=document.createElement('canvas');big.width=Math.round(w/2);big.height=Math.round(h/2);const g=big.getContext('2d');
+  const sm=document.createElement('canvas');sm.width=Math.max(1,Math.round(w/14));sm.height=Math.max(1,Math.round(h/14));const s2=sm.getContext('2d');
+  s2.imageSmoothingEnabled=true;s2.imageSmoothingQuality='high';
+  try{s2.drawImage(sc,0,0,sm.width,sm.height)}catch(e){}s2.drawImage(cv,0,0,sm.width,sm.height);
+  g.fillStyle=getComputedStyle(document.body).backgroundColor||'#0b1020';g.fillRect(0,0,big.width,big.height);
+  g.imageSmoothingEnabled=true;g.imageSmoothingQuality='high';g.drawImage(sm,0,0,big.width,big.height);
+  g.fillStyle=dark?'rgba(8,12,24,.3)':'rgba(255,255,255,.2)';g.fillRect(0,0,big.width,big.height);
+  bg.style.backgroundImage=`url(${big.toDataURL('image/jpeg',.82)})`}
 function phGrid(){if(!PH.list.length)return;let el=PH.grid;
   if(!el){el=PH.grid=document.createElement('div');el.className='phgrid';el.setAttribute('role','dialog');el.setAttribute('aria-modal','true');el.setAttribute('aria-label','All photos nearby');
     el.innerHTML=`<div class="phgp"><div class="phgh"><b></b><button class="phx" aria-label="Close">×</button></div><div class="phgl"></div></div>`;document.body.appendChild(el);
