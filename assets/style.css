@@ -336,16 +336,15 @@ body.in3d .strip,body.in3d .attrib{display:none}
 
 /* weather in cards */
 .wx{margin:12px 0 4px;border-top:1px solid var(--glass-b);padding-top:10px}
-.wxh{display:flex;justify-content:space-between;align-items:baseline;font-weight:600;font-size:.9rem;margin-bottom:6px}
+.wxh{display:flex;justify-content:space-between;align-items:baseline;font-weight:600;font-size:.9rem;margin-bottom:4px}
 .wxh small{font-weight:400;color:var(--ink2);font-size:.74rem}
 .wxnow{display:flex;align-items:center;gap:10px}
-.wxnow i{font-style:normal;font-size:1.9rem;line-height:1}
-.wxnow b{font-size:1.5rem;font-weight:700}
-.wxnow span{display:flex;flex-direction:column;font-size:.86rem}
+.wxnow b{font-size:1.7rem;font-weight:700}
+.wxnow span{display:flex;flex-direction:column;font-size:.88rem}
 .wxnow small{color:var(--ink2);font-size:.74rem}
-.wxhours{display:flex;gap:4px;overflow-x:auto;margin:8px 0 4px;padding-bottom:2px}
-.wxhours span{flex:none;display:flex;flex-direction:column;align-items:center;min-width:40px;font-size:.78rem;background:var(--field);border-radius:9px;padding:4px 2px}
-.wxhours small{color:var(--ink2);font-size:.68rem}.wxhours i{font-style:normal}.wxhours em{font-style:normal;color:#4f9de0;font-size:.66rem}
-.wxdays{list-style:none;margin:4px 0 0;padding:0}
-.wxdays li{display:grid;grid-template-columns:52px 26px 34px 34px 1fr;align-items:center;font-size:.82rem;padding:2px 0}
-.wxdays i{font-style:normal}.wxdays small{color:var(--ink2)}.wxdays em{font-style:normal;color:#4f9de0;font-size:.72rem}
+.wxdays{list-style:none;margin:8px 0 0;padding:0;display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.wxdays li{display:flex;flex-direction:column;align-items:center;gap:1px;background:var(--field);border-radius:10px;padding:6px 0 5px;font-size:.8rem}
+.wxdays span{font-size:.72rem;color:var(--ink2)}
+.wxdays b{font-weight:700}.wxdays small{color:var(--ink2);font-size:.74rem}
+.wxdays em{font-style:normal;color:#4f9de0;font-size:.68rem;min-height:.9em}
+.wxi{display:block;flex:none}

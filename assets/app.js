@@ -122,7 +122,7 @@ function draw(){
   ctx.save();ctx.beginPath();path({type:'Sphere'});ctx.clip();
   const sg=ctx.createRadialGradient(cx-s*.42,cy-s*.48,0,cx,cy,s*1.02);sg.addColorStop(0,pal.shadeLite);sg.addColorStop(.55,'rgba(0,0,0,0)');sg.addColorStop(1,pal.shadeDark);
   ctx.fillStyle=sg;ctx.fillRect(0,0,W,H);ctx.restore();
-  drawOverlays();if(typeof clDraw==='function')clDraw();drawLabels();if(showWeather)wxDraw();if(showNames&&shown&&(!raster||BM().labels))drawMapLabels(tileA);drawPin();
+  drawOverlays();if(typeof clDraw==='function')clDraw();const mapNames=showNames&&shown&&(!raster||BM().labels);drawLabels();if(showWeather)wxDraw(mapNames);if(showNames&&shown&&(!raster||BM().labels))drawMapLabels(tileA);drawPin();
 }
 
 function drawOverlays(){overlays.forEach(L=>{if(!L.on)return;L.fc.features.forEach(f=>{const g=f.geometry;if(!g||/Point/.test(g.type))return;
@@ -474,7 +474,7 @@ let vtZ=0;
 function drawMapLabels(alpha){
   const cand=[];for(const dk of vtUsed){const dd=vdata.get(dk);if(dd&&dd.ok)for(const L of vtLabels(dk,dd))if(vtZ>=L.minz)cand.push(L)}
   if(!cand.length)return;cand.sort((p,q)=>q.pri-p.pri);
-  const boxes=placed.map(r=>[r.x0,r.y0,r.x1,r.y1]),seen=new Map();
+  const boxes=placed.map(r=>[r.x0,r.y0,r.x1,r.y1]).concat(showWeather?WX.boxes:[]),seen=new Map();
   const free=bs=>!bs.some(b=>b[0]<0||b[1]<0||b[2]>W||b[3]>H||boxes.some(q=>b[0]-3<q[2]&&b[2]+3>q[0]&&b[1]-2<q[3]&&b[3]+2>q[1]));
   const near=(name,x,y,gap)=>{const s=seen.get(name);return s&&s.some(q=>Math.hypot(q[0]-x,q[1]-y)<gap)};
   const mark=(name,q)=>{if(!seen.has(name))seen.set(name,[]);seen.get(name).push(q)};
@@ -879,7 +879,7 @@ function m3dGeo(){
   const fv={type:'FeatureCollection',features:favs.map((f,i)=>({type:'Feature',properties:{i,n:f.name},geometry:{type:'Point',coordinates:[f.lon,f.lat]}}))};
   const ov={type:'FeatureCollection',features:[]};
   overlays.forEach((L,li)=>{if(L.on)L.fc.features.forEach((f,fi)=>{if(f.geometry)ov.features.push({type:'Feature',properties:{li,fi,c:L.color,n:(f.properties&&f.properties.name)||''},geometry:f.geometry})})});
-  const wx={type:'FeatureCollection',features:showWeather?[...WX.pts.values()].map(p=>({type:'Feature',properties:{t:Math.round(p.temp)+'°',c:wxTempCol(p.temp)},geometry:{type:'Point',coordinates:[p.lon,p.lat]}})):[]};
+  const wx={type:'FeatureCollection',features:showWeather?(WX.shown||[]).map(p=>WX.pts.get(wxKey(p.lat,p.lon))).filter(Boolean).map(p=>({type:'Feature',properties:{t:Math.round(p.temp)+'°',c:wxTempCol(p.temp)},geometry:{type:'Point',coordinates:[p.lon,p.lat]}})):[]};
   return{tz,lab,cl,fv,ov,wx}}
 function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.getStyle())return}catch(e){return}
   try{g=m3dGeo()}catch(e){return}
@@ -1324,55 +1324,72 @@ function phKey(e){if(e.key==='ArrowRight'){phGo(1)}else if(e.key==='ArrowLeft'){
 
 // Weather from Open-Meteo (https://open-meteo.com, free, no key). The "Weather now" layer shows current
 // temperature and conditions on a grid of points across the view; each card shows a 7-day forecast.
-const WMO={0:['☀️','Clear'],1:['🌤️','Mostly clear'],2:['⛅','Partly cloudy'],3:['☁️','Overcast'],45:['🌫️','Fog'],48:['🌫️','Freezing fog'],
-  51:['🌦️','Light drizzle'],53:['🌦️','Drizzle'],55:['🌧️','Heavy drizzle'],56:['🌧️','Freezing drizzle'],57:['🌧️','Freezing drizzle'],
-  61:['🌦️','Light rain'],63:['🌧️','Rain'],65:['🌧️','Heavy rain'],66:['🌧️','Freezing rain'],67:['🌧️','Freezing rain'],
-  71:['🌨️','Light snow'],73:['🌨️','Snow'],75:['❄️','Heavy snow'],77:['🌨️','Snow grains'],80:['🌦️','Showers'],81:['🌧️','Heavy showers'],82:['⛈️','Violent showers'],
-  85:['🌨️','Snow showers'],86:['🌨️','Heavy snow showers'],95:['⛈️','Thunderstorm'],96:['⛈️','Thunderstorm with hail'],99:['⛈️','Thunderstorm with hail']};
-const wmo=(c,day)=>{const w=WMO[c]||['🌡️','—'];return(day===0&&(c===0||c===1))?['🌙',w[1]]:w};
-const WX={pts:new Map(),pending:new Set(),timer:0,busy:false};
+const WMO={0:'Clear',1:'Mostly clear',2:'Partly cloudy',3:'Overcast',45:'Fog',48:'Freezing fog',51:'Light drizzle',53:'Drizzle',55:'Heavy drizzle',56:'Freezing drizzle',57:'Freezing drizzle',
+  61:'Light rain',63:'Rain',65:'Heavy rain',66:'Freezing rain',67:'Freezing rain',71:'Light snow',73:'Snow',75:'Heavy snow',77:'Snow grains',80:'Showers',81:'Heavy showers',82:'Violent showers',
+  85:'Snow showers',86:'Heavy snow showers',95:'Thunderstorm',96:'Thunderstorm with hail',99:'Thunderstorm with hail'};
+// clear, drawn weather icons (emoji render small and inconsistently on Windows)
+const wxKind=(c,day)=>c<=1?(day===0?'moon':'sun'):c===2?(day===0?'pmoon':'psun'):c===3?'cloud':c<=48?'fog':c<=57?'drizzle':c<=67||(c>=80&&c<=82)?(c===65||c===82?'heavy':'rain'):c<=86?'snow':'storm';
+const WXI=(()=>{const CL='<path d="M8 19h9.5a4.5 4.5 0 0 0 .6-8.96A6 6 0 0 0 6.6 11.2 4 4 0 0 0 8 19z" fill="#d5dde9" stroke="#7d8ba1" stroke-width="1.2"/>',
+  SUN=(x,y,r)=>`<g stroke="#f4a623" stroke-width="1.6" stroke-linecap="round">${[0,45,90,135,180,225,270,315].map(d=>{const a=d*Math.PI/180;return`<line x1="${x+Math.cos(a)*(r+2)}" y1="${y+Math.sin(a)*(r+2)}" x2="${x+Math.cos(a)*(r+4)}" y2="${y+Math.sin(a)*(r+4)}"/>`}).join('')}</g><circle cx="${x}" cy="${y}" r="${r}" fill="#ffc83d"/>`,
+  MOON=(x,y,r)=>`<path d="M${x+r*0.3} ${y-r}a${r} ${r} 0 1 0 ${r*0.7} ${r*1.55} ${r*0.8} ${r*0.8} 0 0 1-${r*0.7}-${r*1.55}z" fill="#c9d4ee" stroke="#8796b8" stroke-width="1"/>`,
+  DROPS=(n,c)=>[...Array(n)].map((_,i)=>`<line x1="${9+i*3.5}" y1="20.5" x2="${8+i*3.5}" y2="23" stroke="${c}" stroke-width="1.6" stroke-linecap="round"/>`).join(''),
+  w=b=>`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 26">${b}</svg>`;
+  return{sun:w(SUN(13,13,5.5)),moon:w(MOON(12,13,7)),psun:w(SUN(9,9,4)+CL),pmoon:w(MOON(8,9,5)+CL),cloud:w(CL),
+    fog:w(CL+'<g stroke="#9aa6b8" stroke-width="1.6" stroke-linecap="round"><line x1="5" y1="21.5" x2="20" y2="21.5"/><line x1="8" y1="24" x2="22" y2="24"/></g>'),
+    drizzle:w(CL+DROPS(3,'#5aa5e6')),rain:w(CL+DROPS(4,'#2f86d6')),heavy:w(CL.replace('#d5dde9','#aeb9ca')+DROPS(4,'#1d6fc4')),
+    snow:w(CL+'<g fill="#7fb6ef">'+[9,13,17].map(x=>`<circle cx="${x}" cy="22.5" r="1.5"/>`).join('')+'</g>'),
+    storm:w(CL.replace('#d5dde9','#9aa6b8')+'<path d="M13 17l-3 5h3l-1.5 4 4.5-6h-3l1.5-3z" fill="#ffc83d" stroke="#d89a12" stroke-width=".6"/>')}})();
+const wxSvg=(c,day,px)=>`<img class="wxi" src="data:image/svg+xml,${encodeURIComponent(WXI[wxKind(c,day)])}" width="${px}" height="${px}" alt="${esc(WMO[c]||'')}" title="${esc(WMO[c]||'')}">`;
+const WXIMG={};const wxImg=(c,day)=>{const kd=wxKind(c,day);if(!WXIMG[kd]){const im=new Image();im.onload=()=>draw();im.src='data:image/svg+xml,'+encodeURIComponent(WXI[kd]);WXIMG[kd]=im}return WXIMG[kd]};
+const WX={pts:new Map(),pending:new Set(),timer:0,busy:false,boxes:[]};
 const wxTempCol=t=>t<=-10?'#5b6ee1':t<=0?'#4f9de0':t<=10?'#39b6c8':t<=18?'#4cc38a':t<=25?'#f2c14e':t<=32?'#f28b3c':'#e2453c';
-// grid spacing in degrees: about one reading per 150 px of screen
-function wxStep(){const ppd=base*k/DEG,raw=150/ppd;const steps=[0.05,0.1,0.25,0.5,1,2,3,5,10,15];return steps.find(v=>v>=raw)||20}
-function wxGrid(){const st=wxStep(),out=[],seen=new Set();
-  for(let gy=0;gy<=Math.ceil(H/120);gy++)for(let gx=0;gx<=Math.ceil(W/150);gx++){const ll=proj.invert([gx*150+(gy%2?75:0),gy*120+40]);
-    if(!ll||d3.geoDistance(ll,viewCap[0])>1.45)continue;const lat=clamp(Math.round(ll[1]/st)*st,-80,80),lon=Math.round(wrap(ll[0])/st)*st,key=lat.toFixed(2)+','+lon.toFixed(2);
-    if(!seen.has(key)){seen.add(key);out.push({key,lat,lon})}}
-  return out}
+const wxKey=(lat,lon)=>lat.toFixed(2)+','+lon.toFixed(2);
+// which places get a reading: the towns and cities on the street map once zoomed in, otherwise cities with a
+// major airport. Most important first; the drawing step keeps them from overlapping.
+function wxCands(){const out=[];
+  if(WX.mapNames){for(const dk of vtUsed){const dd=vdata.get(dk);if(!dd||!dd.ok)continue;
+      for(const L of vtLabels(dk,dd))if(L.kind==='place'&&vtZ>=L.minz&&/city|town|village|suburb/.test(L.cls)){
+        const lat=Math.asin(clamp(L.v[2],-1,1))*DEG,lon=Math.atan2(L.v[1],L.v[0])*DEG;out.push({name:L.name,v:L.v,lat,lon,pri:L.pri,under:true})}}}
+  else if(airports){if(!WX.cities){const seen=new Set();WX.cities=[];for(const a of airports)if(a[6]===1&&!seen.has(a[2]+a[3])){seen.add(a[2]+a[3]);WX.cities.push({name:String(a[2]||a[1]).replace(/ am Main$/,''),lat:a[4],lon:a[5],v:vec(a[5],a[4]),pri:0})}}
+    out.push(...WX.cities)}
+  else loadAirports().then(()=>draw()).catch(()=>{});
+  return out.sort((a,b)=>b.pri-a.pri)}
 function wxQueue(){if(!showWeather)return;clearTimeout(WX.timer);WX.timer=setTimeout(wxFetch,500)}
 async function wxFetch(){if(!showWeather||WX.busy||Date.now()<(WX.wait||0))return;const now=Date.now();
-  const need=wxGrid().filter(p=>{const q=WX.pts.get(p.key);return!(q&&now-q.t<20*60e3)&&!WX.pending.has(p.key)}).slice(0,60);if(!need.length)return;
-  WX.busy=true;need.forEach(p=>WX.pending.add(p.key));
-  try{const u=`https://api.open-meteo.com/v1/forecast?latitude=${need.map(p=>p.lat.toFixed(2)).join(',')}&longitude=${need.map(p=>p.lon.toFixed(2)).join(',')}&current=temperature_2m,weather_code,is_day,wind_speed_10m&timezone=auto&wind_speed_unit=kmh`;
+  const need=[];for(const p of WX.shown||[]){const key=wxKey(p.lat,p.lon),q=WX.pts.get(key);if(!(q&&now-q.t<20*60e3)&&!WX.pending.has(key)&&!need.some(n=>n.key===key))need.push({key,lat:p.lat,lon:p.lon});if(need.length>=60)break}
+  if(!need.length)return;WX.busy=true;need.forEach(p=>WX.pending.add(p.key));
+  try{const u=`https://api.open-meteo.com/v1/forecast?latitude=${need.map(p=>p.lat.toFixed(2)).join(',')}&longitude=${need.map(p=>p.lon.toFixed(2)).join(',')}&current=temperature_2m,weather_code,is_day&timezone=auto`;
     let j=await phJSON(u);if(!Array.isArray(j))j=[j];
-    j.forEach((r,i)=>{const c=r&&r.current;if(c)WX.pts.set(need[i].key,{lat:need[i].lat,lon:need[i].lon,v:vec(need[i].lon,need[i].lat),t:now,temp:c.temperature_2m,code:c.weather_code,day:c.is_day,wind:c.wind_speed_10m})});
-    if(WX.pts.size>1500){let n=WX.pts.size-1200;for(const kk of WX.pts.keys()){WX.pts.delete(kk);if(--n<=0)break}}}
+    j.forEach((r,i)=>{const c=r&&r.current;if(c)WX.pts.set(need[i].key,{lat:need[i].lat,lon:need[i].lon,t:now,temp:c.temperature_2m,code:c.weather_code,day:c.is_day})});
+    if(WX.pts.size>2000){let n=WX.pts.size-1600;for(const kk of WX.pts.keys()){WX.pts.delete(kk);if(--n<=0)break}}}
   catch(e){WX.wait=Date.now()+30000}finally{need.forEach(p=>WX.pending.delete(p.key));WX.busy=false}
-  draw();m3dSync();if(wxGrid().some(p=>!WX.pts.has(p.key)))wxQueue()}
-function wxDraw(){const st=wxStep(),font='600 12px "Bricolage Grotesque", "Segoe UI", sans-serif',boxes=placed.map(r=>[r.x0,r.y0,r.x1,r.y1]);
-  ctx.save();ctx.textAlign='left';ctx.textBaseline='middle';
-  for(const p of WX.pts.values()){if(Math.abs(Math.round(p.lat/st)*st-p.lat)>1e-6||Math.abs(Math.round(p.lon/st)*st-p.lon)>1e-6)continue;
-    const v=p.v,X=M[0]*v[0]+M[1]*v[1]+M[2]*v[2];if(X<0.1)continue;const x=cx+SC*(M[3]*v[0]+M[4]*v[1]),y=cy-SC*(M[6]*v[0]+M[7]*v[1]+M[8]*v[2]);if(x<0||y<0||x>W||y>H)continue;
-    const ic=wmo(p.code,p.day)[0],tt=Math.round(p.temp)+'°',w=tw(tt,font)+30,h=22,bx=[x-w/2,y-h/2,x+w/2,y+h/2];
-    if(boxes.some(q=>bx[0]<q[2]&&bx[2]>q[0]&&bx[1]<q[3]&&bx[3]>q[1]))continue;boxes.push(bx);
-    ctx.beginPath();ctx.roundRect?ctx.roundRect(bx[0],bx[1],w,h,11):ctx.rect(bx[0],bx[1],w,h);ctx.fillStyle=dark?'rgba(14,20,36,.82)':'rgba(255,255,255,.88)';ctx.fill();
-    ctx.lineWidth=2;ctx.strokeStyle=wxTempCol(p.temp);ctx.stroke();
-    ctx.font='13px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';ctx.fillText(ic,bx[0]+6,y+1);
-    ctx.font=font;ctx.fillStyle=pal.ink;ctx.fillText(tt,bx[0]+24,y+1)}
+  draw();m3dSync()}
+// badges sit just under the town's name on the street map; zoomed out they carry the city name themselves
+function wxDraw(mapNames){WX.mapNames=mapNames;const font='600 12px "Bricolage Grotesque", "Segoe UI", sans-serif',nfont='500 11px "Bricolage Grotesque", "Segoe UI", sans-serif',boxes=placed.map(r=>[r.x0,r.y0,r.x1,r.y1]);
+  WX.boxes=[];WX.shown=[];const cap=clamp(Math.round(W*H/26000),12,70),names=new Set();let n=0;
+  ctx.save();ctx.textBaseline='middle';ctx.textAlign='left';
+  for(const p of wxCands()){if(n>=cap)break;const v=p.v,X=M[0]*v[0]+M[1]*v[1]+M[2]*v[2];if(X<0.12)continue;
+    const x=cx+SC*(M[3]*v[0]+M[4]*v[1]),y=cy-SC*(M[6]*v[0]+M[7]*v[1]+M[8]*v[2]);if(x<20||y<20||x>W-20||y>H-20)continue;
+    if(names.has(p.name))continue;
+    const q=WX.pts.get(wxKey(p.lat,p.lon)),tt=q?Math.round(q.temp)+'°':'…',name=p.under?'':p.name,nw=name?tw(name,nfont)+6:0,w=nw+tw(tt,font)+34,h=24,by=p.under?y+12:y-h/2,bx=[x-w/2,by,x+w/2,by+h];
+    if(boxes.some(b=>bx[0]<b[2]+3&&bx[2]+3>b[0]&&bx[1]<b[3]+2&&bx[3]+2>b[1]))continue;boxes.push(bx);WX.boxes.push(bx);WX.shown.push(p);names.add(p.name);n++;if(!q)continue;
+    ctx.beginPath();ctx.roundRect?ctx.roundRect(bx[0],bx[1],w,h,12):ctx.rect(bx[0],bx[1],w,h);ctx.fillStyle=dark&&!mapNames?'rgba(14,20,36,.85)':'rgba(255,255,255,.92)';ctx.fill();
+    ctx.lineWidth=2;ctx.strokeStyle=wxTempCol(q.temp);ctx.stroke();
+    const im=wxImg(q.code,q.day);if(im.complete&&im.naturalWidth)ctx.drawImage(im,bx[0]+5,by+2,20,20);
+    const ink=dark&&!mapNames?'#f6f7fb':'#111a30';
+    if(name){ctx.font=nfont;ctx.fillStyle=ink;ctx.globalAlpha=.8;ctx.fillText(name,bx[0]+27,by+h/2+1);ctx.globalAlpha=1}
+    ctx.font=font;ctx.fillStyle=ink;ctx.fillText(tt,bx[0]+27+nw,by+h/2+1)}
   ctx.restore();wxQueue()}
-// card section: now, next hours, and the week ahead (in the place's own local time)
+// card section: now, then the week ahead by day (in the place's own local time)
 const wxBlock=()=>`<div class="wx" id="wx"><div class="wxh">Weather <small id="wxst">Loading…</small></div><div id="wxb"></div></div>`;
 let wxTok=0;
 function wxLoad(ll){if(!ll)return;const tok=++wxTok;
-  const u=`https://api.open-meteo.com/v1/forecast?latitude=${ll[1].toFixed(3)}&longitude=${ll[0].toFixed(3)}&current=temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m,relative_humidity_2m,precipitation&hourly=temperature_2m,weather_code,is_day,precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset&forecast_days=7&forecast_hours=24&timezone=auto&wind_speed_unit=kmh`;
-  phJSON(u).then(j=>{if(tok!==wxTok)return;const b=document.getElementById('wxb'),st=document.getElementById('wxst');if(!b)return;const c=j.current||{},d=j.daily||{},h=j.hourly||{};
-    const [ic,desc]=wmo(c.weather_code,c.is_day);st.textContent='now · Open-Meteo';
-    const hrs=(h.time||[]).map((t,i)=>i%3?'':`<span><small>${t.slice(11,16)}</small><i>${wmo(h.weather_code[i],h.is_day[i])[0]}</i><b>${Math.round(h.temperature_2m[i])}°</b>${h.precipitation_probability&&h.precipitation_probability[i]>=30?`<em>${h.precipitation_probability[i]}%</em>`:''}</span>`).join('');
-    const days=(d.time||[]).map((t,i)=>{const dt=new Date(t+'T12:00');return`<li><span>${i?dt.toLocaleDateString('en-GB',{weekday:'short'}):'Today'}</span><i title="${esc(wmo(d.weather_code[i])[1])}">${wmo(d.weather_code[i])[0]}</i>`+
-      `<b>${Math.round(d.temperature_2m_max[i])}°</b><small>${Math.round(d.temperature_2m_min[i])}°</small><em>${d.precipitation_probability_max&&d.precipitation_probability_max[i]>=20?d.precipitation_probability_max[i]+'%':''}</em></li>`}).join('');
-    b.innerHTML=`<div class="wxnow"><i>${ic}</i><b>${Math.round(c.temperature_2m)}°C</b><span>${esc(desc)}<small>Feels ${Math.round(c.apparent_temperature)}° · wind ${Math.round(c.wind_speed_10m)} km/h · humidity ${Math.round(c.relative_humidity_2m)}%</small></span></div>`+
-      `<div class="wxhours">${hrs}</div><ul class="wxdays">${days}</ul>`+
-      (d.sunrise&&d.sunrise[0]?`<p class="clsmall">Sunrise ${d.sunrise[0].slice(11,16)} · sunset ${d.sunset[0].slice(11,16)} (local time)</p>`:'')})
+  const u=`https://api.open-meteo.com/v1/forecast?latitude=${ll[1].toFixed(3)}&longitude=${ll[0].toFixed(3)}&current=temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m,relative_humidity_2m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=7&timezone=auto&wind_speed_unit=kmh`;
+  phJSON(u).then(j=>{if(tok!==wxTok)return;const b=document.getElementById('wxb'),st=document.getElementById('wxst');if(!b)return;const c=j.current||{},d=j.daily||{};
+    st.textContent='Open-Meteo';
+    const days=(d.time||[]).map((t,i)=>{const dt=new Date(t+'T12:00'),pr=d.precipitation_probability_max&&d.precipitation_probability_max[i];
+      return`<li title="${esc(WMO[d.weather_code[i]]||'')}"><span>${i?dt.toLocaleDateString('en-GB',{weekday:'short'}):'Today'}</span>${wxSvg(d.weather_code[i],1,34)}<b>${Math.round(d.temperature_2m_max[i])}°</b><small>${Math.round(d.temperature_2m_min[i])}°</small><em>${pr>=20?pr+'%':''}</em></li>`}).join('');
+    b.innerHTML=`<div class="wxnow">${wxSvg(c.weather_code,c.is_day,52)}<b>${Math.round(c.temperature_2m)}°C</b><span>${esc(WMO[c.weather_code]||'')}<small>Feels ${Math.round(c.apparent_temperature)}° · wind ${Math.round(c.wind_speed_10m)} km/h · humidity ${Math.round(c.relative_humidity_2m)}%</small></span></div><ul class="wxdays">${days}</ul>`})
   .catch(()=>{if(tok!==wxTok)return;const st=document.getElementById('wxst');if(st)st.textContent='unavailable right now'})}
 
 // start
