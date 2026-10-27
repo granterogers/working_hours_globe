@@ -227,8 +227,8 @@ cv.addEventListener('keydown',e=>{const st=40;if(e.key==='ArrowLeft'){vel=[st/4,
 document.getElementById('zi').onclick=()=>zoomTo(kT*1.8,[cx,cy]);
 document.getElementById('zo').onclick=()=>zoomTo(kT/1.8,[cx,cy]);
 
-function flyTo(lon,lat,sizeDeg,dur){
-  const target=clamp((Math.min(W,H)*0.38)/(Math.max(sizeDeg,1.2)*base/DEG),1,MAXK);
+function flyTo(lon,lat,sizeDeg,dur,minDeg){
+  const target=clamp((Math.min(W,H)*0.38)/(Math.max(sizeDeg,minDeg??1.2)*base/DEG),1,MAXK);
   const r0=rot.slice(),r1=[-lon,clamp(-lat,-85,85),0];r1[0]=r0[0]+wrap(r1[0]-r0[0]);
   const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
   // arc out a little on long trips so it feels like travelling
@@ -645,7 +645,22 @@ function pinShape(x,y,col){ctx.save();ctx.shadowColor='rgba(0,0,0,.35)';ctx.shad
   ctx.beginPath();ctx.moveTo(x,y);ctx.bezierCurveTo(x-3,y-7,x-11,y-13,x-11,y-22);ctx.arc(x,y-22,11,Math.PI,0);ctx.bezierCurveTo(x+11,y-13,x+3,y-7,x,y);ctx.closePath();
   ctx.fillStyle=col;ctx.fill();ctx.restore();ctx.lineWidth=1.5;ctx.strokeStyle='rgba(255,255,255,.85)';ctx.stroke();
   ctx.beginPath();ctx.arc(x,y-22,4.2,0,7);ctx.fillStyle='#fff';ctx.fill();}
-function drawPin(){if(clickPin&&!draft){const s=scr(clickPin);if(s)pinShape(s[0],s[1],'#2f7df6')}
+// your location: a blue dot with a soft ring showing how accurate the fix is
+let myLoc=null;
+function drawMe(){if(!myLoc)return;const s=scr([myLoc.lon,myLoc.lat]);if(!s)return;const ppm=base*k/DEG/111320,r=Math.max(10,myLoc.acc*ppm);
+  ctx.beginPath();ctx.arc(s[0],s[1],Math.min(r,400),0,7);ctx.fillStyle='rgba(47,125,246,.12)';ctx.fill();ctx.lineWidth=1;ctx.strokeStyle='rgba(47,125,246,.35)';ctx.stroke();
+  ctx.beginPath();ctx.arc(s[0],s[1],7.5,0,7);ctx.fillStyle='#2f7df6';ctx.fill();ctx.lineWidth=3;ctx.strokeStyle='#fff';ctx.stroke()}
+function locate(){const b=document.getElementById('loc');if(!navigator.geolocation){toastMsg('This browser can’t share your location.');return}
+  b.classList.add('busy');
+  navigator.geolocation.getCurrentPosition(p=>{b.classList.remove('busy');myLoc={lon:p.coords.longitude,lat:p.coords.latitude,acc:p.coords.accuracy||50};
+      if(m3d.el&&!m3d.el.hidden&&m3d.map){m3dMe();m3d.map.flyTo({center:[myLoc.lon,myLoc.lat],zoom:14,duration:2000})}
+      else flyTo(myLoc.lon,myLoc.lat,0.08,null,0.05);draw()},
+    e=>{b.classList.remove('busy');toastMsg(e.code===1?'Location is blocked for this site. Allow it in the browser’s address bar, then try again.':'Couldn’t find your location just now. Try again in a moment.')},
+    {enableHighAccuracy:true,timeout:15000,maximumAge:60000})}
+function toastMsg(m){let t=document.getElementById('msgtoast');if(!t){t=document.createElement('div');t.id='msgtoast';t.className='msgtoast glass';t.setAttribute('role','status');document.body.appendChild(t)}
+  t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),5000)}
+function m3dMe(){if(!myLoc||!m3d.map||!m3d.libRef)return;if(!m3d.me){const el=document.createElement('div');el.className='me3d';m3d.me=new m3d.libRef.Marker({element:el})}m3d.me.setLngLat([myLoc.lon,myLoc.lat]).addTo(m3d.map)}
+function drawPin(){drawMe();if(clickPin&&!draft){const s=scr(clickPin);if(s)pinShape(s[0],s[1],'#2f7df6')}
   if(!draft)return;const s=scr([draft.lon,draft.lat]);if(!s)return;const x=s[0],y=s[1];
   ctx.save();ctx.shadowColor='rgba(0,0,0,.35)';ctx.shadowBlur=8;ctx.shadowOffsetY=3;
   ctx.beginPath();ctx.moveTo(x,y);ctx.bezierCurveTo(x-3,y-7,x-11,y-13,x-11,y-22);ctx.arc(x,y-22,11,Math.PI,0);ctx.bezierCurveTo(x+11,y-13,x+3,y-7,x,y);ctx.closePath();
@@ -798,6 +813,7 @@ document.getElementById('bmbtn').onclick=e=>{e.stopPropagation();bmToggle()};
 document.addEventListener('click',e=>{const m=document.getElementById('bmmenu');if(!m.hidden&&!e.target.closest('.bmwrap'))bmToggle(false)});
 document.getElementById('bmmenu').addEventListener('keydown',e=>{if(e.key==='Escape'){bmToggle(false);document.getElementById('bmbtn').focus()}});
 document.getElementById('b3d').onclick=()=>open3D();
+document.getElementById('loc').onclick=locate;
 
 // 3D view: MapLibre GL with terrain, opened over the globe at the same spot; left-drag pans, right-drag (or
 // Ctrl+drag) tilts and turns, the wheel zooms. Uses the current base map; satellite gets English place names.
@@ -819,7 +835,7 @@ function m3dStyleDef(){const B=BM();
 function m3dExtras(map){
   if(!map.getSource('dem'))map.addSource('dem',{type:'raster-dem',tiles:['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],encoding:'terrarium',tileSize:256,maxzoom:15,
     attribution:'Terrain: Mapzen / AWS Terrain Tiles (SRTM, GMTED, ETOPO1, others)'});
-  try{map.setTerrain({source:'dem',exaggeration:1.3})}catch(e){}
+  m3dMode(map,true);
   if(basemap!=='satellite'&&basemap!=='s2'&&basemap!=='night'&&!map.getLayer('hills')){
     const first=(map.getStyle().layers.find(l=>l.type==='symbol')||{}).id;
     map.addLayer({id:'hills',type:'hillshade',source:'dem',paint:{'hillshade-exaggeration':0.35,'hillshade-shadow-color':'rgba(0,0,0,.35)'}},first)}
@@ -840,11 +856,17 @@ async function open3D(){let el=m3d.el;
   if(m3d.map){m3d.map.jumpTo({center:[lon,lat],zoom,pitch:0,bearing:0});m3d.map.resize();m3dSync();return}
   try{const map=m3d.map=new lib.Map({container:'m3dmap',style:m3dStyleDef(),center:[lon,lat],zoom,pitch:0,bearing:0,maxPitch:85,attributionControl:{compact:true},hash:false,dragRotate:true,pitchWithRotate:true});
     map.addControl(new lib.NavigationControl({visualizePitch:true}),'bottom-right');
-    map.on('style.load',()=>{try{map.setProjection({type:'globe'})}catch(e){}m3dExtras(map);m3dSync()});
+    map.on('style.load',()=>{m3d.mode=null;m3dExtras(map);m3dSync()});
+    map.on('zoomend',()=>m3dMode(map));map.on('moveend',()=>{if(m3d.me&&myLoc)m3dMe()});
     map.on('click',m3dClick);
     m3dWheelButton(map);
     map.on('error',e=>{if(e&&e.error&&/webgl/i.test(String(e.error.message)))msg.textContent='3D needs WebGL, which this browser has switched off.',msg.hidden=false})}
   catch(e){msg.textContent='3D needs WebGL, which this browser has switched off.';msg.hidden=false}}
+// Globe projection with 3D terrain on top tore and flickered while panning, so the two never run together:
+// zoomed out it's a globe (terrain adds nothing at that scale); from zoom 5 in, a flat map with terrain.
+function m3dMode(map,force){const z=map.getZoom(),want=z>=5?'terrain':z<4.5?'globe':m3d.mode||'globe';if(!force&&want===m3d.mode)return;m3d.mode=want;
+  try{if(want==='terrain'){map.setProjection({type:'mercator'});if(map.getSource('dem'))map.setTerrain({source:'dem',exaggeration:1.3})}
+    else{map.setTerrain(null);map.setProjection({type:'globe'})}}catch(e){}}
 // hold the wheel (middle button) and drag: sideways turns, up and down tilts. No keys needed.
 // With a place clicked, turning and tilting orbit around that place (it stays put on screen); otherwise around
 // the centre of the view.
@@ -893,6 +915,7 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
   lay({id:M3D_OWN+'tz',type:'fill',source:M3D_OWN+'tz',paint:{'fill-color':['get','c'],'fill-opacity':op}},
     (map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
   map.setPaintProperty(M3D_OWN+'tz','fill-opacity',['interpolate',['linear'],['zoom'],zA,op,zB,0]);
+  try{map.setLayerZoomRange(M3D_OWN+'tz',0,Math.min(24,zB+0.3))}catch(e){}
   lay({id:M3D_OWN+'ovf',type:'fill',source:M3D_OWN+'ov',filter:['==',['geometry-type'],'Polygon'],paint:{'fill-color':['get','c'],'fill-opacity':0.2}});
   lay({id:M3D_OWN+'ovl',type:'line',source:M3D_OWN+'ov',filter:['in',['geometry-type'],['literal',['LineString','Polygon']]],paint:{'line-color':['get','c'],'line-width':2.5}});
   lay({id:M3D_OWN+'ovp',type:'circle',source:M3D_OWN+'ov',filter:['==',['geometry-type'],'Point'],paint:{'circle-color':['get','c'],'circle-radius':5,'circle-stroke-color':'#fff','circle-stroke-width':1.5}});

@@ -351,3 +351,11 @@ body.in3d .strip,body.in3d .attrib{display:none}
 .wxdays b{font-weight:700}.wxdays small{color:var(--ink2);font-size:.74rem}
 .wxdays em{font-style:normal;color:#4f9de0;font-size:.68rem;min-height:.9em}
 .wxi{display:block;flex:none}
+
+.locbtn{position:absolute;right:16px;bottom:110px;z-index:3}
+.locbtn.busy svg{animation:phsp 1s linear infinite}
+body.in3d .locbtn{z-index:46;bottom:140px}
+.msgtoast{position:fixed;left:50%;bottom:70px;transform:translateX(-50%) translateY(20px);opacity:0;pointer-events:none;padding:10px 16px;border-radius:12px;font-size:.88rem;z-index:60;transition:opacity .2s,transform .2s;max-width:min(90vw,460px);text-align:center}
+.msgtoast.show{opacity:1;transform:translateX(-50%)}
+.me3d{width:15px;height:15px;border-radius:50%;background:#2f7df6;border:3px solid #fff;box-shadow:0 0 0 8px rgba(47,125,246,.18),0 2px 6px rgba(0,0,0,.3)}
+@media (max-width:700px){.locbtn{right:12px;bottom:106px}}
