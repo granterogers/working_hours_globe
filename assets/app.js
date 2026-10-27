@@ -807,9 +807,8 @@ function lyrRender(){const m=document.getElementById('lyrb');if(!m)return;
   m.innerHTML=tick('hours',showHours,'Working hours')+
     (CL.data.length?tick('cl',CL.on,'Colivings',`<small class="clcnt" id="clcnt"></small><button type="button" class="clfb${clActive(CL.f)?' on':''}" id="clfb" aria-label="Filter colivings" title="Filter and updates">${FUNNEL}</button>`):'')+
     tick('names',showNames,'Place names')+tick('weather',showWeather,'Weather now','<small class="clcnt">°C</small>')+
-    tick('cams',showCams,'Webcams',`<button type="button" class="clfb" id="camkey" title="${camKey()?'Windy webcams key is set (click to change)':'Add a free Windy webcams key for live images'}" aria-label="Webcam key">${camKey()?'🔑':'＋'}</button>`);
+    tick('cams',showCams,'Webcams');
   m.querySelectorAll('[data-show]').forEach(c=>c.onchange=()=>setShow(c.dataset.show,c.checked));
-  const kb=m.querySelector('#camkey');if(kb)kb.onclick=e=>{e.preventDefault();e.stopPropagation();camAskKey()};
   const fb=m.querySelector('#clfb');if(fb)fb.onclick=e=>{e.preventDefault();e.stopPropagation();clToggle()};clCounts();lyrFit()}
 function lyrFold(open){const el=document.getElementById('lyr'),h=document.getElementById('lyrh');el.classList.toggle('folded',!open);h.setAttribute('aria-expanded',String(open));
   try{localStorage.setItem('whg.lyr',open?'open':'folded')}catch(e){}lyrFit()}
@@ -1479,32 +1478,26 @@ document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest
   setTimeout(()=>{if(b.getAttribute('aria-expanded')!=='true')return;for(const [bt,bd] of ACC){if(bt===b.id)continue;const B=document.getElementById(bt),D=document.getElementById(bd);
     if(B&&D&&!D.hidden){D.hidden=true;B.setAttribute('aria-expanded','false')}}})});
 
-// Webcams layer. Live images come from Windy Webcams (free key, kept only in this browser: set it from the
-// layers menu or open the page once with #windy=KEY). Without a key, and in addition to it, webcams listed in
-// OpenStreetMap (contact:webcam / webcam tags) and Wikidata (webcam page URL) show as links once zoomed in.
+// Webcams layer. Windy's webcam service doesn't accept calls straight from a web page, so a weekly GitHub Action
+// (scripts/webcams.py, key in a repository secret) saves the most popular cameras per country to
+// data/webcams.json; each opens in Windy's public embed player. Zoomed in, webcams listed in OpenStreetMap
+// (contact:webcam / webcam tags) and Wikidata (webcam page URL) are added as links.
 const CAM={list:new Map(),sel:null,timer:0,busy:false,done:new Set(),wait:0};
-(()=>{const m=/[#&]windy=([^&]+)/.exec(location.hash);if(!m)return;try{localStorage.setItem('whg.windy',decodeURIComponent(m[1]))}catch(e){}
-  history.replaceState(null,'',location.pathname+location.search)})();
-const camKey=()=>{try{return localStorage.getItem('whg.windy')||''}catch(e){return''}};
-function camAskKey(){const v=prompt('Windy Webcams API key (free from api.windy.com/keys). Stored only in this browser. Leave empty to remove.',camKey());if(v==null)return;
-  try{if(v.trim())localStorage.setItem('whg.windy',v.trim());else localStorage.removeItem('whg.windy')}catch(e){}CAM.done.clear();lyrRender();camQueue()}
+// a key saved by the earlier version isn't needed any more; and #windy=... links are just tidied away
+try{localStorage.removeItem('whg.windy')}catch(e){}
+if(/[#&]windy=/.test(location.hash))history.replaceState(null,'',location.pathname+location.search);
+function camLoadWindy(){if(CAM.windyP)return CAM.windyP;CAM.windyP=fetch('data/webcams.json').then(r=>{if(!r.ok)throw new Error(r.status);return r.json()}).then(j=>{
+    for(const w of j.webcams||[])camAdd({id:'w'+w[0],wid:w[0],src:'windy',title:w[1],lat:w[2],lon:w[3],place:w[4],link:`https://www.windy.com/webcams/${w[0]}`});CAM.updated=j.updated;draw();m3dSync()})
+  .catch(()=>{CAM.windyP=null;CAM.none=true;toastMsg('The Windy webcam list isn’t set up yet, so only listed webcams show when zoomed in.')});return CAM.windyP}
 function camQueue(){if(!showCams)return;clearTimeout(CAM.timer);CAM.timer=setTimeout(camFetch,700)}
 function camView(){const pts=[];for(let i=0;i<=6;i++)for(let j=0;j<=6;j++){const ll=proj.invert([W*i/6,H*j/6]);if(ll&&d3.geoDistance(ll,viewCap[0])<1.5)pts.push(ll)}
   if(!pts.length)return null;const c=[-rot[0],-rot[1]],r=Math.max(...pts.map(p=>d3.geoDistance(p,c)))*6371;
   return{c,rkm:r,s:Math.min(...pts.map(p=>p[1])),n:Math.max(...pts.map(p=>p[1])),w:Math.min(...pts.map(p=>p[0])),e:Math.max(...pts.map(p=>p[0]))}}
 const camAdd=x=>{if(!isFinite(x.lat)||!isFinite(x.lon))return;const o=CAM.list.get(x.id);CAM.list.set(x.id,Object.assign(o||{},x,{v:vec(x.lon,x.lat)}))};
 async function camFetch(){if(!showCams||CAM.busy||Date.now()<CAM.wait)return;const vw=camView();if(!vw)return;CAM.busy=true;
-  const key=camKey(),jobs=[];
+  const jobs=[];
   try{
-    // zoomed out: the most popular cameras worldwide (3 pages of 50); closer in: everything near the centre of the view
-    const wide=vw.rkm>400,qs=wide?[0,50,100].map(o=>`sortKey=popularity&sortDirection=desc&limit=50&offset=${o}`):[`nearby=${vw.c[1].toFixed(2)},${vw.c[0].toFixed(2)},${Math.round(clamp(vw.rkm,5,250))}&limit=50`];
-    if(key)for(const qq of qs){const q='w:'+qq;
-      if(!CAM.done.has(q)){CAM.done.add(q);jobs.push(phJSON(`https://api.windy.com/webcams/api/v3/webcams?${qq}&lang=en&include=images,location,player,urls`,{headers:{'x-windy-api-key':key}})
-        .then(j=>{for(const w of j.webcams||[]){const L=w.location||{},im=(w.images||{}).current||{};camAdd({id:'w'+w.webcamId,src:'windy',title:w.title,lat:L.latitude,lon:L.longitude,place:[L.city,L.country].filter(Boolean).join(', '),
-          img:im.preview||im.thumbnail,player:(w.player||{}).day||(w.player||{}).live,link:(w.urls||{}).detail||`https://www.windy.com/webcams/${w.webcamId}`,t:Date.now()})}})
-        .catch(e=>{CAM.done.delete(q);const m=String(e&&e.message);
-          toastMsg(/40[13]/.test(m)?'The Windy webcams key was not accepted. Check it with the key button next to Webcams.':/429/.test(m)?'Windy webcams: too many requests for now, trying again shortly.':'Couldn’t reach Windy webcams ('+(m||'blocked by the browser')+').');
-          CAM.wait=Date.now()+20000}))}}
+    if(!CAM.none)jobs.push(camLoadWindy());
     if(k>=TILE_K&&vw.e-vw.w<6&&vw.n-vw.s<6){const bb=[vw.s,vw.w,vw.n,vw.e].map(v=>v.toFixed(2)),q='o:'+bb.join(',');
       if(!CAM.done.has(q)){CAM.done.add(q);
         jobs.push(phJSON('https://overpass-api.de/api/interpreter',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
@@ -1531,16 +1524,12 @@ function camDraw(){camQueue();if(!CAM.list.size)return;const r=k<6?7:9,at=[];ctx
 function camHit(x,y){let best=null,bd=13;for(const c of CAM.list.values()){if(c.src!=='windy'&&k<TILE_K)continue;const p=camProj(c.v);if(!p)continue;const d=Math.hypot(p[0]-x,p[1]-y);if(d<bd){bd=d;best=c}}return best}
 function camShow(x){activeFav=null;draft=null;selected=null;if(typeof CL!=='undefined')CL.sel=null;clickPin=null;CAM.sel=x;if(typeof infoTok!=='undefined')infoTok++;
   const src={windy:'Windy Webcams',osm:'OpenStreetMap',wikidata:'Wikidata'}[x.src];
-  document.getElementById('infob').innerHTML=`<p class="cltype"><i style="background:${x.src==='windy'?'#e2453c':'#1f2937'}"></i>Webcam${x.src==='windy'?' · live image':''}</p><h2>${esc(x.title||'Webcam')}</h2><p class="where">${esc(x.place||'')}</p>`+
-    (x.img?`<button type="button" class="camimg" id="camimg" title="Open larger"><img src="${esc(x.img)}" alt="${esc(x.title||'Webcam image')}" referrerpolicy="no-referrer"></button><p class="clsmall">Latest image from ${src}. Refreshes when you reopen it.</p>`:`<p class="clsmall">This webcam is listed on ${src}; its live view opens on the camera’s own site.</p>`)+
-    `<div class="cllinks">${x.player?`<a class="clbtn" href="${esc(x.player)}" target="_blank" rel="noopener noreferrer">Today’s timelapse ↗</a>`:''}<a class="clbtn" href="${esc(x.link)}" target="_blank" rel="noopener noreferrer">${x.src==='windy'?'Open on Windy ↗':'Open webcam ↗'}</a></div>`+
+  document.getElementById('infob').innerHTML=`<p class="cltype"><i style="background:${x.src==='windy'?'#e2453c':'#1f2937'}"></i>Webcam</p><h2>${esc(x.title||'Webcam')}</h2><p class="where">${esc(x.place||'')}</p>`+
+    (x.src==='windy'?`<div class="camplayer"><iframe src="https://webcams.windy.com/webcams/public/embed/player/${x.wid}/day" title="${esc(x.title||'Webcam')}: today" loading="lazy" allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe></div><p class="clsmall">Today’s images from this camera, by <a href="https://www.windy.com/webcams" target="_blank" rel="noopener noreferrer">Windy.com</a>. Press play, or open it on Windy for the live view.</p>`:`<p class="clsmall">This webcam is listed on ${src}; its live view opens on the camera’s own site.</p>`)+
+    `<div class="cllinks"><a class="clbtn" href="${esc(x.link)}" target="_blank" rel="noopener noreferrer">${x.src==='windy'?'Open on Windy ↗':'Open webcam ↗'}</a></div>`+
     `<div>${hoursBlock(tzAt([x.lon,x.lat]))}</div>${wxBlock()}`;
   wxLoad([x.lon,x.lat]);
-  const ib=document.getElementById('camimg');if(ib)ib.onclick=()=>{PH.list=[{key:x.id,thumb:x.img,full:x.img,lat:x.lat,lon:x.lon,d:0,src,author:'',lic:'See source',date:'live',link:x.link,title:x.title||'Webcam'}];phOpen(0)};
-  document.getElementById('info').classList.add('show');
-  // Windy image links expire after a while: fetch a fresh one for this camera
-  if(x.src==='windy'&&camKey()&&Date.now()-(x.t||0)>8*60e3)phJSON(`https://api.windy.com/webcams/api/v3/webcams/${x.id.slice(1)}?include=images,player`,{headers:{'x-windy-api-key':camKey()}})
-    .then(w=>{const im=((w.images||{}).current||{});x.img=im.preview||x.img;x.t=Date.now();if(CAM.sel===x)camShow(x)}).catch(()=>{})}
+  document.getElementById('info').classList.add('show')}
 
 // start
 window.addEventListener('resize',resize);setSeason(season);theme();resize();
