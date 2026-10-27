@@ -781,7 +781,7 @@ document.getElementById('e').oninput=e=>{if(e.target.value){E=tval(e.target.valu
 const bw=document.getElementById('w'),bs=document.getElementById('su');
 function setSeason(v){season=v;bw.setAttribute('aria-pressed',String(v===0));bs.setAttribute('aria-pressed',String(v===1));ui();draw();hideInfo()}
 bw.onclick=()=>setSeason(0);bs.onclick=()=>setSeason(1);
-function ui(){renderFavs();renderLayers();if(typeof m3dSync==='function')m3dSync();document.getElementById('sum').textContent=`${hhmm(S)}–${hhmm(E)} UK, ${season?'summer':'winter'}`;
+function ui(){renderFavs();renderLayers();lyrRender();if(typeof m3dSync==='function')m3dSync();document.getElementById('sum').textContent=`${hhmm(S)}–${hhmm(E)} UK, ${season?'summer':'winter'}`;
   document.getElementById('snote').textContent=season?'Late March to late October, while the UK is on BST.':'Late October to late March, while the UK is on GMT.';
   document.getElementById('key').innerHTML=BANDS.map((b,i)=>`<li><i style="background:${pal['b'+i]}"></i>${b.name} <small>${b.sub}</small></li>`).join('');
   stripRender();}
@@ -801,23 +801,35 @@ function setShow(k,v){if(k==='hours'){showHours=v;try{localStorage.setItem('whg.
   else if(k==='weather'){showWeather=v;try{localStorage.setItem('whg.weather',v?'on':'off')}catch(e){}if(v)wxQueue()}
   else if(k==='cl'){CL.on=v;clStore.set('whg.clOn',v);if(!v&&CL.sel){CL.sel=null;hideInfo()}stripRender()}
   draw();m3dSync()}
-function bmRender(){const m=document.getElementById('bmmenu');
+// Layers panel (bottom left, open unless you fold it): what's drawn on the map
+function lyrRender(){const m=document.getElementById('lyrb');if(!m)return;
   const tick=(k,on,label,extra)=>`<label class="bmtick"><input type="checkbox" data-show="${k}" ${on?'checked':''}><span>${label}</span>${extra||''}</label>`;
-  m.innerHTML=`<div class="bmh">Show</div>`+tick('hours',showHours,'Working hours')+
+  m.innerHTML=tick('hours',showHours,'Working hours')+
     (CL.data.length?tick('cl',CL.on,'Colivings',`<small class="clcnt" id="clcnt"></small><button type="button" class="clfb${clActive(CL.f)?' on':''}" id="clfb" aria-label="Filter colivings" title="Filter and updates">${FUNNEL}</button>`):'')+
-    tick('names',showNames,'Place names')+tick('weather',showWeather,'Weather now','<small class="clcnt">°C</small>')+tick('cams',showCams,'Webcams',`<button type="button" class="clfb" id="camkey" title="${camKey()?'Windy webcams key is set (click to change)':'Add a free Windy webcams key for live images'}" aria-label="Webcam key">${camKey()?'🔑':'＋'}</button>`)+`<div class="bmh bmh2">Base map</div>`+Object.entries(BASEMAPS).map(([id,b])=>`<button type="button" role="menuitemradio" aria-checked="${id===basemap}" data-id="${id}"><i class="bmdot"></i><span><b>${b.name}</b><small>${b.sub}</small></span></button>`).join('')+
-    `<button type="button" class="bm3d" data-3d="1"><b>3D view</b><small>Fly around in 3D with terrain</small></button>`;
-  m.querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>{setBasemap(b.dataset.id);bmToggle(false)});
+    tick('names',showNames,'Place names')+tick('weather',showWeather,'Weather now','<small class="clcnt">°C</small>')+
+    tick('cams',showCams,'Webcams',`<button type="button" class="clfb" id="camkey" title="${camKey()?'Windy webcams key is set (click to change)':'Add a free Windy webcams key for live images'}" aria-label="Webcam key">${camKey()?'🔑':'＋'}</button>`);
   m.querySelectorAll('[data-show]').forEach(c=>c.onchange=()=>setShow(c.dataset.show,c.checked));
   const kb=m.querySelector('#camkey');if(kb)kb.onclick=e=>{e.preventDefault();e.stopPropagation();camAskKey()};
-  const fb=m.querySelector('#clfb');if(fb)fb.onclick=e=>{e.preventDefault();e.stopPropagation();bmToggle(false);clToggle(true)};clCounts();m.querySelector('[data-3d]').onclick=()=>{bmToggle(false);open3D()}}
+  const fb=m.querySelector('#clfb');if(fb)fb.onclick=e=>{e.preventDefault();e.stopPropagation();clToggle()};clCounts();lyrFit()}
+function lyrFold(open){const el=document.getElementById('lyr'),h=document.getElementById('lyrh');el.classList.toggle('folded',!open);h.setAttribute('aria-expanded',String(open));
+  try{localStorage.setItem('whg.lyr',open?'open':'folded')}catch(e){}lyrFit()}
+// keep the working-hours panel clear of the Layers panel below it
+function lyrFit(){const el=document.getElementById('lyr');if(!el)return;const r=document.documentElement.style;r.setProperty('--lyrh',(el.offsetHeight+12)+'px');r.setProperty('--lyrw',(el.offsetWidth+16)+'px')}
+document.getElementById('lyrh').onclick=()=>lyrFold(document.getElementById('lyr').classList.contains('folded'));
+// base map menu (top right)
+function bmRender(){const m=document.getElementById('bmmenu');
+  m.innerHTML=`<div class="bmh">Base map</div>`+Object.entries(BASEMAPS).map(([id,b])=>`<button type="button" role="menuitemradio" aria-checked="${id===basemap}" data-id="${id}"><i class="bmdot"></i><span><b>${b.name}</b><small>${b.sub}</small></span></button>`).join('')+
+    `<button type="button" class="bm3d" data-3d="1"><b>3D view</b><small>Fly around in 3D with terrain</small></button>`;
+  m.querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>{setBasemap(b.dataset.id);bmToggle(false)});m.querySelector('[data-3d]').onclick=()=>{bmToggle(false);open3D()}}
 function setBasemap(id){if(!BASEMAPS[id]||id===basemap)return;basemap=id;try{localStorage.setItem('whg.basemap',id)}catch(e){}vtUsed.clear();if(m3d.map)m3dStyle();draw()}
 function bmToggle(open){const m=document.getElementById('bmmenu'),b=document.getElementById('bmbtn');const show=open==null?m.hidden:open;if(show)bmRender();m.hidden=!show;b.setAttribute('aria-expanded',String(show));
-  if(show)setTimeout(()=>{const f=m.querySelector('input,[aria-checked=true]');if(f)f.focus()})}
+  if(show)setTimeout(()=>{const f=m.querySelector('[aria-checked=true]');if(f)f.focus()})}
 document.getElementById('bmbtn').onclick=e=>{e.stopPropagation();bmToggle()};
 document.addEventListener('click',e=>{const m=document.getElementById('bmmenu');if(!m.hidden&&!e.target.closest('.bmwrap'))bmToggle(false)});
 document.getElementById('bmmenu').addEventListener('keydown',e=>{if(e.key==='Escape'){bmToggle(false);document.getElementById('bmbtn').focus()}});
 document.getElementById('b3d').onclick=()=>open3D();
+try{if(localStorage.getItem('whg.lyr')==='folded')lyrFold(false)}catch(e){}
+addEventListener('resize',lyrFit);
 document.getElementById('loc').onclick=locate;
 // north button: in 3D, first click turns the view to face north, a second click looks straight down again;
 // the needle shows which way north is. The globe view always has north up, so there it just levels the view.
@@ -1178,7 +1190,7 @@ async function clCheck(){const res=document.getElementById('clres'),btn=document
   res.querySelectorAll('button[data-id]').forEach(b=>b.onclick=()=>{const x=CL.byId.get(b.dataset.id);if(x)clGo(x)})}
 
 Promise.all([fetch('data/coliving.json').then(r=>{if(!r.ok)throw new Error(r.status);return r.json()}),fetch('data/coliving-updates.json').then(r=>r.ok?r.json():null).catch(()=>null)])
-  .then(([list,meta])=>{clSetData(list,meta);if(typeof renderLayers==='function')renderLayers()}).catch(()=>{});
+  .then(([list,meta])=>{clSetData(list,meta);if(typeof renderLayers==='function')renderLayers();lyrRender()}).catch(()=>{});
 
 // Photos near a clicked spot, from open sources that need no key: Wikimedia Commons, Wikidata, iNaturalist,
 // Panoramax, KartaView and OpenStreetMap. All are asked at once; results are merged, de-duplicated and
@@ -1475,20 +1487,24 @@ const CAM={list:new Map(),sel:null,timer:0,busy:false,done:new Set(),wait:0};
   history.replaceState(null,'',location.pathname+location.search)})();
 const camKey=()=>{try{return localStorage.getItem('whg.windy')||''}catch(e){return''}};
 function camAskKey(){const v=prompt('Windy Webcams API key (free from api.windy.com/keys). Stored only in this browser. Leave empty to remove.',camKey());if(v==null)return;
-  try{if(v.trim())localStorage.setItem('whg.windy',v.trim());else localStorage.removeItem('whg.windy')}catch(e){}CAM.done.clear();bmRender();camQueue()}
+  try{if(v.trim())localStorage.setItem('whg.windy',v.trim());else localStorage.removeItem('whg.windy')}catch(e){}CAM.done.clear();lyrRender();camQueue()}
 function camQueue(){if(!showCams)return;clearTimeout(CAM.timer);CAM.timer=setTimeout(camFetch,700)}
 function camView(){const pts=[];for(let i=0;i<=6;i++)for(let j=0;j<=6;j++){const ll=proj.invert([W*i/6,H*j/6]);if(ll&&d3.geoDistance(ll,viewCap[0])<1.5)pts.push(ll)}
   if(!pts.length)return null;const c=[-rot[0],-rot[1]],r=Math.max(...pts.map(p=>d3.geoDistance(p,c)))*6371;
   return{c,rkm:r,s:Math.min(...pts.map(p=>p[1])),n:Math.max(...pts.map(p=>p[1])),w:Math.min(...pts.map(p=>p[0])),e:Math.max(...pts.map(p=>p[0]))}}
 const camAdd=x=>{if(!isFinite(x.lat)||!isFinite(x.lon))return;const o=CAM.list.get(x.id);CAM.list.set(x.id,Object.assign(o||{},x,{v:vec(x.lon,x.lat)}))};
-async function camFetch(){if(!showCams||CAM.busy||Date.now()<CAM.wait)return;const vw=camView();if(!vw||k<2.2)return;CAM.busy=true;
+async function camFetch(){if(!showCams||CAM.busy||Date.now()<CAM.wait)return;const vw=camView();if(!vw)return;CAM.busy=true;
   const key=camKey(),jobs=[];
   try{
-    if(key){const r=Math.round(clamp(vw.rkm,5,250)),q='w:'+vw.c.map(v=>v.toFixed(1)).join(',')+':'+r;
-      if(!CAM.done.has(q)){CAM.done.add(q);jobs.push(phJSON(`https://api.windy.com/webcams/api/v3/webcams?nearby=${vw.c[1].toFixed(3)},${vw.c[0].toFixed(3)},${r}&limit=50&include=images,location,player,urls`,{headers:{'x-windy-api-key':key}})
+    // zoomed out: the most popular cameras worldwide (3 pages of 50); closer in: everything near the centre of the view
+    const wide=vw.rkm>400,qs=wide?[0,50,100].map(o=>`sortKey=popularity&sortDirection=desc&limit=50&offset=${o}`):[`nearby=${vw.c[1].toFixed(2)},${vw.c[0].toFixed(2)},${Math.round(clamp(vw.rkm,5,250))}&limit=50`];
+    if(key)for(const qq of qs){const q='w:'+qq;
+      if(!CAM.done.has(q)){CAM.done.add(q);jobs.push(phJSON(`https://api.windy.com/webcams/api/v3/webcams?${qq}&lang=en&include=images,location,player,urls`,{headers:{'x-windy-api-key':key}})
         .then(j=>{for(const w of j.webcams||[]){const L=w.location||{},im=(w.images||{}).current||{};camAdd({id:'w'+w.webcamId,src:'windy',title:w.title,lat:L.latitude,lon:L.longitude,place:[L.city,L.country].filter(Boolean).join(', '),
           img:im.preview||im.thumbnail,player:(w.player||{}).day||(w.player||{}).live,link:(w.urls||{}).detail||`https://www.windy.com/webcams/${w.webcamId}`,t:Date.now()})}})
-        .catch(e=>{CAM.done.delete(q);if(/40[13]/.test(String(e&&e.message)))toastMsg('The Windy webcams key was not accepted. Check it from the layers menu.');CAM.wait=Date.now()+20000}))}}
+        .catch(e=>{CAM.done.delete(q);const m=String(e&&e.message);
+          toastMsg(/40[13]/.test(m)?'The Windy webcams key was not accepted. Check it with the key button next to Webcams.':/429/.test(m)?'Windy webcams: too many requests for now, trying again shortly.':'Couldn’t reach Windy webcams ('+(m||'blocked by the browser')+').');
+          CAM.wait=Date.now()+20000}))}}
     if(k>=TILE_K&&vw.e-vw.w<6&&vw.n-vw.s<6){const bb=[vw.s,vw.w,vw.n,vw.e].map(v=>v.toFixed(2)),q='o:'+bb.join(',');
       if(!CAM.done.has(q)){CAM.done.add(q);
         jobs.push(phJSON('https://overpass-api.de/api/interpreter',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
