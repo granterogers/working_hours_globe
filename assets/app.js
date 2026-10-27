@@ -972,10 +972,10 @@ function phBox(lat,lon,m){const dl=m/111320,dn=m/(111320*Math.max(0.2,Math.cos(l
 
 // --- sources: each returns [{key,thumb,full,lat,lon,src,author,lic,date,link,title}] ---
 async function phCommons(lat,lon,r){const rad=Math.min(r,10000);
-  const u=`https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=geosearch&ggscoord=${lat}|${lon}&ggsradius=${rad}&ggsnamespace=6&ggslimit=50&prop=imageinfo|coordinates&iiprop=url|extmetadata|size|mime&iiurlwidth=400&iiextmetadatafilter=Artist|LicenseShortName|DateTimeOriginal|ObjectName`;
+  const u=`https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=geosearch&ggscoord=${lat}|${lon}&ggsradius=${rad}&ggsnamespace=6&ggslimit=50&prop=imageinfo|coordinates&iiprop=url|extmetadata|size|mime&iiurlwidth=400&iiextmetadatafilter=Artist|LicenseShortName|DateTimeOriginal|ObjectName|Categories|ImageDescription`;
   const j=await phJSON(u);return Object.values((j.query||{}).pages||{}).map(p=>{const ii=(p.imageinfo||[])[0],c=(p.coordinates||[])[0];if(!ii||!c||!/^image\/(jpeg|png|webp)/.test(ii.mime||''))return null;const m=ii.extmetadata||{};
-    if(PH_NATURE.test(phFile(p.title)))return null;
-    return{key:'c:'+phFile(p.title),thumb:ii.thumburl||ii.url,full:ii.width>1600?(ii.thumburl||'').replace(/\/\d+px-/,'/1600px-'):ii.url,lat:c.lat,lon:c.lon,src:'Wikimedia Commons',
+    if(ii.width&&ii.width<500)return null;const off=PH_NATURE.test(phFile(p.title))||phOff(phAbout(phFile(p.title),m));
+    return{off,key:'c:'+phFile(p.title),thumb:ii.thumburl||ii.url,full:ii.width>1600?(ii.thumburl||'').replace(/\/\d+px-/,'/1600px-'):ii.url,lat:c.lat,lon:c.lon,src:'Wikimedia Commons',
       author:phStrip(m.Artist&&m.Artist.value),lic:phStrip(m.LicenseShortName&&m.LicenseShortName.value),date:phStrip(m.DateTimeOriginal&&m.DateTimeOriginal.value).slice(0,10),link:ii.descriptionurl,title:phStrip(m.ObjectName&&m.ObjectName.value)||phFile(p.title).replace(/\.\w+$/,'')}}).filter(Boolean)}
 async function phWikidata(lat,lon,r){const km=Math.min(r,50000)/1000;
   const q=`SELECT ?item ?itemLabel ?img ?coord WHERE { SERVICE wikibase:around { ?item wdt:P625 ?coord. bd:serviceParam wikibase:center "Point(${lon} ${lat})"^^geo:wktLiteral; wikibase:radius "${km}". } ?item wdt:P18 ?img. SERVICE wikibase:label { bd:serviceParam wikibase:language "en,[AUTO_LANGUAGE]". } } LIMIT 60`;
@@ -1020,19 +1020,34 @@ async function phMapillary(lat,lon,r){let tok='';try{tok=localStorage.getItem('w
 const PH_SOURCES=[phCommons,phWikidata,phPanoramax,phOverpass,phMapillary],PH_WAIT=5000;
 const PH_NATURE=/\b(bird|insect|butterfl|moth|beetle|bee|wasp|spider|dragonfl|lizard|gecko|snake|frog|caterpillar|larva|fung|lichen|moss|seed|leaf|leaves|flower|petal|specimen|herbarium|ant|fly|snail|crab|mushroom)s?\b|\b[A-Z][a-z]+ [a-z]{4,} \(|\b[A-Z][a-z]+_[a-z]{4,}\b/i;
 const PH_STREET=new Set(['Panoramax','KartaView','Mapillary']);
+// subjects that aren't the place itself: sea life and diving, wildlife and plants, food, people, vehicles being
+// spotted, maps and documents. Matched against Commons categories and descriptions as well as file names.
+const PH_OFFTOPIC=new RegExp(['under ?water','diving','\\bdivers?\\b','scuba','snorkel','marine (life|fauna|animals|biology|organisms)','sea ?life','\\bfish(es)?\\b','actinopterygii','elasmobranch',
+  '\\brays?\\b','stingrays?','batoidea','dasyatis','taeniura','sharks?','whales?','dolphins?','cetacea','sea turtles?','octopus','cephalopod','jellyfish','nudibranch','crustacea','corals?\\b','sponges?\\b','echinoderm',
+  'fauna','\\bflora\\b','animals','mammals','reptiles','amphibians','birds','\\baves\\b','insects','arthropod','lepidoptera','coleoptera','hymenoptera','diptera','arachnid','spiders','plants','botan','taxon','species','specimens',
+  'herbarium','fungi','lichens','close-?up','macro photograph','\\bfood','dishes','cuisine','portraits?\\b','people of','selfie','aircraft','airliner','aviation photograph','\\bregistration','buses in','trams in',
+  'locomotive','maps? of','diagrams?','\\blogos?\\b','\\bdocuments?\\b','screenshots?','scans? of','coats? of arms','postage stamps'].join('|'),'i');
+// a category or title that is just a species' Latin name (e.g. "Pinus canariensis")
+const PH_LATIN=/(^|\|)\s*[A-Z][a-z]+ [a-z]+(ensis|ii|ae|us|um|oides|ata|atus|ana|iana|ica|icum|icus|aria|ella|ina|inus)\b[^|]{0,12}(\||$)/;
+const phOff=t=>PH_OFFTOPIC.test(t)||PH_LATIN.test(t);
+const phAbout=(file,m)=>[file,m&&m.Categories&&m.Categories.value,phStrip(m&&m.ImageDescription&&m.ImageDescription.value).slice(0,300)].join(' | ');
 // author and licence for Commons files found through Wikidata or OpenStreetMap
 async function phFillCommons(list){const need=list.filter(p=>p.file&&!p.lic).slice(0,50);if(!need.length)return;
-  try{const j=await phTimeout(phJSON('https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&prop=imageinfo&iiprop=extmetadata|url&iiextmetadatafilter=Artist|LicenseShortName|DateTimeOriginal&titles='+encodeURIComponent(need.map(p=>'File:'+p.file).join('|'))),8000);
+  try{const j=await phTimeout(phJSON('https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&prop=imageinfo&iiprop=extmetadata|url&iiextmetadatafilter=Artist|LicenseShortName|DateTimeOriginal|Categories|ImageDescription&titles='+encodeURIComponent(need.map(p=>'File:'+p.file).join('|'))),8000);
     const by={};for(const p of Object.values((j.query||{}).pages||{})){const ii=(p.imageinfo||[])[0];if(ii)by[phFile(p.title)]=ii}
     for(const p of need){const ii=by[p.file];if(!ii)continue;const m=ii.extmetadata||{};p.author=phStrip(m.Artist&&m.Artist.value);p.lic=phStrip(m.LicenseShortName&&m.LicenseShortName.value);
-      p.date=p.date||phStrip(m.DateTimeOriginal&&m.DateTimeOriginal.value).slice(0,10);p.commons=ii.descriptionurl}}catch(e){}}
+      p.date=p.date||phStrip(m.DateTimeOriginal&&m.DateTimeOriginal.value).slice(0,10);p.commons=ii.descriptionurl;if(phOff(phAbout(p.file,m)))p.off=true}}catch(e){}}
 
 // Each radius asks every source at once and reports as each one answers (onUpdate(list,radius,done));
 // a source that takes longer than PH_WAIT is dropped for that step so one slow server can't hold things up.
 function phRank(seen){
   // street-level cameras take a frame every few metres; keep one per ~60 m so the same road doesn't fill the grid,
   // and rank them after photos of the place itself (landmarks, views, buildings) at a similar distance
-  const all=[...seen.values()].sort((a,b)=>a.d-b.d),kept=[],street=[];
+  // photos pinned to a generic spot (an island's or town's centre) pile up on exactly the same coordinates;
+  // three or more Commons/OpenStreetMap photos sharing one point are treated as unlocated and left out
+  const at={},spot=p=>p.lat.toFixed(5)+','+p.lon.toFixed(5),own=p=>!PH_STREET.has(p.src)&&p.src!=='Wikidata';
+  for(const p of seen.values())if(own(p))at[spot(p)]=(at[spot(p)]||0)+1;
+  const all=[...seen.values()].filter(p=>!p.off&&!(own(p)&&at[spot(p)]>=3)).sort((a,b)=>a.d-b.d),kept=[],street=[];
   for(const p of all){if(PH_STREET.has(p.src)){if(street.some(q=>phDist(p.lat,p.lon,q.lat,q.lon)<60))continue;street.push(p)}kept.push(p)}
   return kept.sort((a,b)=>a.d*(PH_STREET.has(a.src)?2:1)-b.d*(PH_STREET.has(b.src)?2:1))}
 async function phSearch(lat,lon,onUpdate){const seen=new Map();let radius=0;
@@ -1044,8 +1059,10 @@ async function phSearch(lat,lon,onUpdate){const seen=new Map();let radius=0;
       await Promise.allSettled(PH_SOURCES.map(f=>phTimeout(f(lat,lon,r),PH_WAIT).then(v=>{got.push(...v);add(v,r);if(onUpdate(phRank(seen),r,false)===false)throw 0})));
       PH.cache.set(key,got);if(PH.cache.size>60)PH.cache.delete(PH.cache.keys().next().value)}
     if(onUpdate(phRank(seen),r,false)===false)return;
-    if(seen.size>=PH_WANT)break;}
-  const list=phRank(seen);onUpdate(list,radius,true);phFillCommons(list)}
+    if(phRank(seen).length>=PH_WANT)break;}
+  const list=phRank(seen);onUpdate(list,radius,true);
+  // files found through Wikidata or OpenStreetMap get their categories checked too, then the list is re-ranked
+  await phFillCommons(list);if(list.some(p=>p.off))onUpdate(phRank(seen),radius,true)}
 
 // --- card section ---
 // The search starts as soon as the card opens; the thumbnails only show once the Photos button is pressed.
