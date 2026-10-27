@@ -844,8 +844,9 @@ function m3dStyleDef(){const B=BM();
       {id:'places',type:'symbol',source:'ofm','source-layer':'place',filter:['in',['get','class'],['literal',['city','town','village','suburb','hamlet','island']]],
         layout:{'text-field':NAME_EN,'text-font':['Noto Sans Bold'],'text-size':['match',['get','class'],'city',16,'town',14,12]},paint:{'text-color':B.dark?'#fff':'#111','text-halo-color':B.dark?'rgba(0,0,0,.8)':'#fff','text-halo-width':1.5}}]:[])}}
 function m3dExtras(map){
-  if(!map.getSource('dem'))map.addSource('dem',{type:'raster-dem',tiles:['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],encoding:'terrarium',tileSize:256,maxzoom:15,
-    attribution:'Terrain: Mapzen / AWS Terrain Tiles (SRTM, GMTED, ETOPO1, others)'});
+  // terrain heights from Mapterhorn (the open terrain set MapLibre's own examples use); the older AWS/Mapzen
+  // tiles had stray spikes, mostly along coasts and at close zoom
+  if(!map.getSource('dem'))map.addSource('dem',{type:'raster-dem',url:'https://tiles.mapterhorn.com/tilejson.json'});
   m3dMode(map,true);
   if(basemap!=='satellite'&&basemap!=='s2'&&basemap!=='night'&&!map.getLayer('hills')){
     const first=(map.getStyle().layers.find(l=>l.type==='symbol')||{}).id;
