@@ -94,7 +94,7 @@ def coworking():
         import coworking as cw
         if cw.main():
             import subprocess
-            subprocess.run(['git', 'add', '-A', 'data/coworking'], cwd=ROOT, check=False)
+            subprocess.run(['git', 'add', 'data/coworking.json'], cwd=ROOT, check=False)
     except Exception as e:  # noqa: BLE001
         print('Coworking update skipped:', e)
 

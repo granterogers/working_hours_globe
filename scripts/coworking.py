@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""Build the coworking-spaces layer for the globe: data/coworking/index.json plus one file per 10°×10° square.
+"""Build the coworking-spaces layer for the globe: one file, data/coworking.json, loaded with the page like colivings.
 
 Sources (both free and open, worldwide):
   * Overture Maps Places (CDLA Permissive 2.0): tens of millions of businesses conflated from Meta,
     Microsoft and others, read straight from Overture's public S3 bucket with DuckDB. Every place whose
-    category is coworking is kept, with its website, phone, address, brand and Overture's confidence score.
+    category is coworking and that is not marked closed is kept, with its address, website, phone, brand,
+    category and Overture's confidence score.
   * OpenStreetMap (ODbL): amenity=coworking_space / office=coworking, via one worldwide Overpass query;
     adds opening hours and places Overture lacks. Near-duplicates (same name within 150 m) are merged.
 
   python scripts/coworking.py            # run by the weekly webcams workflow (see scripts/webcams.py)
 
-Rows: [name, lat, lon, place, website, phone, opening_hours, source ('v' Overture, 'o' OSM, 'vo' both),
-       confidence 0-100 (Overture) or -1, brand]
+Each row in "rows" follows "fields": name, lat, lon, street, city, country (ISO code), web, phone,
+hours (OpenStreetMap opening_hours), src ('v' Overture, 'o' OSM, 'vo' both), conf (Overture confidence
+0-100, or -1), brand, category (Overture category or OSM amenity/office).
 """
 import json
 import math
@@ -24,10 +26,10 @@ import urllib.parse
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(ROOT, 'data', 'coworking')
-CELL = 10
+OUT = os.path.join(ROOT, 'data', 'coworking.json')
+FIELDS = ['name', 'lat', 'lon', 'street', 'city', 'country', 'web', 'phone', 'hours', 'src', 'conf', 'brand', 'category']
 OSM_BUDGET = 900  # seconds for all Overpass attempts together; the weekly job is capped at 45 minutes
-UA ={'User-Agent': 'working_hours_globe coworking layer (github.com/granterogers/working_hours_globe)'}
+UA = {'User-Agent': 'working_hours_globe coworking layer (github.com/granterogers/working_hours_globe)'}
 
 
 def http(url, data=None, timeout=300):
@@ -69,21 +71,24 @@ def overture(source=None):
     if not conds:
         raise RuntimeError('no category column in this Overture release')
     pick = lambda c, expr, alt='NULL': expr if c in cols else alt  # noqa: E731
+    status = pick('operating_status', "coalesce(operating_status, 'open')", "'open'")
     q = f"""SELECT names.primary AS name, (bbox.ymin + bbox.ymax) / 2 AS lat, (bbox.xmin + bbox.xmax) / 2 AS lon,
         {pick('addresses', 'addresses[1].locality')} AS city, {pick('addresses', 'addresses[1].country')} AS country,
         {pick('addresses', 'addresses[1].freeform')} AS street,
         {pick('websites', 'websites[1]')} AS web, {pick('phones', 'phones[1]')} AS phone,
-        {pick('confidence', 'confidence', '0.5')} AS conf, {pick('brand', 'brand.names.primary')} AS brand
-      FROM {source} WHERE ({' OR '.join(conds)}) AND names.primary IS NOT NULL"""
+        {pick('confidence', 'confidence', '0.5')} AS conf, {pick('brand', 'brand.names.primary')} AS brand,
+        {pick('basic_category', 'basic_category')} AS category
+      FROM {source} WHERE ({' OR '.join(conds)}) AND names.primary IS NOT NULL AND {status} <> 'closed'"""
     rows = con.execute(q).fetchall()
     print(len(rows), 'coworking places from Overture')
     out = []
-    for name, lat, lon, city, country, street, web, phone, conf, brand in rows:
+    for name, lat, lon, city, country, street, web, phone, conf, brand, category in rows:
         if lat is None or lon is None:
             continue
-        place = ', '.join(x for x in (street, city, country) if x)
-        out.append([name[:80], round(lat, 5), round(lon, 5), place[:90], (web or '')[:120], (phone or '')[:30], '', 'v',
-                    int(round((conf or 0) * 100)), (brand or '')[:40]])
+        out.append({'name': name[:80], 'lat': round(lat, 5), 'lon': round(lon, 5), 'street': (street or '')[:90],
+                    'city': (city or '')[:60], 'country': iso2(country), 'web': (web or '')[:120],
+                    'phone': (phone or '')[:30], 'hours': '', 'src': 'v', 'conf': int(round((conf or 0) * 100)),
+                    'brand': (brand or '')[:40], 'category': (category or '')[:40]})
     return out
 
 
@@ -112,10 +117,12 @@ def osm():
         if lat is None:
             continue
         street = ' '.join(x for x in (t.get('addr:street'), t.get('addr:housenumber')) if x)
-        place = ', '.join(x for x in (street, t.get('addr:city') or t.get('addr:place'), t.get('addr:country')) if x)
-        out.append([(t.get('name:en') or t.get('name') or 'Coworking space')[:80], round(lat, 5), round(lon, 5), place[:90],
-                    (t.get('website') or t.get('contact:website') or '')[:120], (t.get('phone') or t.get('contact:phone') or '')[:30],
-                    (t.get('opening_hours') or '')[:80], 'o', -1, (t.get('brand') or '')[:40]])
+        out.append({'name': (t.get('name:en') or t.get('name') or 'Coworking space')[:80], 'lat': round(lat, 5), 'lon': round(lon, 5),
+                    'street': street[:90], 'city': (t.get('addr:city') or t.get('addr:place') or '')[:60],
+                    'country': iso2(t.get('addr:country')), 'web': (t.get('website') or t.get('contact:website') or '')[:120],
+                    'phone': (t.get('phone') or t.get('contact:phone') or '')[:30], 'hours': (t.get('opening_hours') or '')[:80],
+                    'src': 'o', 'conf': -1, 'brand': (t.get('brand') or '')[:40],
+                    'category': (t.get('amenity') or t.get('office') or '')[:40]})
     print(len(out), 'coworking places from OpenStreetMap')
     return out
 
@@ -124,47 +131,47 @@ def norm(s):
     return re.sub(r'[^a-z0-9]', '', (s or '').lower())
 
 
+def iso2(code):
+    """a two-letter country code, or '' when the source has something else"""
+    code = (code or '').strip().upper()
+    return code if re.fullmatch(r'[A-Z]{2}', code) else ''
+
+
 def merge(a, b):
     """add OSM rows (b) to Overture rows (a), folding near-duplicates into one row"""
     grid = {}
     for i, r in enumerate(a):
-        grid.setdefault((int(r[1] * 100), int(r[2] * 100)), []).append(i)
+        grid.setdefault((int(r['lat'] * 100), int(r['lon'] * 100)), []).append(i)
     out = list(a)
     for r in b:
-        gx, gy = int(r[1] * 100), int(r[2] * 100)
+        gx, gy = int(r['lat'] * 100), int(r['lon'] * 100)
         hit = None
         for dx in (-1, 0, 1):
             for dy in (-1, 0, 1):
                 for i in grid.get((gx + dx, gy + dy), []):
                     o = out[i]
-                    d = math.hypot((o[1] - r[1]) * 111320, (o[2] - r[2]) * 111320 * math.cos(math.radians(r[1])))
-                    n1, n2 = norm(o[0]), norm(r[0])
+                    d = math.hypot((o['lat'] - r['lat']) * 111320, (o['lon'] - r['lon']) * 111320 * math.cos(math.radians(r['lat'])))
+                    n1, n2 = norm(o['name']), norm(r['name'])
                     if d < 150 and n1 and n2 and (n1 in n2 or n2 in n1):
                         hit = i
         if hit is None:
             out.append(r)
         else:
             o = out[hit]
-            o[4] = o[4] or r[4]; o[5] = o[5] or r[5]; o[6] = r[6] or o[6]; o[3] = o[3] or r[3]; o[7] = 'vo'
+            for k in ('street', 'city', 'country', 'web', 'phone', 'brand', 'category'):
+                o[k] = o[k] or r[k]
+            o['hours'] = r['hours'] or o['hours']
+            o['src'] = 'vo'
     return out
 
 
 def write(rows):
-    os.makedirs(OUT, exist_ok=True)
-    for f in os.listdir(OUT):
-        if f.endswith('.json'):
-            os.remove(os.path.join(OUT, f))
-    cells = {}
-    for r in rows:
-        la, lo = math.floor(r[1] / CELL) * CELL, math.floor(r[2] / CELL) * CELL
-        cells.setdefault(f'{la}_{lo}', []).append(r)
-    for key, rs in cells.items():
-        with open(os.path.join(OUT, key + '.json'), 'w', encoding='utf-8') as f:
-            json.dump(rs, f, ensure_ascii=False, separators=(',', ':'))
-    with open(os.path.join(OUT, 'index.json'), 'w', encoding='utf-8') as f:
-        json.dump({'updated': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'cell': CELL, 'total': len(rows),
-                   'cells': {k: len(v) for k, v in cells.items()}}, f, separators=(',', ':'))
-    print(len(rows), 'coworking places in', len(cells), 'squares written to data/coworking/')
+    rows.sort(key=lambda r: (r['country'], r['city'], r['name']))
+    data = {'updated': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'fields': FIELDS,
+            'rows': [[r[k] for k in FIELDS] for r in rows]}
+    with open(OUT, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, separators=(',', ':'))
+    print(len(rows), 'coworking places written to', os.path.relpath(OUT, ROOT))
 
 
 def main():
@@ -176,7 +183,7 @@ def main():
     b = osm()
     rows = merge(a, b)
     if len(rows) < 500:
-        print(f'Only {len(rows)} coworking places found; keeping the previous files.')
+        print(f'Only {len(rows)} coworking places found; keeping the previous file.')
         return False
     write(rows)
     return True
