@@ -15,6 +15,7 @@ const BANDS=[
   {lo:21,hi:29,name:"Overnight",sub:"starts 21:00–05:00",dark:"#5a6bdc",light:"#4656c8"}];
 const DEG=180/Math.PI, MINK=0.85, MAXK=9000;
 let S=12,E=20,season=0,W=0,H=0,dpr=1,base=300,cx=0,cy=0;
+let showWeather=(()=>{try{return localStorage.getItem('whg.weather')==='on'}catch(e){return false}})();
 let showNames=(()=>{try{return localStorage.getItem('whg.names')!=='off'}catch(e){return true}})();
 let showHours=(()=>{try{return localStorage.getItem('whg.hours')!=='off'}catch(e){return true}})();
 let rot=[-8,-36,0],k=0.7,kT=1,vel=[0,0],anchor=null,dragging=false,running=false,fly=null,overlays=[],placed=[],dark=true,pal={};
@@ -108,15 +109,10 @@ function draw(){
   const lv=k<2.5?0:k<5?1:2;
   const TZ=[D.tzL,D.tzM,D.tz][lv],CB=[D.cbL,D.cbM,D.cb][lv];
   const tileA=clamp((k-TILE_K)/4.5,0,1),bA=1-tileA,raster=basemap!=='street';
-  let shown=false;
-  if(raster){shown=drawTiles();if(shown)ctx.drawImage(tcv,0,0,W,H);
-    // working-hours colours over the imagery, see-through, fading out as you zoom in
-    if(bA>0.02&&showHours){ctx.save();ctx.globalAlpha=bA*0.5;fillBands(D.gaps);fillBands(TZ);ctx.restore()}}
-  else{
-    if(bA>0.02){ctx.globalAlpha=bA;ctx.lineJoin='round';strokeFC(CB,pal.coast1,k>4?9:6);strokeFC(CB,pal.coast2,k>4?3.5:2.5);ctx.globalAlpha=1}
-    fillBands(D.gaps);fillBands(TZ);
-    // street map fades in as you zoom towards a country, replacing the time-zone colours once fully in
-    shown=tileA>0&&drawTiles();if(shown){ctx.globalAlpha=tileA;ctx.drawImage(tcv,0,0,W,H);ctx.globalAlpha=1}}
+  // whichever base map is chosen fades in as you zoom towards a country, replacing the time-zone colours once fully in
+  if(bA>0.02){ctx.globalAlpha=bA;ctx.lineJoin='round';strokeFC(CB,pal.coast1,k>4?9:6);strokeFC(CB,pal.coast2,k>4?3.5:2.5);ctx.globalAlpha=1}
+  fillBands(D.gaps);fillBands(TZ);
+  const shown=tileA>0&&drawTiles();if(shown){ctx.globalAlpha=tileA;ctx.drawImage(tcv,0,0,W,H);ctx.globalAlpha=1}
   if(shown)attrib.textContent=raster?BM().attr:VT_ATTR;attrib.classList.toggle('show',shown);
   // the colour key fades with the working-hours colours
   const stripEl=document.getElementById('strip');if(stripEl){const o=bA<0.03?0:bA;if(stripEl._o!==o){stripEl._o=o;stripEl.style.opacity=o;stripEl.style.visibility=o?'':'hidden'}}
@@ -125,7 +121,7 @@ function draw(){
   ctx.save();ctx.beginPath();path({type:'Sphere'});ctx.clip();
   const sg=ctx.createRadialGradient(cx-s*.42,cy-s*.48,0,cx,cy,s*1.02);sg.addColorStop(0,pal.shadeLite);sg.addColorStop(.55,'rgba(0,0,0,0)');sg.addColorStop(1,pal.shadeDark);
   ctx.fillStyle=sg;ctx.fillRect(0,0,W,H);ctx.restore();
-  drawOverlays();if(typeof clDraw==='function')clDraw();drawLabels();if(showNames&&shown&&(!raster||BM().labels))drawMapLabels(raster?Math.max(tileA,k>=4?1:0):tileA);drawPin();
+  drawOverlays();if(typeof clDraw==='function')clDraw();drawLabels();if(showWeather)wxDraw();if(showNames&&shown&&(!raster||BM().labels))drawMapLabels(tileA);drawPin();
 }
 
 function drawOverlays(){overlays.forEach(L=>{if(!L.on)return;L.fc.features.forEach(f=>{const g=f.geometry;if(!g||/Point/.test(g.type))return;
@@ -355,8 +351,8 @@ function vtPaint(g,L,S,z,d,ox,oy){const px=S/256,k2=2**d,tx=-ox*S,ty=-oy*S;
     stroke(bd,a2,OC.bound,(z>=10?2:1.4)*px,[6*px,3*px,1.5*px,3*px],'butt');if(z>=8)stroke(bd,a4,OC.bound,1*px,[5*px,3*px],'butt')}}
 // painted tiles, least recently used dropped first; painting is spread over frames to keep motion smooth
 const vimg=new Map(),vtUsed=new Set();let vBudget=0;
-// base maps: the English street map (vector, above) or a raster layer. Raster layers show from the whole-globe
-// view down, under softened working-hours colours that fade as you zoom in. 'labels' adds the English place
+// base maps: the English street map (vector, above) or a raster layer. Every base map fades in as you zoom
+// towards a country, taking over from the working-hours colours, exactly like the street map. 'labels' adds the English place
 // names from the vector tiles on top (for imagery without its own names).
 const BASEMAPS={
   street:{name:'Street map',sub:'OpenStreetMap data, names in English'},
@@ -532,7 +528,7 @@ function showFav(f,focus){activeFav=f;selected=null;draft=null;
   document.getElementById('infob').innerHTML=`<input class="ftitle" id="fname" value="${esc(f.name)}" aria-label="Favourite name" maxlength="80">
     <p class="where"><span class="fh" aria-hidden="true">♥</span> ${esc(f.where?f.where+', ':'')}saved ${ds}</p><p class="coords">${coordStr(f)}</p>${hoursBlock(f.tz)}
     <label class="nl" for="fnote">Note</label><textarea id="fnote" rows="4" placeholder="Where to stay, who to contact, what to check…">${esc(f.note||'')}</textarea>
-    ${flightsBlock()}<p class="hint2">Drag the heart to move it.</p><div class="frow"><span class="saved" id="fsaved"></span><button class="ghost" id="fdel">Remove favourite</button></div>`;wireFlights([f.lon,f.lat]);
+    ${wxBlock()}${flightsBlock()}<p class="hint2">Drag the heart to move it.</p><div class="frow"><span class="saved" id="fsaved"></span><button class="ghost" id="fdel">Remove favourite</button></div>`;wireFlights([f.lon,f.lat]);wxLoad([f.lon,f.lat]);
   const nm=document.getElementById('fname'),nt=document.getElementById('fnote'),sv=document.getElementById('fsaved');
   const commit=()=>{clearTimeout(favTimer);favTimer=setTimeout(()=>{f.name=nm.value.trim()||'Saved place';f.note=nt.value;saveFavs();renderFavs();draw();sv.textContent='Saved';setTimeout(()=>sv.textContent='',1500)},400)};
   nm.oninput=commit;nt.oninput=commit;
@@ -752,8 +748,8 @@ let infoTok=0;
 function showInfo(title,where,tz,ll){activeFav=null;draft=null;infoTok++;const z=D.zones[tz]||[0,0],o=z[season],b=band(o),other=z[1-season];
   document.getElementById('infob').innerHTML=`<h2>${esc(title)}</h2><p class="where">${esc(where&&where!==title?where:' ')}</p>
   <div class="big"><i style="background:${pal['b'+b]}"></i>${hours(o)}</div><p class="bandname">${BANDS[b].name}, ${season?'summer':'winter'}</p>
-  <dl><dt>${season?'Winter':'Summer'}</dt><dd>${hours(other)}</dd><dt>Difference</dt><dd>${vsUK(o)}</dd><dt>Time zone</dt><dd>${utc(o)}</dd></dl>${ll?photosBlock():''}${ll?flightsBlock():''}`;
-  wireFlights(ll);photosLoad(ll);document.getElementById('info').classList.add('show');}
+  <dl><dt>${season?'Winter':'Summer'}</dt><dd>${hours(other)}</dd><dt>Difference</dt><dd>${vsUK(o)}</dd><dt>Time zone</dt><dd>${utc(o)}</dd></dl>${ll?wxBlock():''}${ll?photosBlock():''}${ll?flightsBlock():''}`;
+  wireFlights(ll);wxLoad(ll);photosLoad(ll);document.getElementById('info').classList.add('show');}
 function hideInfo(){document.getElementById('info').classList.remove('show');PH.tok++;if(clickPin){clickPin=null;draw()}if(typeof CL!=='undefined'&&CL.sel){CL.sel=null;draw()}if(selected||activeFav||draft){selected=null;activeFav=null;draft=null;draw()}}
 document.getElementById('infox').onclick=hideInfo;
 
@@ -774,13 +770,14 @@ function ui(){renderFavs();renderLayers();if(typeof m3dSync==='function')m3dSync
 // base map menu (top right)
 function setShow(k,v){if(k==='hours'){showHours=v;try{localStorage.setItem('whg.hours',v?'on':'off')}catch(e){}ui()}
   else if(k==='names'){showNames=v;try{localStorage.setItem('whg.names',v?'on':'off')}catch(e){}}
+  else if(k==='weather'){showWeather=v;try{localStorage.setItem('whg.weather',v?'on':'off')}catch(e){}if(v)wxQueue()}
   else if(k==='cl'){CL.on=v;clStore.set('whg.clOn',v);if(!v&&CL.sel){CL.sel=null;hideInfo()}}
   draw();m3dSync()}
 function bmRender(){const m=document.getElementById('bmmenu');
   const tick=(k,on,label,extra)=>`<label class="bmtick"><input type="checkbox" data-show="${k}" ${on?'checked':''}><span>${label}</span>${extra||''}</label>`;
   m.innerHTML=`<div class="bmh">Show</div>`+tick('hours',showHours,'Working hours')+
     (CL.data.length?tick('cl',CL.on,'Colivings',`<small class="clcnt" id="clcnt"></small><button type="button" class="clfb${clActive(CL.f)?' on':''}" id="clfb" aria-label="Filter colivings" title="Filter and updates">${FUNNEL}</button>`):'')+
-    tick('names',showNames,'Place names')+`<div class="bmh bmh2">Base map</div>`+Object.entries(BASEMAPS).map(([id,b])=>`<button type="button" role="menuitemradio" aria-checked="${id===basemap}" data-id="${id}"><i class="bmdot"></i><span><b>${b.name}</b><small>${b.sub}</small></span></button>`).join('')+
+    tick('names',showNames,'Place names')+tick('weather',showWeather,'Weather now','<small class="clcnt">°C</small>')+`<div class="bmh bmh2">Base map</div>`+Object.entries(BASEMAPS).map(([id,b])=>`<button type="button" role="menuitemradio" aria-checked="${id===basemap}" data-id="${id}"><i class="bmdot"></i><span><b>${b.name}</b><small>${b.sub}</small></span></button>`).join('')+
     `<button type="button" class="bm3d" data-3d="1"><b>3D view</b><small>Fly around in 3D with terrain</small></button>`;
   m.querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>{setBasemap(b.dataset.id);bmToggle(false)});
   m.querySelectorAll('[data-show]').forEach(c=>c.onchange=()=>setShow(c.dataset.show,c.checked));
@@ -873,16 +870,17 @@ function m3dGeo(){
   const fv={type:'FeatureCollection',features:favs.map((f,i)=>({type:'Feature',properties:{i,n:f.name},geometry:{type:'Point',coordinates:[f.lon,f.lat]}}))};
   const ov={type:'FeatureCollection',features:[]};
   overlays.forEach((L,li)=>{if(L.on)L.fc.features.forEach((f,fi)=>{if(f.geometry)ov.features.push({type:'Feature',properties:{li,fi,c:L.color,n:(f.properties&&f.properties.name)||''},geometry:f.geometry})})});
-  return{tz,lab,cl,fv,ov}}
+  const wx={type:'FeatureCollection',features:showWeather?[...WX.pts.values()].map(p=>({type:'Feature',properties:{t:Math.round(p.temp)+'°',c:wxTempCol(p.temp)},geometry:{type:'Point',coordinates:[p.lon,p.lat]}})):[]};
+  return{tz,lab,cl,fv,ov,wx}}
 function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.getStyle())return}catch(e){return}
   try{g=m3dGeo()}catch(e){return}
   const src=(id,data)=>{const s=map.getSource(M3D_OWN+id);if(s)s.setData(data);else map.addSource(M3D_OWN+id,{type:'geojson',data})};
-  try{src('tz',g.tz);src('lab',g.lab);src('cl',g.cl);src('fv',g.fv);src('ov',g.ov)}catch(e){return}
+  try{src('tz',g.tz);src('lab',g.lab);src('cl',g.cl);src('fv',g.fv);src('ov',g.ov);src('wx',g.wx)}catch(e){return}
   const font=['Noto Sans Bold'],dk=BM().dark||false;
   const lay=(def,before)=>{if(!map.getLayer(def.id))map.addLayer(def,before)};
   // working-hours colours fade out as you zoom in, like on the globe
   // same fade as on the globe: full colour until the street-map zoom, gone 4.5 zoom steps later
-  const la=map.getCenter().lat,zA=k2z(TILE_K,la),zB=Math.max(zA+0.5,k2z(TILE_K+4.5,la)),op=basemap==='street'?0.8:0.5;
+  const la=map.getCenter().lat,zA=k2z(TILE_K,la),zB=Math.max(zA+0.5,k2z(TILE_K+4.5,la)),op=1;
   lay({id:M3D_OWN+'tz',type:'fill',source:M3D_OWN+'tz',paint:{'fill-color':['get','c'],'fill-opacity':op}},
     (map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
   map.setPaintProperty(M3D_OWN+'tz','fill-opacity',['interpolate',['linear'],['zoom'],zA,op,zB,0]);
@@ -895,6 +893,8 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
   lay({id:M3D_OWN+'fvn',type:'symbol',source:M3D_OWN+'fv',layout:{'text-field':['get','n'],'text-font':font,'text-size':12,'text-offset':[0,-1.3],'text-anchor':'bottom'},paint:{'text-color':dk?'#fff':'#14213d','text-halo-color':dk?'rgba(0,0,0,.75)':'#fff','text-halo-width':1.5}});
   lay({id:M3D_OWN+'lab',type:'symbol',source:M3D_OWN+'lab',layout:{'text-field':['get','t'],'text-font':font,'text-size':['match',['get','r'],1,13,11.5],'text-line-height':1.25,'text-padding':6},
     paint:{'text-color':dk||basemap==='street'?'#ffffff':'#ffffff','text-halo-color':'rgba(10,16,30,.8)','text-halo-width':1.6}});
+  lay({id:M3D_OWN+'wx',type:'circle',source:M3D_OWN+'wx',paint:{'circle-color':'rgba(14,20,36,.8)','circle-radius':15,'circle-stroke-color':['get','c'],'circle-stroke-width':2.5}});
+  lay({id:M3D_OWN+'wxt',type:'symbol',source:M3D_OWN+'wx',layout:{'text-field':['get','t'],'text-font':font,'text-size':12,'text-allow-overlap':true},paint:{'text-color':'#fff'}});
   // the base map's own names follow the Place names switch
   for(const l of map.getStyle().layers)if(l.type==='symbol'&&!l.id.startsWith(M3D_OWN))try{map.setLayoutProperty(l.id,'visibility',showNames?'visible':'none')}catch(e){}}
 // clicks in 3D open the same cards as on the globe
@@ -1050,8 +1050,8 @@ function clShow(x){activeFav=null;draft=null;selected=null;CL.sel=x;clickPin=nul
     <h2>${esc(x.n)}</h2><p class="where">${esc([x.a,x.c].filter(Boolean).join(', '))}</p>
     <dl class="meta">${rows.map(([a,b])=>`<dt>${a}</dt><dd>${esc(b)}</dd>`).join('')}</dl>
     ${x.src==='estimate'&&x.eur!=null?'<p class="clsmall">Price is colivingDB’s estimate; check with the host.</p>':''}
-    <div class="cllinks">${links}</div><div>${hoursBlock(tzAt([x.lon,x.lat]))}</div>${photosBlock()}${flightsBlock()}`;
-  wireFlights([x.lon,x.lat]);photosLoad([x.lon,x.lat]);document.getElementById('info').classList.add('show');}
+    <div class="cllinks">${links}</div><div>${hoursBlock(tzAt([x.lon,x.lat]))}</div>${wxBlock()}${photosBlock()}${flightsBlock()}`;
+  wireFlights([x.lon,x.lat]);wxLoad([x.lon,x.lat]);photosLoad([x.lon,x.lat]);document.getElementById('info').classList.add('show');}
 function clGo(x){if(!CL.vis.includes(x)){CL.f=Object.assign({},CL_DEF);clSync();clApply()}flyTo(x.lon,x.lat,0.6);clShow(x);draw()}
 
 // Map layers row and the filter card
@@ -1312,6 +1312,59 @@ function phClose(toGrid){if(!PH.box)return;PH.box.hidden=true;document.removeEve
 function phKey(e){if(e.key==='ArrowRight'){phGo(1)}else if(e.key==='ArrowLeft'){phGo(-1)}else if(e.key==='Escape'){phClose()}
   else if(e.key==='Tab'){const f=[...PH.box.querySelectorAll('button:not([hidden]),a')];const a=f.indexOf(document.activeElement);e.preventDefault();f[(a+(e.shiftKey?-1:1)+f.length)%f.length].focus()}
   else return;e.preventDefault();e.stopPropagation()}
+
+// Weather from Open-Meteo (https://open-meteo.com, free, no key). The "Weather now" layer shows current
+// temperature and conditions on a grid of points across the view; each card shows a 7-day forecast.
+const WMO={0:['☀️','Clear'],1:['🌤️','Mostly clear'],2:['⛅','Partly cloudy'],3:['☁️','Overcast'],45:['🌫️','Fog'],48:['🌫️','Freezing fog'],
+  51:['🌦️','Light drizzle'],53:['🌦️','Drizzle'],55:['🌧️','Heavy drizzle'],56:['🌧️','Freezing drizzle'],57:['🌧️','Freezing drizzle'],
+  61:['🌦️','Light rain'],63:['🌧️','Rain'],65:['🌧️','Heavy rain'],66:['🌧️','Freezing rain'],67:['🌧️','Freezing rain'],
+  71:['🌨️','Light snow'],73:['🌨️','Snow'],75:['❄️','Heavy snow'],77:['🌨️','Snow grains'],80:['🌦️','Showers'],81:['🌧️','Heavy showers'],82:['⛈️','Violent showers'],
+  85:['🌨️','Snow showers'],86:['🌨️','Heavy snow showers'],95:['⛈️','Thunderstorm'],96:['⛈️','Thunderstorm with hail'],99:['⛈️','Thunderstorm with hail']};
+const wmo=(c,day)=>{const w=WMO[c]||['🌡️','—'];return(day===0&&(c===0||c===1))?['🌙',w[1]]:w};
+const WX={pts:new Map(),pending:new Set(),timer:0,busy:false};
+const wxTempCol=t=>t<=-10?'#5b6ee1':t<=0?'#4f9de0':t<=10?'#39b6c8':t<=18?'#4cc38a':t<=25?'#f2c14e':t<=32?'#f28b3c':'#e2453c';
+// grid spacing in degrees: about one reading per 150 px of screen
+function wxStep(){const ppd=base*k/DEG,raw=150/ppd;const steps=[0.05,0.1,0.25,0.5,1,2,3,5,10,15];return steps.find(v=>v>=raw)||20}
+function wxGrid(){const st=wxStep(),out=[],seen=new Set();
+  for(let gy=0;gy<=Math.ceil(H/120);gy++)for(let gx=0;gx<=Math.ceil(W/150);gx++){const ll=proj.invert([gx*150+(gy%2?75:0),gy*120+40]);
+    if(!ll||d3.geoDistance(ll,viewCap[0])>1.45)continue;const lat=clamp(Math.round(ll[1]/st)*st,-80,80),lon=Math.round(wrap(ll[0])/st)*st,key=lat.toFixed(2)+','+lon.toFixed(2);
+    if(!seen.has(key)){seen.add(key);out.push({key,lat,lon})}}
+  return out}
+function wxQueue(){if(!showWeather)return;clearTimeout(WX.timer);WX.timer=setTimeout(wxFetch,500)}
+async function wxFetch(){if(!showWeather||WX.busy||Date.now()<(WX.wait||0))return;const now=Date.now();
+  const need=wxGrid().filter(p=>{const q=WX.pts.get(p.key);return!(q&&now-q.t<20*60e3)&&!WX.pending.has(p.key)}).slice(0,60);if(!need.length)return;
+  WX.busy=true;need.forEach(p=>WX.pending.add(p.key));
+  try{const u=`https://api.open-meteo.com/v1/forecast?latitude=${need.map(p=>p.lat.toFixed(2)).join(',')}&longitude=${need.map(p=>p.lon.toFixed(2)).join(',')}&current=temperature_2m,weather_code,is_day,wind_speed_10m&timezone=auto&wind_speed_unit=kmh`;
+    let j=await phJSON(u);if(!Array.isArray(j))j=[j];
+    j.forEach((r,i)=>{const c=r&&r.current;if(c)WX.pts.set(need[i].key,{lat:need[i].lat,lon:need[i].lon,v:vec(need[i].lon,need[i].lat),t:now,temp:c.temperature_2m,code:c.weather_code,day:c.is_day,wind:c.wind_speed_10m})});
+    if(WX.pts.size>1500){let n=WX.pts.size-1200;for(const kk of WX.pts.keys()){WX.pts.delete(kk);if(--n<=0)break}}}
+  catch(e){WX.wait=Date.now()+30000}finally{need.forEach(p=>WX.pending.delete(p.key));WX.busy=false}
+  draw();m3dSync();if(wxGrid().some(p=>!WX.pts.has(p.key)))wxQueue()}
+function wxDraw(){const st=wxStep(),font='600 12px "Bricolage Grotesque", "Segoe UI", sans-serif',boxes=placed.map(r=>[r.x0,r.y0,r.x1,r.y1]);
+  ctx.save();ctx.textAlign='left';ctx.textBaseline='middle';
+  for(const p of WX.pts.values()){if(Math.abs(Math.round(p.lat/st)*st-p.lat)>1e-6||Math.abs(Math.round(p.lon/st)*st-p.lon)>1e-6)continue;
+    const v=p.v,X=M[0]*v[0]+M[1]*v[1]+M[2]*v[2];if(X<0.1)continue;const x=cx+SC*(M[3]*v[0]+M[4]*v[1]),y=cy-SC*(M[6]*v[0]+M[7]*v[1]+M[8]*v[2]);if(x<0||y<0||x>W||y>H)continue;
+    const ic=wmo(p.code,p.day)[0],tt=Math.round(p.temp)+'°',w=tw(tt,font)+30,h=22,bx=[x-w/2,y-h/2,x+w/2,y+h/2];
+    if(boxes.some(q=>bx[0]<q[2]&&bx[2]>q[0]&&bx[1]<q[3]&&bx[3]>q[1]))continue;boxes.push(bx);
+    ctx.beginPath();ctx.roundRect?ctx.roundRect(bx[0],bx[1],w,h,11):ctx.rect(bx[0],bx[1],w,h);ctx.fillStyle=dark?'rgba(14,20,36,.82)':'rgba(255,255,255,.88)';ctx.fill();
+    ctx.lineWidth=2;ctx.strokeStyle=wxTempCol(p.temp);ctx.stroke();
+    ctx.font='13px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';ctx.fillText(ic,bx[0]+6,y+1);
+    ctx.font=font;ctx.fillStyle=pal.ink;ctx.fillText(tt,bx[0]+24,y+1)}
+  ctx.restore();wxQueue()}
+// card section: now, next hours, and the week ahead (in the place's own local time)
+const wxBlock=()=>`<div class="wx" id="wx"><div class="wxh">Weather <small id="wxst">Loading…</small></div><div id="wxb"></div></div>`;
+let wxTok=0;
+function wxLoad(ll){if(!ll)return;const tok=++wxTok;
+  const u=`https://api.open-meteo.com/v1/forecast?latitude=${ll[1].toFixed(3)}&longitude=${ll[0].toFixed(3)}&current=temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m,relative_humidity_2m,precipitation&hourly=temperature_2m,weather_code,is_day,precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset&forecast_days=7&forecast_hours=24&timezone=auto&wind_speed_unit=kmh`;
+  phJSON(u).then(j=>{if(tok!==wxTok)return;const b=document.getElementById('wxb'),st=document.getElementById('wxst');if(!b)return;const c=j.current||{},d=j.daily||{},h=j.hourly||{};
+    const [ic,desc]=wmo(c.weather_code,c.is_day);st.textContent='now · Open-Meteo';
+    const hrs=(h.time||[]).map((t,i)=>i%3?'':`<span><small>${t.slice(11,16)}</small><i>${wmo(h.weather_code[i],h.is_day[i])[0]}</i><b>${Math.round(h.temperature_2m[i])}°</b>${h.precipitation_probability&&h.precipitation_probability[i]>=30?`<em>${h.precipitation_probability[i]}%</em>`:''}</span>`).join('');
+    const days=(d.time||[]).map((t,i)=>{const dt=new Date(t+'T12:00');return`<li><span>${i?dt.toLocaleDateString('en-GB',{weekday:'short'}):'Today'}</span><i title="${esc(wmo(d.weather_code[i])[1])}">${wmo(d.weather_code[i])[0]}</i>`+
+      `<b>${Math.round(d.temperature_2m_max[i])}°</b><small>${Math.round(d.temperature_2m_min[i])}°</small><em>${d.precipitation_probability_max&&d.precipitation_probability_max[i]>=20?d.precipitation_probability_max[i]+'%':''}</em></li>`}).join('');
+    b.innerHTML=`<div class="wxnow"><i>${ic}</i><b>${Math.round(c.temperature_2m)}°C</b><span>${esc(desc)}<small>Feels ${Math.round(c.apparent_temperature)}° · wind ${Math.round(c.wind_speed_10m)} km/h · humidity ${Math.round(c.relative_humidity_2m)}%</small></span></div>`+
+      `<div class="wxhours">${hrs}</div><ul class="wxdays">${days}</ul>`+
+      (d.sunrise&&d.sunrise[0]?`<p class="clsmall">Sunrise ${d.sunrise[0].slice(11,16)} · sunset ${d.sunset[0].slice(11,16)} (local time)</p>`:'')})
+  .catch(()=>{if(tok!==wxTok)return;const st=document.getElementById('wxst');if(st)st.textContent='unavailable right now'})}
 
 // start
 window.addEventListener('resize',resize);setSeason(season);theme();resize();
