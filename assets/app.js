@@ -116,7 +116,7 @@ function draw(){
   const tileA=showHours?clamp((k-TILE_K)/4.5,0,1):1,bA=1-tileA,raster=basemap!=='street';
   if(bA>0.02){ctx.globalAlpha=bA;ctx.lineJoin='round';strokeFC(CB,pal.coast1,k>4?9:6);strokeFC(CB,pal.coast2,k>4?3.5:2.5);ctx.globalAlpha=1}
   fillBands(D.gaps);fillBands(TZ);
-  const shown=tileA>0&&drawTiles();if(shown){ctx.globalAlpha=tileA;ctx.drawImage(tcv,0,0,W,H);ctx.globalAlpha=1}
+  const shown=tileA>0&&drawTiles();if(shown){ctx.globalAlpha=tileA;ctx.drawImage(tcv,0,0,W,H);drawPoleCaps();ctx.globalAlpha=1}
   if(shown)attrib.textContent=raster?BM().attr:VT_ATTR;attrib.classList.toggle('show',shown);
   // the colour key fades with the working-hours colours
   // the working-hours part of the key fades with the colours; the coliving part stays while colivings show
@@ -1618,6 +1618,14 @@ function drawNight(){const sp=sunNow(Date.now()),anti=[sp[0]+180>180?sp[0]-180:s
   ctx.save();for(const [r,a] of NIGHT_BANDS){ctx.beginPath();path(d3.geoCircle().center(anti).radius(r).precision(1)());ctx.fillStyle=`rgba(${col},${a.toFixed(4)})`;ctx.fill()}
   ctx.restore()}
 setInterval(()=>{if(showNight&&!running)draw()},60000);
+
+// Web map tiles stop at 85° north and south, which left a dark disc over each pole. Fill those caps in the base
+// map's own colours: ice for Antarctica, sea for the Arctic, with a soft edge so the join doesn't show.
+const POLE={street:['#ddecec','#aad3df'],satellite:['#eef2f5','#0d2238'],s2:['#eef2f5','#0d2238'],topo:['#f4f7f7','#97d2e3'],ocean:['#e8eef0','#a8c4d4'],night:['#0b0d1a','#05070f']};
+function drawPoleCaps(){const c=POLE[basemap]||POLE.street,a0=ctx.globalAlpha;
+  for(const [lat,col] of [[-90,c[0]],[90,c[1]]]){
+    for(const [r,a] of [[5.6,0.35],[5.3,0.6],[5.05,1]]){ctx.beginPath();path(d3.geoCircle().center([0,lat]).radius(r).precision(1)());ctx.globalAlpha=a0*a;ctx.fillStyle=col;ctx.fill()}}
+  ctx.globalAlpha=a0}
 
 // start
 window.addEventListener('resize',resize);setSeason(season);theme();resize();
