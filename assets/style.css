@@ -265,11 +265,11 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .phbox,.phgrid{position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:50;background:transparent;font-family:var(--sans)}
 .phbox[hidden],.phgrid[hidden]{display:none}
 .phbox{display:flex;align-items:center;justify-content:center;gap:14px}
-.phbox figure{margin:0;width:80vw;height:80vh;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0}
-.phimg{position:relative;flex:1 1 auto;min-height:0;width:100%;display:flex;align-items:center;justify-content:center}
-.phimg img{max-width:100%;max-height:100%;object-fit:contain;border-radius:10px;box-shadow:0 14px 50px rgba(0,0,0,.45)}
+.phbox figure{margin:0;width:80vw;height:80vh;flex:0 0 80vw;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;overflow:hidden}
+.phimg{position:relative;flex:1 1 0;min-height:0;min-width:0;width:100%;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.phimg img{display:block;width:auto;height:auto;max-width:min(100%,80vw);max-height:calc(80vh - 110px);min-width:0;min-height:0;flex:none;object-fit:contain;border-radius:10px;box-shadow:0 14px 50px rgba(0,0,0,.45)}
 .phspin{position:absolute;width:34px;height:34px;border-radius:50%;border:3px solid rgba(255,255,255,.35);border-top-color:#fff;animation:phsp .8s linear infinite;display:none}
-.phbox.loading .phspin{display:block}
+.phbox.phload .phspin{display:block}
 @keyframes phsp{to{transform:rotate(360deg)}}
 .phbox figcaption{flex:none;font-size:.84rem;text-align:center;margin-top:12px;display:flex;flex-direction:column;gap:2px;max-width:min(100%,720px);
   background:var(--glass);border:1px solid var(--glass-b);color:var(--ink);border-radius:14px;padding:9px 16px;box-shadow:var(--shadow)}
@@ -289,7 +289,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .phgh b{font-family:var(--serif);font-weight:600;font-size:1.1rem}
 .phgh .phx{position:static;width:34px;height:34px;box-shadow:none}
 .phgl{flex:1 1 auto;min-height:0;overflow:auto;align-content:start;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;padding:2px}
-@media (max-width:700px){.phbox figure{width:92vw;height:76vh}.pha{position:absolute;bottom:18px;width:44px;height:44px}.phprev{left:18px}.phnext{right:18px}.phgl{grid-template-columns:repeat(3,1fr)}}
+@media (max-width:700px){.phbox figure{width:92vw;height:76vh;flex-basis:92vw}.phimg img{max-width:92vw;max-height:calc(76vh - 110px)}.pha{position:absolute;bottom:18px;width:44px;height:44px}.phprev{left:18px}.phnext{right:18px}.phgl{grid-template-columns:repeat(3,1fr)}}
 
 /* base map menu and 3D view */
 .bmwrap{position:relative}

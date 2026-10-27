@@ -817,7 +817,7 @@ function m3dExtras(map){
   if(basemap!=='satellite'&&basemap!=='s2'&&basemap!=='night'&&!map.getLayer('hills')){
     const first=(map.getStyle().layers.find(l=>l.type==='symbol')||{}).id;
     map.addLayer({id:'hills',type:'hillshade',source:'dem',paint:{'hillshade-exaggeration':0.35,'hillshade-shadow-color':'rgba(0,0,0,.35)'}},first)}
-  try{map.setSky({'sky-color':'#7fb4ff','horizon-color':'#cfe3ff','fog-color':'#e8f0ff','sky-horizon-blend':0.5,'horizon-fog-blend':0.6,'fog-ground-blend':0.35,'atmosphere-blend':['interpolate',['linear'],['zoom'],0,1,10,1,12,0]})}catch(e){}
+  try{map.setSky({'sky-color':'#6aa6f0','horizon-color':'#bcd6f5','fog-color':'#bcd6f5','sky-horizon-blend':0.6,'horizon-fog-blend':0.15,'fog-ground-blend':1,'atmosphere-blend':['interpolate',['linear'],['zoom'],0,1,8,0.6,11,0]})}catch(e){}
   // street style: every name label in English where OpenStreetMap has one (road numbers and house numbers left alone)
   if(basemap==='street')for(const l of map.getStyle().layers)if(l.type==='symbol'&&l.layout&&/"name|\{name/.test(JSON.stringify(l.layout['text-field']||'')))try{map.setLayoutProperty(l.id,'text-field',NAME_EN)}catch(e){}}
 function m3dStyle(){const map=m3d.map;if(map)map.setStyle(m3dStyleDef(),{diff:false})}
@@ -825,7 +825,7 @@ function m3dStyle(){const map=m3d.map;if(map)map.setStyle(m3dStyleDef(),{diff:fa
 const k2z=(kk,lat)=>clamp(Math.log2(2*Math.PI*base*kk*Math.cos(lat*RAD)/512),0,20);
 const z2k=(z,lat)=>clamp(512*2**z/(2*Math.PI*base*Math.cos(lat*RAD)),MINK,MAXK);
 async function open3D(){let el=m3d.el;
-  if(!el){el=m3d.el=document.createElement('div');el.className='m3d';el.innerHTML=`<div class="m3dmap" id="m3dmap"></div><div class="m3dbar glass"><b>3D</b><small>Drag to move · wheel to zoom · hold the wheel down and drag to turn and tilt</small><button type="button" class="primary" id="m3dx">Back to globe</button></div><p class="m3dmsg" id="m3dmsg" hidden></p>`;document.body.appendChild(el);
+  if(!el){el=m3d.el=document.createElement('div');el.className='m3d';el.innerHTML=`<div class="m3dmap" id="m3dmap"></div><div class="m3dbar glass"><b>3D</b><small>Drag to move · wheel to zoom · hold the wheel down and drag to turn and tilt (around the last place you clicked)</small><button type="button" class="primary" id="m3dx">Back to globe</button></div><p class="m3dmsg" id="m3dmsg" hidden></p>`;document.body.appendChild(el);
     el.querySelector('#m3dx').onclick=close3D}
   el.hidden=false;document.body.classList.add('in3d');const msg=el.querySelector('#m3dmsg');msg.hidden=true;
   let lib;try{lib=await m3dLoad()}catch(e){msg.textContent='The 3D view couldn’t load. Check your connection and try again.';msg.hidden=false;return}
@@ -840,14 +840,22 @@ async function open3D(){let el=m3d.el;
     map.on('error',e=>{if(e&&e.error&&/webgl/i.test(String(e.error.message)))msg.textContent='3D needs WebGL, which this browser has switched off.',msg.hidden=false})}
   catch(e){msg.textContent='3D needs WebGL, which this browser has switched off.';msg.hidden=false}}
 // hold the wheel (middle button) and drag: sideways turns, up and down tilts. No keys needed.
+// With a place clicked, turning and tilting orbit around that place (it stays put on screen); otherwise around
+// the centre of the view.
 function m3dWheelButton(map){const c=map.getCanvasContainer();let st=null;
-  c.addEventListener('mousedown',e=>{if(e.button!==1)return;e.preventDefault();st={x:e.clientX,y:e.clientY,b:map.getBearing(),p:map.getPitch()};c.style.cursor='grabbing'});
-  window.addEventListener('mousemove',e=>{if(!st)return;map.jumpTo({bearing:st.b-(e.clientX-st.x)*0.35,pitch:clamp(st.p-(e.clientY-st.y)*0.3,0,85)})});
+  c.addEventListener('mousedown',e=>{if(e.button!==1)return;e.preventDefault();
+    const pv=m3d.pivot,pt=pv&&map.project(pv),r=map.getContainer().getBoundingClientRect();
+    const onScreen=pt&&pt.x>=0&&pt.y>=0&&pt.x<=r.width&&pt.y<=r.height;
+    st={x:e.clientX,y:e.clientY,b:map.getBearing(),p:map.getPitch(),pv:onScreen?pv:null,pt:onScreen?[pt.x,pt.y]:null};c.style.cursor='grabbing'});
+  window.addEventListener('mousemove',e=>{if(!st)return;map.jumpTo({bearing:st.b-(e.clientX-st.x)*0.35,pitch:clamp(st.p-(e.clientY-st.y)*0.3,0,85)});
+    // move the centre so the clicked place returns to where it was on screen (two passes for terrain and the globe's curve)
+    if(st.pv)for(let i=0;i<3;i++){const q=map.project(st.pv),dx=q.x-st.pt[0],dy=q.y-st.pt[1];if(!isFinite(dx)||Math.hypot(dx,dy)<0.5)break;
+      const cc=map.project(map.getCenter());map.jumpTo({center:map.unproject([cc.x+dx,cc.y+dy])})}});
   window.addEventListener('mouseup',e=>{if(st&&e.button===1){st=null;c.style.cursor=''}});
   c.addEventListener('auxclick',e=>{if(e.button===1)e.preventDefault()})}
 function close3D(){if(!m3d.el)return;const map=m3d.map;
   if(map){const c=map.getCenter(),lat=clamp(c.lat,-85,85);rot=[-c.lng,-lat,0];k=kT=z2k(map.getZoom(),lat);fly=null;vel=[0,0]}
-  if(m3d.pin){m3d.pin.remove();m3d.pin=null}
+  if(m3d.pin){m3d.pin.remove();m3d.pin=null}m3d.pivot=null;
   m3d.el.hidden=true;document.body.classList.remove('in3d');bmToggle(false);hideInfo();draw()}
 
 // everything from the globe drawn into the 3D view as map layers, kept in step with the app
@@ -892,6 +900,7 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
 // clicks in 3D open the same cards as on the globe
 function m3dClick(e){const map=m3d.map,hits=map.queryRenderedFeatures(e.point,{layers:[M3D_OWN+'fv',M3D_OWN+'cl',M3D_OWN+'ovp',M3D_OWN+'ovl',M3D_OWN+'ovf'].filter(id=>map.getLayer(id))});
   const ll=[e.lngLat.lng,e.lngLat.lat];if(m3d.pin){m3d.pin.remove();m3d.pin=null}
+  m3d.pivot=e.lngLat;   // turning and tilting now orbit around this spot
   const h=hits[0];
   if(h&&h.layer.id===M3D_OWN+'fv'){const f=favs[h.properties.i];if(f){showFav(f);return}}
   if(h&&h.layer.id===M3D_OWN+'cl'){const x=CL.byId.get(h.properties.id);if(x){clShow(x);return}}
@@ -1288,10 +1297,10 @@ function phOpen(i,fromGrid){if(!PH.list.length)return;let el=PH.box;PH.fromGrid=
     document.body.appendChild(el);
     el.querySelector('.phx').onclick=phClose;el.querySelector('.phall').onclick=()=>{phClose(true);phGrid()};el.querySelector('.phprev').onclick=()=>phGo(-1);el.querySelector('.phnext').onclick=()=>phGo(1);
     el.addEventListener('click',e=>{if(e.target===el)phClose()});
-    const img=el.querySelector('img');img.onload=()=>el.classList.remove('loading');img.onerror=()=>{const p=PH.list[PH.i];if(p&&img.src!==p.thumb){img.src=p.thumb}else el.classList.remove('loading')};
+    const img=el.querySelector('img');img.onload=()=>el.classList.remove('phload');img.onerror=()=>{const p=PH.list[PH.i];if(p&&img.src!==p.thumb){img.src=p.thumb}else el.classList.remove('phload')};
     let sx=null;el.addEventListener('touchstart',e=>{sx=e.touches[0].clientX},{passive:true});el.addEventListener('touchend',e=>{if(sx==null)return;const dx=e.changedTouches[0].clientX-sx;if(Math.abs(dx)>50)phGo(dx<0?1:-1);sx=null})}
   if(!PH.fromGrid)PH.prevFocus=document.activeElement;if(PH.grid)PH.grid.hidden=true;el.hidden=false;phBlur(true);document.addEventListener('keydown',phKey,true);phShow(i);el.querySelector('.phnext').focus({preventScroll:true})}
-function phShow(i){const n=PH.list.length;PH.i=(i+n)%n;const p=PH.list[PH.i],el=PH.box,img=el.querySelector('img');el.classList.add('loading');img.src=p.full;img.alt=p.title||'Photo';
+function phShow(i){const n=PH.list.length;PH.i=(i+n)%n;const p=PH.list[PH.i],el=PH.box,img=el.querySelector('img');el.classList.add('phload');img.src=p.full;img.alt=p.title||'Photo';
   const credit=[p.author?'© '+p.author:'',p.lic].filter(Boolean).join(' · ')||'Licence: see source';
   el.querySelector('figcaption').innerHTML=`<b>${esc(p.title||'Photo')}</b><span>${phFmtD(p.d)} away · ${esc(p.src)}${p.date?' · '+esc(p.date):''}</span><span>${esc(credit)}</span>`+
     `<span class="phlinks"><a href="${esc(p.link)}" target="_blank" rel="noopener noreferrer">Original ↗</a>${p.commons&&p.commons!==p.link?` <a href="${esc(p.commons)}" target="_blank" rel="noopener noreferrer">Commons file ↗</a>`:''}<em>${PH.i+1} / ${n}</em></span>`;
