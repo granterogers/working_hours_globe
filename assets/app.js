@@ -115,7 +115,8 @@ function draw(){
   const shown=tileA>0&&drawTiles();if(shown){ctx.globalAlpha=tileA;ctx.drawImage(tcv,0,0,W,H);ctx.globalAlpha=1}
   if(shown)attrib.textContent=raster?BM().attr:VT_ATTR;attrib.classList.toggle('show',shown);
   // the colour key fades with the working-hours colours
-  const stripEl=document.getElementById('strip');if(stripEl){const o=bA<0.03?0:bA;if(stripEl._o!==o){stripEl._o=o;stripEl.style.opacity=o;stripEl.style.visibility=o?'':'hidden'}}
+  // the working-hours part of the key fades with the colours; the coliving part stays while colivings show
+  const stripEl=document.getElementById('strip');if(stripEl){const o=showHours?(bA<0.03?0:bA):0;if(stripEl._o!==o){stripEl._o=o;stripKey(o)}}
   if(bA>0.02){ctx.globalAlpha=bA;strokeFC(CB,pal.border,k>4?1.4:0.9);ctx.globalAlpha=1}
   // sphere shading for depth
   ctx.save();ctx.beginPath();path({type:'Sphere'});ctx.clip();
@@ -765,13 +766,21 @@ bw.onclick=()=>setSeason(0);bs.onclick=()=>setSeason(1);
 function ui(){renderFavs();renderLayers();if(typeof m3dSync==='function')m3dSync();document.getElementById('sum').textContent=`${hhmm(S)}–${hhmm(E)} UK, ${season?'summer':'winter'}`;
   document.getElementById('snote').textContent=season?'Late March to late October, while the UK is on BST.':'Late October to late March, while the UK is on GMT.';
   document.getElementById('key').innerHTML=BANDS.map((b,i)=>`<li><i style="background:${pal['b'+i]}"></i>${b.name} <small>${b.sub}</small></li>`).join('');
-  document.getElementById('strip').classList.toggle('off',!showHours);
-  document.getElementById('strip').innerHTML=BANDS.map((b,i)=>`<span><i style="background:${pal['b'+i]}"></i>${b.name}</span>`).join('');}
+  stripRender();}
+// colour key at the bottom: working-hours bands, then the coliving dot colours when that layer is on
+function stripRender(){const el=document.getElementById('strip');if(!el)return;
+  const cl=typeof CL!=='undefined'&&CL.on&&CL.data.length?['p','u','f'].filter(t=>CL.f.types.includes(t)):[];
+  const CLN={p:'Coliving',u:'Pop-up',f:'Festival'};
+  el.innerHTML=`<span class="sbands">${BANDS.map((b,i)=>`<span><i style="background:${pal['b'+i]}"></i>${b.name}</span>`).join('')}</span>`+
+    (cl.length?`<span class="scl">${cl.map(t=>`<span><i class="cldot" style="background:${CLT[t].col}"></i>${CLN[t]}</span>`).join('')}</span>`:'');
+  el._o=undefined;stripKey(el._o2==null?1:el._o2)}
+function stripKey(o){const el=document.getElementById('strip');if(!el)return;el._o2=o;const sb=el.querySelector('.sbands'),scl=el.querySelector('.scl');
+  if(sb){sb.style.opacity=o;sb.hidden=!o}if(scl)scl.classList.toggle('alone',!o);el.style.visibility=o||scl?'':'hidden'}
 // base map menu (top right)
 function setShow(k,v){if(k==='hours'){showHours=v;try{localStorage.setItem('whg.hours',v?'on':'off')}catch(e){}ui()}
   else if(k==='names'){showNames=v;try{localStorage.setItem('whg.names',v?'on':'off')}catch(e){}}
   else if(k==='weather'){showWeather=v;try{localStorage.setItem('whg.weather',v?'on':'off')}catch(e){}if(v)wxQueue()}
-  else if(k==='cl'){CL.on=v;clStore.set('whg.clOn',v);if(!v&&CL.sel){CL.sel=null;hideInfo()}}
+  else if(k==='cl'){CL.on=v;clStore.set('whg.clOn',v);if(!v&&CL.sel){CL.sel=null;hideInfo()}stripRender()}
   draw();m3dSync()}
 function bmRender(){const m=document.getElementById('bmmenu');
   const tick=(k,on,label,extra)=>`<label class="bmtick"><input type="checkbox" data-show="${k}" ${on?'checked':''}><span>${label}</span>${extra||''}</label>`;
@@ -1021,7 +1030,7 @@ function clPass(x,f,now){
     if(!x.dr.some(r=>r[0]<=e&&r[1]>=s))return false}
   return true;}
 function clApply(){const now=clToday();CL.vis=CL.data.filter(x=>clPass(x,CL.f,now));CL.total=CL.data.filter(x=>!(x.dr.length&&x.dr.every(r=>r[1]<now))).length;clStore.set('whg.clF',CL.f);
-  if(CL.sel&&!CL.vis.includes(CL.sel))CL.sel=null;clCounts();if(typeof draw==='function')draw();if(typeof m3dSync==='function')m3dSync();}
+  if(CL.sel&&!CL.vis.includes(CL.sel))CL.sel=null;clCounts();stripRender();if(typeof draw==='function')draw();if(typeof m3dSync==='function')m3dSync();}
 function clSetData(list,meta){CL.data=list.filter(x=>isFinite(x.lat)&&isFinite(x.lon)).map(x=>Object.assign(x,{v:vec(x.lon,x.lat),rm:x.rm||[],tg:x.tg||[],vb:x.vb||[],dr:x.dr||[]}));
   CL.byId=new Map(CL.data.map(x=>[x.id,x]));if(meta)CL.meta=meta;
   if(!clStore.get('whg.clSeen',null))clStore.set('whg.clSeen',CL.data.map(x=>x.id));   // first visit: nothing counts as new
