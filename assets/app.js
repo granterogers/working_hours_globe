@@ -1000,7 +1000,7 @@ async function phKarta(lat,lon,r){const fd=new URLSearchParams({lat,lng:lon,radi
     return{key:'k:'+p.id,thumb:base+(p.th_name||p.lth_name),full:base+(p.lth_name||p.name||p.th_name),lat:la,lon:lo,src:'KartaView',author:p.username||'',lic:'CC BY-SA 4.0',
       date:String(p.shot_date||p.date_added||'').slice(0,10),link:p.sequence_id?`https://kartaview.org/details/${p.sequence_id}/${p.sequence_index||0}`:'https://kartaview.org/',title:'Street-level photo'}}).filter(Boolean)}
 async function phOverpass(lat,lon,r){const rad=Math.min(r,2000);
-  const q=`[out:json][timeout:15];nwr(around:${rad},${lat},${lon})[~"^(image|wikimedia_commons)$"~"."];out center tags 40;`;
+  const q=`[out:json][timeout:5];nwr(around:${rad},${lat},${lon})[~"^(image|wikimedia_commons)$"~"."];out center tags 40;`;
   const j=await phJSON('https://overpass-api.de/api/interpreter',{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'}});
   const out=[];for(const e of j.elements||[]){const t=e.tags||{},la=e.lat??(e.center&&e.center.lat),lo=e.lon??(e.center&&e.center.lon);if(la==null)continue;
     const name=t['name:en']||t.name||'';const link=`https://www.openstreetmap.org/${e.type}/${e.id}`;
@@ -1009,14 +1009,15 @@ async function phOverpass(lat,lon,r){const rad=Math.min(r,2000);
     else if(im&&/^File:/i.test(im)){const f=phFile(im);out.push({key:'c:'+f,file:f,thumb:phFilePath(f,400),full:phFilePath(f,1600),lat:la,lon:lo,src:'OpenStreetMap',author:'',lic:'',date:'',link,title:name})}}
   return out}
 async function phMapillary(lat,lon,r){let tok='';try{tok=localStorage.getItem('whg.mapillary')||''}catch(e){}if(!tok)return[];
-  // small boxes only: the centre one, widened by tiling a 3×3 grid on the larger steps
-  const step=0.004,n=r<=500?0:1,boxes=[];for(let i=-n;i<=n;i++)for(let j=-n;j<=n;j++){const cx=lon+i*step*2,cy=lat+j*step*2;boxes.push([cx-step,cy-step,cx+step,cy+step].map(v=>v.toFixed(5)).join(','))}
-  const res=await Promise.all(boxes.map(b=>phJSON(`https://graph.mapillary.com/images?fields=id,thumb_256_url,thumb_1024_url,captured_at,geometry,creator&bbox=${b}&limit=20`,{headers:{Authorization:'OAuth '+tok}}).catch(()=>({data:[]}))));
-  return res.flatMap(j=>j.data||[]).map(p=>{const g=p.geometry&&p.geometry.coordinates;if(!g)return null;
+  // one small box (the API is slow on big ones); 360° panoramas are skipped since their thumbnails are mostly sky
+  const b=phBox(lat,lon,Math.min(r,1000)).map(v=>v.toFixed(5)).join(',');
+  const j=await phJSON(`https://graph.mapillary.com/images?fields=id,is_pano,thumb_256_url,thumb_1024_url,captured_at,geometry,creator&bbox=${b}&limit=50`,{headers:{Authorization:'OAuth '+tok}});
+  return(j.data||[]).map(p=>{const g=p.geometry&&p.geometry.coordinates;if(!g||p.is_pano)return null;
     return{key:'m:'+p.id,thumb:p.thumb_256_url,full:p.thumb_1024_url||p.thumb_256_url,lat:g[1],lon:g[0],src:'Mapillary',author:(p.creator&&p.creator.username)||'',lic:'CC BY-SA (© Mapillary contributors)',
       date:p.captured_at?new Date(p.captured_at).toISOString().slice(0,10):'',link:`https://www.mapillary.com/app/?pKey=${p.id}`,title:'Street-level photo'}}).filter(Boolean)}
 // iNaturalist is left out: its photos are close-ups of plants and animals rather than the place itself
-const PH_SOURCES=[phCommons,phWikidata,phPanoramax,phKarta,phOverpass,phMapillary];
+// KartaView is left out: its API no longer answers from browsers
+const PH_SOURCES=[phCommons,phWikidata,phPanoramax,phOverpass,phMapillary],PH_WAIT=5000;
 const PH_NATURE=/\b(bird|insect|butterfl|moth|beetle|bee|wasp|spider|dragonfl|lizard|gecko|snake|frog|caterpillar|larva|fung|lichen|moss|seed|leaf|leaves|flower|petal|specimen|herbarium|ant|fly|snail|crab|mushroom)s?\b|\b[A-Z][a-z]+ [a-z]{4,} \(|\b[A-Z][a-z]+_[a-z]{4,}\b/i;
 const PH_STREET=new Set(['Panoramax','KartaView','Mapillary']);
 // author and licence for Commons files found through Wikidata or OpenStreetMap
@@ -1026,35 +1027,45 @@ async function phFillCommons(list){const need=list.filter(p=>p.file&&!p.lic).sli
     for(const p of need){const ii=by[p.file];if(!ii)continue;const m=ii.extmetadata||{};p.author=phStrip(m.Artist&&m.Artist.value);p.lic=phStrip(m.LicenseShortName&&m.LicenseShortName.value);
       p.date=p.date||phStrip(m.DateTimeOriginal&&m.DateTimeOriginal.value).slice(0,10);p.commons=ii.descriptionurl}}catch(e){}}
 
-async function phSearch(lat,lon,onStep){const seen=new Map();let radius=0;
-  for(const r of PH_RADII){radius=r;const key=lat.toFixed(4)+','+lon.toFixed(4)+','+r;
-    let got=PH.cache.get(key);
-    if(!got){const res=await Promise.allSettled(PH_SOURCES.map(f=>phTimeout(f(lat,lon,r),12000)));got=res.flatMap(x=>x.status==='fulfilled'?x.value:[]);PH.cache.set(key,got);
-      if(PH.cache.size>60)PH.cache.delete(PH.cache.keys().next().value)}
-    for(const p of got){const k=p.key.toLowerCase();const d=phDist(lat,lon,p.lat,p.lon);if(d>r*1.05)continue;
-      const prev=seen.get(k);if(!prev||(prev.src==='Wikidata'||prev.src==='OpenStreetMap')&&p.src==='Wikimedia Commons')seen.set(k,Object.assign({},p,{d}))}
-    if(onStep&&onStep(r)===false)return null;
-    if(seen.size>=PH_WANT)break;}
+// Each radius asks every source at once and reports as each one answers (onUpdate(list,radius,done));
+// a source that takes longer than PH_WAIT is dropped for that step so one slow server can't hold things up.
+function phRank(seen){
   // street-level cameras take a frame every few metres; keep one per ~60 m so the same road doesn't fill the grid,
   // and rank them after photos of the place itself (landmarks, views, buildings) at a similar distance
   const all=[...seen.values()].sort((a,b)=>a.d-b.d),kept=[],street=[];
   for(const p of all){if(PH_STREET.has(p.src)){if(street.some(q=>phDist(p.lat,p.lon,q.lat,q.lon)<60))continue;street.push(p)}kept.push(p)}
-  const list=kept.sort((a,b)=>a.d*(PH_STREET.has(a.src)?2:1)-b.d*(PH_STREET.has(b.src)?2:1));await phFillCommons(list);return{list,radius}}
+  return kept.sort((a,b)=>a.d*(PH_STREET.has(a.src)?2:1)-b.d*(PH_STREET.has(b.src)?2:1))}
+async function phSearch(lat,lon,onUpdate){const seen=new Map();let radius=0;
+  const add=(got,r)=>{for(const p of got){const k=p.key.toLowerCase();const d=phDist(lat,lon,p.lat,p.lon);if(d>r*1.05)continue;
+    const prev=seen.get(k);if(!prev||(prev.src==='Wikidata'||prev.src==='OpenStreetMap')&&p.src==='Wikimedia Commons')seen.set(k,Object.assign({},p,{d}))}};
+  for(const r of PH_RADII){radius=r;const key=lat.toFixed(4)+','+lon.toFixed(4)+','+r;
+    let got=PH.cache.get(key);
+    if(got){add(got,r)}else{got=[];
+      await Promise.allSettled(PH_SOURCES.map(f=>phTimeout(f(lat,lon,r),PH_WAIT).then(v=>{got.push(...v);add(v,r);if(onUpdate(phRank(seen),r,false)===false)throw 0})));
+      PH.cache.set(key,got);if(PH.cache.size>60)PH.cache.delete(PH.cache.keys().next().value)}
+    if(onUpdate(phRank(seen),r,false)===false)return;
+    if(seen.size>=PH_WANT)break;}
+  const list=phRank(seen);onUpdate(list,radius,true);phFillCommons(list)}
 
 // --- card section ---
-const photosBlock=()=>`<div class="phs" id="phs"><div class="phh">Photos nearby <small id="phst">Searching…</small></div><div class="phg" id="phg"></div></div>`;
-function photosLoad(ll){if(!ll)return;const tok=++PH.tok,st=()=>document.getElementById('phst'),g=()=>document.getElementById('phg');
-  g().innerHTML=Array(6).fill('<span class="phsk"></span>').join('');
-  phSearch(ll[1],ll[0],r=>{if(tok!==PH.tok)return false;if(st())st().textContent=`Searching within ${phFmtD(r)}…`}).then(res=>{
-    if(!res||tok!==PH.tok||!g())return;PH.list=res.list;const n=res.list.length;
-    if(!n){st().textContent='';g().innerHTML=`<p class="clsmall">No photos found within ${phFmtD(res.radius)}.</p>`;return}
-    st().textContent=`${n} within ${phFmtD(res.radius)}`;
-    const shown=res.list.slice(0,PH_SHOW);
-    g().innerHTML=shown.map((p,i)=>{const more=i===PH_SHOW-1&&n>PH_SHOW;
-      return`<button type="button" class="pht" data-i="${i}" title="${esc([p.title,phFmtD(p.d)+' away',p.src,p.author&&'© '+p.author,p.lic,p.date].filter(Boolean).join(' · '))}" aria-label="${esc((p.title||'Photo')+', '+phFmtD(p.d)+' away, '+p.src)}">`+
-        `<img src="${esc(p.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.pht').classList.add('bad')">`+
-        (more?`<b class="phmore">+${n-PH_SHOW+1}</b>`:'')+`</button>`}).join('');
-    g().querySelectorAll('.pht').forEach(b=>b.onclick=()=>{const i=+b.dataset.i;if(i===PH_SHOW-1&&n>PH_SHOW)phGrid();else phOpen(i)})})}
+// The search starts as soon as the card opens; the thumbnails only show once the Photos button is pressed.
+const photosBlock=()=>`<div class="phs" id="phs"><button type="button" class="phbtn" id="phbtn" aria-expanded="false" aria-controls="phg"><span>Photos nearby</span><small id="phst">Searching…</small><i class="phchev" aria-hidden="true">›</i></button><div class="phg" id="phg" hidden></div></div>`;
+function photosLoad(ll){if(!ll)return;const tok=++PH.tok;PH.list=[];PH.done=false;PH.radius=0;PH.sig='';
+  const btn=document.getElementById('phbtn');if(btn)btn.onclick=()=>{const g=document.getElementById('phg');const open=g.hidden;g.hidden=!open;btn.setAttribute('aria-expanded',open);if(open)photosRender(true)};
+  phSearch(ll[1],ll[0],(list,r,done)=>{if(tok!==PH.tok||!document.getElementById('phg'))return false;PH.list=list;PH.radius=r;PH.done=done;photosRender()})}
+function photosRender(force){const st=document.getElementById('phst'),g=document.getElementById('phg'),btn=document.getElementById('phbtn');if(!st||!g)return;
+  const n=PH.list.length;
+  st.textContent=PH.done?(n?`${n} within ${phFmtD(PH.radius)}`:`none within ${phFmtD(PH.radius)}`):n?`${n} so far…`:'Searching…';
+  btn.classList.toggle('empty',PH.done&&!n);
+  if(g.hidden)return;
+  if(!n){PH.sig='';g.innerHTML=PH.done?`<p class="clsmall">No photos found within ${phFmtD(PH.radius)}.</p>`:Array(6).fill('<span class="phsk"></span>').join('');return}
+  const shown=PH.list.slice(0,PH_SHOW),more=n>PH_SHOW,sig=shown.map(p=>p.key).join('|')+'#'+(more?n:0);
+  if(sig===PH.sig&&!force)return;PH.sig=sig;
+  g.innerHTML=shown.map((p,i)=>{const m=i===PH_SHOW-1&&more;
+    return`<button type="button" class="pht" data-i="${i}" title="${esc([p.title,phFmtD(p.d)+' away',p.src,p.author&&'© '+p.author,p.lic,p.date].filter(Boolean).join(' · '))}" aria-label="${esc((p.title||'Photo')+', '+phFmtD(p.d)+' away, '+p.src)}">`+
+      `<img src="${esc(p.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.pht').classList.add('bad')">`+
+      (m?`<b class="phmore">+${n-PH_SHOW+1}</b>`:'')+`</button>`}).join('')+(shown.length<PH_SHOW&&!PH.done?'<span class="phsk"></span>'.repeat(PH_SHOW-shown.length):'');
+  g.querySelectorAll('.pht').forEach(b=>b.onclick=()=>{const i=+b.dataset.i;if(i===PH_SHOW-1&&PH.list.length>PH_SHOW)phGrid();else phOpen(i)})}
 
 // --- full-size gallery: 80% of the screen, arrows by click, keyboard or swipe ---
 function phBlur(on){document.body.classList.toggle('ph-open',on)}
