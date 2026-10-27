@@ -893,7 +893,7 @@ async function open3D(){let el=m3d.el;
   // start exactly where the globe was: same centre, same scale, looking straight down
   const lon=-rot[0],lat=clamp(-rot[1],-85,85),zoom=k2z(k,lat);
   if(m3d.map){m3d.map.jumpTo({center:[lon,lat],zoom,pitch:0,bearing:0});m3d.map.resize();m3dSync();return}
-  try{const map=m3d.map=new lib.Map({container:'m3dmap',style:m3dStyleDef(),center:[lon,lat],zoom,pitch:0,bearing:0,maxPitch:85,attributionControl:{compact:true},hash:false,dragRotate:true,pitchWithRotate:true});
+  try{const map=m3d.map=new lib.Map({container:'m3dmap',style:m3dStyleDef(),center:[lon,lat],zoom,pitch:0,bearing:0,maxPitch:85,attributionControl:{compact:true},hash:false,dragRotate:true,pitchWithRotate:true,maxTileCacheSize:3000,refreshExpiredTiles:false});
     map.addControl(new lib.NavigationControl({showCompass:false}),'bottom-right');
     map.on('rotate',northNeedle);map.on('pitch',northNeedle);
     map.on('style.load',()=>{m3d.mode=null;m3dExtras(map);m3dSync()});
@@ -1626,6 +1626,11 @@ function drawPoleCaps(){const c=POLE[basemap]||POLE.street,a0=ctx.globalAlpha;
   for(const [lat,col] of [[-90,c[0]],[90,c[1]]]){
     for(const [r,a] of [[5.6,0.35],[5.3,0.6],[5.05,1]]){ctx.beginPath();path(d3.geoCircle().center([0,lat]).radius(r).precision(1)());ctx.globalAlpha=a0*a;ctx.fillStyle=col;ctx.fill()}}
   ctx.globalAlpha=a0}
+
+// keep tiles, terrain and the 3D library on this device between visits (see sw.js), and fetch the 3D library
+// quietly once the page has settled so the first switch to 3D is quick
+if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='127.0.0.1'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+setTimeout(()=>{const go=()=>m3dLoad().catch(()=>{});'requestIdleCallback' in window?requestIdleCallback(go,{timeout:8000}):go()},6000);
 
 // start
 window.addEventListener('resize',resize);setSeason(season);theme();resize();
