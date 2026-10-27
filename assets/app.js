@@ -798,7 +798,7 @@ function stripKey(o){const el=document.getElementById('strip');if(!el)return;el.
 function setShow(k,v){if(k==='hours'){showHours=v;try{localStorage.setItem('whg.hours',v?'on':'off')}catch(e){}ui()}
   else if(k==='names'){showNames=v;try{localStorage.setItem('whg.names',v?'on':'off')}catch(e){}}
   else if(k==='cams'){showCams=v;try{localStorage.setItem('whg.cams',v?'on':'off')}catch(e){}if(v)camQueue();else if(CAM.sel){CAM.sel=null;hideInfo()}}
-  else if(k==='weather'){showWeather=v;try{localStorage.setItem('whg.weather',v?'on':'off')}catch(e){}if(v)wxQueue()}
+  else if(k==='weather'){showWeather=v;try{localStorage.setItem('whg.weather',v?'on':'off')}catch(e){}if(v){wxQueue();if(m3d.map)m3dWx()}}
   else if(k==='cl'){CL.on=v;clStore.set('whg.clOn',v);if(!v&&CL.sel){CL.sel=null;hideInfo()}stripRender()}
   draw();m3dSync()}
 // Layers panel (bottom left, open unless you fold it): what's drawn on the map
@@ -882,7 +882,7 @@ async function open3D(){let el=m3d.el;
     map.on('rotate',northNeedle);map.on('pitch',northNeedle);
     map.on('style.load',()=>{m3d.mode=null;m3dExtras(map);m3dSync()});
     map.on('zoomend',()=>m3dMode(map));map.on('moveend',()=>{if(m3d.me&&myLoc)m3dMe()});
-    map.on('click',m3dClick);
+    map.on('click',m3dClick);map.on('moveend',m3dWx);map.on('load',m3dWx);
     m3dWheelButton(map);
     map.on('error',e=>{if(e&&e.error&&/webgl/i.test(String(e.error.message)))msg.textContent='3D needs WebGL, which this browser has switched off.',msg.hidden=false})}
   catch(e){msg.textContent='3D needs WebGL, which this browser has switched off.';msg.hidden=false}}
@@ -925,7 +925,7 @@ function m3dGeo(){
   const fv={type:'FeatureCollection',features:favs.map((f,i)=>({type:'Feature',properties:{i,n:f.name},geometry:{type:'Point',coordinates:[f.lon,f.lat]}}))};
   const ov={type:'FeatureCollection',features:[]};
   overlays.forEach((L,li)=>{if(L.on)L.fc.features.forEach((f,fi)=>{if(f.geometry)ov.features.push({type:'Feature',properties:{li,fi,c:L.color,n:(f.properties&&f.properties.name)||''},geometry:f.geometry})})});
-  const wx={type:'FeatureCollection',features:showWeather?(WX.shown||[]).map(p=>WX.pts.get(wxKey(p.lat,p.lon))).filter(Boolean).map(p=>({type:'Feature',properties:{t:Math.round(p.temp)+'°',c:wxTempCol(p.temp)},geometry:{type:'Point',coordinates:[p.lon,p.lat]}})):[]};
+  const wx={type:'FeatureCollection',features:showWeather?(WX.shown3d||[]).map(p=>{const q=WX.pts.get(wxKey(p.lat,p.lon));return q&&{type:'Feature',properties:{t:p.name+'  '+Math.round(q.temp)+'°',c:wxTempCol(q.temp),ic:'wx-'+wxKind(q.code,q.day)},geometry:{type:'Point',coordinates:[p.lon,p.lat]}}}).filter(Boolean):[]};
   const cm={type:'FeatureCollection',features:showCams?[...CAM.list.values()].map(c=>({type:'Feature',properties:{id:c.id,live:c.src==='windy'?1:0},geometry:{type:'Point',coordinates:[c.lon,c.lat]}})):[]};
   return{tz,lab,cl,fv,ov,wx,cm}}
 function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.getStyle())return}catch(e){return}
@@ -950,11 +950,20 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
   lay({id:M3D_OWN+'fvn',type:'symbol',source:M3D_OWN+'fv',layout:{'text-field':['get','n'],'text-font':font,'text-size':12,'text-offset':[0,-1.3],'text-anchor':'bottom'},paint:{'text-color':dk?'#fff':'#14213d','text-halo-color':dk?'rgba(0,0,0,.75)':'#fff','text-halo-width':1.5}});
   lay({id:M3D_OWN+'lab',type:'symbol',source:M3D_OWN+'lab',layout:{'text-field':['get','t'],'text-font':font,'text-size':['match',['get','r'],1,13,11.5],'text-line-height':1.25,'text-padding':6},
     paint:{'text-color':dk||basemap==='street'?'#ffffff':'#ffffff','text-halo-color':'rgba(10,16,30,.8)','text-halo-width':1.6}});
-  lay({id:M3D_OWN+'wx',type:'circle',source:M3D_OWN+'wx',paint:{'circle-color':'rgba(14,20,36,.8)','circle-radius':15,'circle-stroke-color':['get','c'],'circle-stroke-width':2.5}});
-  lay({id:M3D_OWN+'wxt',type:'symbol',source:M3D_OWN+'wx',layout:{'text-field':['get','t'],'text-font':font,'text-size':12,'text-allow-overlap':true},paint:{'text-color':'#fff'}});
+  for(const kd in WXI)if(!map.hasImage('wx-'+kd)){const im=new Image(52,52);im.onload=()=>{try{if(!map.hasImage('wx-'+kd)){map.addImage('wx-'+kd,im,{pixelRatio:2});clearTimeout(m3d.wxT);m3d.wxT=setTimeout(()=>{const s=map.getSource(M3D_OWN+'wx');if(s)s.setData(m3dGeo().wx)},50)}}catch(e){}};im.src='data:image/svg+xml,'+encodeURIComponent(WXI[kd].replace('<svg ','<svg width="52" height="52" '))}
+  lay({id:M3D_OWN+'wxt',type:'symbol',source:M3D_OWN+'wx',layout:{'icon-image':['get','ic'],'icon-size':1,'icon-anchor':'right','icon-offset':[-2,0],'text-field':['get','t'],'text-font':font,'text-size':12.5,'text-anchor':'left','text-offset':[0.3,0],
+      'text-allow-overlap':true,'icon-allow-overlap':true,'icon-optional':true},
+    paint:{'text-color':'#ffffff','text-halo-color':'rgba(10,16,30,.85)','text-halo-width':1.8}});
   lay({id:M3D_OWN+'cm',type:'circle',source:M3D_OWN+'cm',paint:{'circle-color':['case',['==',['get','live'],1],'#1f2937','#ffffff'],'circle-radius':7,'circle-stroke-color':['case',['==',['get','live'],1],'#e2453c','#1f2937'],'circle-stroke-width':2}});
   // the base map's own names follow the Place names switch
   for(const l of map.getStyle().layers)if(l.type==='symbol'&&!l.id.startsWith(M3D_OWN))try{map.setLayoutProperty(l.id,'visibility',showNames?'visible':'none')}catch(e){}}
+// weather in 3D: towns and cities spread across the view, bigger places first, about 140 px apart
+function m3dWx(){const map=m3d.map;if(!map||!showWeather||m3d.el.hidden)return;const c=wxCities();if(!c)return;
+  const W3=map.getContainer().clientWidth,H3=map.getContainer().clientHeight,cap=clamp(Math.round(W3*H3/60000),8,30),at=[],out=[],b=map.getBounds();
+  const pool=c.filter(p=>b.contains([p.lon,p.lat])).sort((a,b)=>b.pri-a.pri);
+  for(const p of pool){if(out.length>=cap)break;const q=map.project([p.lon,p.lat]);if(!isFinite(q.x)||q.x<40||q.y<70||q.x>W3-40||q.y>H3-30)continue;
+    if(at.some(a=>Math.hypot(a[0]-q.x,a[1]-q.y)<140))continue;at.push([q.x,q.y]);out.push(p)}
+  WX.shown3d=out;m3dSync();wxFetch()}
 // clicks in 3D open the same cards as on the globe
 function m3dClick(e){const map=m3d.map,hits=map.queryRenderedFeatures(e.point,{layers:[M3D_OWN+'cm',M3D_OWN+'fv',M3D_OWN+'cl',M3D_OWN+'ovp',M3D_OWN+'ovl',M3D_OWN+'ovf'].filter(id=>map.getLayer(id))});
   const ll=[e.lngLat.lng,e.lngLat.lat];if(m3d.pin){m3d.pin.remove();m3d.pin=null}
@@ -1402,27 +1411,30 @@ const WX_RANK={city:4,town:3,village:2,suburb:1};
 // which places get a reading: once zoomed in, only towns whose names are actually shown on the map (badge just
 // under the name); zoomed out, cities with a major airport (badge carries the name). Bigger places first.
 function wxCands(){const out=[];
-  if(WX.mapNames){for(const L of MAPLAB){const r=WX_RANK[L.cls];if(!r)continue;
+  if(WX.mapNames)for(const L of MAPLAB){const r=WX_RANK[L.cls];if(!r)continue;
       out.push({name:L.name,v:L.v,lat:Math.asin(clamp(L.v[2],-1,1))*DEG,lon:Math.atan2(L.v[1],L.v[0])*DEG,pri:1e5+r*1000+L.pri,under:true})}
-    // towns in the map data whose names didn't fit on screen: these badges carry the name themselves
-    const shownNames=new Set(MAPLAB.map(l=>l.name));
-    for(const dk of vtUsed){const dd=vdata.get(dk);if(!dd||!dd.ok)continue;
-      for(const L of vtLabels(dk,dd)){const r=WX_RANK[L.cls];if(L.kind!=='place'||!r||r<2||shownNames.has(L.name))continue;
-        out.push({name:L.name,v:L.v,lat:Math.asin(clamp(L.v[2],-1,1))*DEG,lon:Math.atan2(L.v[1],L.v[0])*DEG,pri:r*1000+L.pri})}}}
-  if(airports){if(!WX.cities){const seen=new Set();WX.cities=[];for(const a of airports)if(a[6]===1&&!seen.has(a[2]+a[3])){seen.add(a[2]+a[3]);WX.cities.push({name:String(a[2]||a[1]).replace(/ am Main$/,''),lat:a[4],lon:a[5],v:vec(a[5],a[4]),pri:-1})}}
-    out.push(...WX.cities)}
-  else loadAirports().then(()=>draw()).catch(()=>{});
+  // towns in the map data whose names aren't on screen (names off, or no room): these badges carry the name
+  const shownNames=new Set(WX.mapNames?MAPLAB.map(l=>l.name):[]);
+  for(const dk of vtUsed){const dd=vdata.get(dk);if(!dd||!dd.ok)continue;
+    for(const L of vtLabels(dk,dd)){const r=WX_RANK[L.cls];if(L.kind!=='place'||!r||r<2||shownNames.has(L.name))continue;
+      out.push({name:L.name,v:L.v,lat:Math.asin(clamp(L.v[2],-1,1))*DEG,lon:Math.atan2(L.v[1],L.v[0])*DEG,pri:r*1000+L.pri})}}
+  const cities=wxCities();if(cities)out.push(...cities);
   return out.sort((a,b)=>b.pri-a.pri)}
+// every city with an airport (one entry per city): bigger airports rank first
+function wxCities(){if(!airports){loadAirports().then(()=>{draw();m3dSync()}).catch(()=>{});return null}
+  if(!WX.cities){const by=new Map();for(const a of airports){const key=a[2]+'|'+a[3],o=by.get(key);if(!o||(a[6]===1&&o.pri<-1))by.set(key,{name:String(a[2]||a[1]).replace(/ am Main$/,''),lat:a[4],lon:a[5],v:vec(a[5],a[4]),pri:a[6]===1?-1:-2})}
+    WX.cities=[...by.values()]}
+  return WX.cities}
 function wxQueue(){if(!showWeather)return;clearTimeout(WX.timer);WX.timer=setTimeout(wxFetch,500)}
 async function wxFetch(){if(!showWeather||WX.busy||Date.now()<(WX.wait||0))return;const now=Date.now();
-  const need=[];for(const p of WX.shown||[]){const key=wxKey(p.lat,p.lon),q=WX.pts.get(key);if(!(q&&now-q.t<20*60e3)&&!WX.pending.has(key)&&!need.some(n=>n.key===key))need.push({key,lat:p.lat,lon:p.lon});if(need.length>=60)break}
+  const need=[];for(const p of (m3d.el&&!m3d.el.hidden?WX.shown3d:WX.shown)||[]){const key=wxKey(p.lat,p.lon),q=WX.pts.get(key);if(!(q&&now-q.t<20*60e3)&&!WX.pending.has(key)&&!need.some(n=>n.key===key))need.push({key,lat:p.lat,lon:p.lon});if(need.length>=60)break}
   if(!need.length)return;WX.busy=true;need.forEach(p=>WX.pending.add(p.key));
   try{const u=`https://api.open-meteo.com/v1/forecast?latitude=${need.map(p=>p.lat.toFixed(2)).join(',')}&longitude=${need.map(p=>p.lon.toFixed(2)).join(',')}&current=temperature_2m,weather_code,is_day&timezone=auto`;
     let j=await phJSON(u);if(!Array.isArray(j))j=[j];
     j.forEach((r,i)=>{const c=r&&r.current;if(c)WX.pts.set(need[i].key,{lat:need[i].lat,lon:need[i].lon,t:now,temp:c.temperature_2m,code:c.weather_code,day:c.is_day})});
     if(WX.pts.size>2000){let n=WX.pts.size-1600;for(const kk of WX.pts.keys()){WX.pts.delete(kk);if(--n<=0)break}}}
   catch(e){WX.wait=Date.now()+30000}finally{need.forEach(p=>WX.pending.delete(p.key));WX.busy=false}
-  draw();m3dSync()}
+  draw();m3dSync();if(m3d.el&&!m3d.el.hidden&&(WX.shown3d||[]).some(p=>!WX.pts.has(wxKey(p.lat,p.lon))))setTimeout(wxFetch,300)}
 // badges sit just under the town's name on the street map; zoomed out they carry the city name themselves
 function wxDraw(mapNames){WX.mapNames=mapNames;const font='600 12px "Bricolage Grotesque", "Segoe UI", sans-serif',nfont='500 11px "Bricolage Grotesque", "Segoe UI", sans-serif',boxes=placed.map(r=>[r.x0,r.y0,r.x1,r.y1]);
   WX.boxes=[];WX.shown=[];const cap=clamp(Math.round(W*H/(mapNames?80000:45000)),6,mapNames?20:30),gap=mapNames?150:120,names=new Set(),at=[];let n=0;
