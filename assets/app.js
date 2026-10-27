@@ -1381,16 +1381,41 @@ function wxDraw(mapNames){WX.mapNames=mapNames;const font='600 12px "Bricolage G
     ctx.font=font;ctx.fillStyle=ink;ctx.fillText(tt,bx[0]+27+nw,by+h/2+1)}
   ctx.restore();wxQueue()}
 // card section: now, then the week ahead by day (in the place's own local time)
-const wxBlock=()=>`<div class="wx" id="wx"><div class="wxh">Weather <small id="wxst">Loading…</small></div><div id="wxb"></div></div>`;
+const wxBlock=()=>`<div class="wx" id="wx"><button type="button" class="phbtn wxbtn" id="wxbtn" aria-expanded="false" aria-controls="wxb"><span>Weather</span><small id="wxst">Loading…</small><i class="phchev" aria-hidden="true">›</i></button><div id="wxb" hidden></div></div>`;
+// Forecasts are the middle value of several weather models (ECMWF, DWD ICON, NOAA GFS, Météo-France and
+// Open-Meteo's best match), which is steadier than any single model, especially on islands and mountains.
+// "Now" also shows the latest real measurement from the nearest airport weather station (METAR) when one is
+// within 40 km, since that is an observation rather than a model.
+const WX_MODELS=['best_match','ecmwf_ifs025','icon_seamless','gfs_seamless','meteofrance_seamless'];
+const median=a=>{a=a.filter(v=>v!=null&&isFinite(v)).sort((x,y)=>x-y);if(!a.length)return null;const m=a.length>>1;return a.length%2?a[m]:(a[m-1]+a[m])/2};
+const wxPick=(blk,name,i)=>{const vals=WX_MODELS.map(m=>{const arr=blk[name+'_'+m];return Array.isArray(arr)?arr[i]:arr});return vals.some(v=>v!=null)?vals:[blk[name]&&(Array.isArray(blk[name])?blk[name][i]:blk[name])]};
 let wxTok=0;
+async function wxMetar(ll){const d=0.45,b=[ll[1]-d,ll[0]-d,ll[1]+d,ll[0]+d].map(v=>v.toFixed(2)).join(',');
+  const j=await phTimeout(phJSON(`https://aviationweather.gov/api/data/metar?bbox=${b}&format=json`),6000);
+  let best=null,bd=40000;for(const m of Array.isArray(j)?j:[]){if(m.temp==null||m.lat==null)continue;const dd=phDist(ll[1],ll[0],m.lat,m.lon);
+    const age=(Date.now()-(m.obsTime?m.obsTime*1000:Date.parse(m.reportTime||'')))/36e5;if(dd<bd&&age<3){bd=dd;best=Object.assign({d:dd,age},m)}}
+  return best}
 function wxLoad(ll){if(!ll)return;const tok=++wxTok;
-  const u=`https://api.open-meteo.com/v1/forecast?latitude=${ll[1].toFixed(3)}&longitude=${ll[0].toFixed(3)}&current=temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m,relative_humidity_2m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=7&timezone=auto&wind_speed_unit=kmh`;
-  phJSON(u).then(j=>{if(tok!==wxTok)return;const b=document.getElementById('wxb'),st=document.getElementById('wxst');if(!b)return;const c=j.current||{},d=j.daily||{};
-    st.textContent='Open-Meteo';
-    const days=(d.time||[]).map((t,i)=>{const dt=new Date(t+'T12:00'),pr=d.precipitation_probability_max&&d.precipitation_probability_max[i];
-      return`<li title="${esc(WMO[d.weather_code[i]]||'')}"><span>${i?dt.toLocaleDateString('en-GB',{weekday:'short'}):'Today'}</span>${wxSvg(d.weather_code[i],1,34)}<b>${Math.round(d.temperature_2m_max[i])}°</b><small>${Math.round(d.temperature_2m_min[i])}°</small><em>${pr>=20?pr+'%':''}</em></li>`}).join('');
-    b.innerHTML=`<div class="wxnow">${wxSvg(c.weather_code,c.is_day,52)}<b>${Math.round(c.temperature_2m)}°C</b><span>${esc(WMO[c.weather_code]||'')}<small>Feels ${Math.round(c.apparent_temperature)}° · wind ${Math.round(c.wind_speed_10m)} km/h · humidity ${Math.round(c.relative_humidity_2m)}%</small></span></div><ul class="wxdays">${days}</ul>`})
+  const btn=document.getElementById('wxbtn');if(btn)btn.onclick=()=>{const b=document.getElementById('wxb');const open=b.hidden;b.hidden=!open;btn.setAttribute('aria-expanded',String(open))};
+  const q=`latitude=${ll[1].toFixed(4)}&longitude=${ll[0].toFixed(4)}&current=temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m,relative_humidity_2m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=7&timezone=auto&wind_speed_unit=kmh`;
+  const base=`https://api.open-meteo.com/v1/forecast?${q}`;
+  phJSON(base+'&models='+WX_MODELS.join(',')).catch(()=>phJSON(base)).then(async j=>{if(tok!==wxTok)return;const b=document.getElementById('wxb'),st=document.getElementById('wxst');if(!b)return;
+    const c=j.current||{},d=j.daily||{},code=c.weather_code_best_match??c.weather_code,isDay=c.is_day_best_match??c.is_day;
+    const tNow=median(wxPick(c,'temperature_2m')),feels=median(wxPick(c,'apparent_temperature')),wind=median(wxPick(c,'wind_speed_10m')),hum=median(wxPick(c,'relative_humidity_2m'));
+    const nModels=WX_MODELS.filter(m=>c['temperature_2m_'+m]!=null).length;
+    st.innerHTML=`${wxSvg(code,isDay,18)}${Math.round(tNow)}° · ${esc(WMO[code]||'')}`;
+    const days=(d.time||[]).map((t,i)=>{const dt=new Date(t+'T12:00'),dc=(d.weather_code_best_match||d.weather_code||[])[i],pr=median(wxPick(d,'precipitation_probability_max',i));
+      return`<li title="${esc(WMO[dc]||'')}"><span>${i?dt.toLocaleDateString('en-GB',{weekday:'short'}):'Today'}</span>${wxSvg(dc,1,34)}<b>${Math.round(median(wxPick(d,'temperature_2m_max',i)))}°</b><small>${Math.round(median(wxPick(d,'temperature_2m_min',i)))}°</small><em>${pr>=20?Math.round(pr)+'%':''}</em></li>`}).join('');
+    b.innerHTML=`<div class="wxnow">${wxSvg(code,isDay,52)}<b>${Math.round(tNow)}°C</b><span>${esc(WMO[code]||'')}<small>Feels ${Math.round(feels)}° · wind ${Math.round(wind)} km/h · humidity ${Math.round(hum)}%</small></span></div>`+
+      `<p class="clsmall" id="wxobs"></p><ul class="wxdays">${days}</ul><p class="clsmall">${nModels>1?`Middle value of ${nModels} weather models`:'Weather model forecast'} via <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>, in local time.</p>`;
+    try{const m=await wxMetar(ll);if(tok!==wxTok||!m)return;const o=document.getElementById('wxobs');if(!o)return;
+      const nm=(m.name||m.icaoId||'').split(',')[0];o.innerHTML=`Measured ${Math.round(m.temp)}°C at ${esc(nm)} weather station (${esc(m.icaoId||'')}), ${phFmtD(m.d)} away, ${m.age<1?Math.max(1,Math.round(m.age*60))+' min':Math.round(m.age)+' h'} ago`}catch(e){}})
   .catch(()=>{if(tok!==wxTok)return;const st=document.getElementById('wxst');if(st)st.textContent='unavailable right now'})}
+// one section open at a time in a card: opening Weather, Photos or Flights closes the other two
+const ACC=[['wxbtn','wxb'],['phbtn','phg'],['fltog','flbody']];
+document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('#wxbtn,#phbtn,#fltog');if(!b)return;
+  setTimeout(()=>{if(b.getAttribute('aria-expanded')!=='true')return;for(const [bt,bd] of ACC){if(bt===b.id)continue;const B=document.getElementById(bt),D=document.getElementById(bd);
+    if(B&&D&&!D.hidden){D.hidden=true;B.setAttribute('aria-expanded','false')}}})});
 
 // start
 window.addEventListener('resize',resize);setSeason(season);theme();resize();

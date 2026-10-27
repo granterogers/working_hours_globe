@@ -336,8 +336,11 @@ body.in3d .strip,body.in3d .attrib{display:none}
 
 /* weather in cards */
 .wx{margin:12px 0 4px;border-top:1px solid var(--glass-b);padding-top:10px}
-.wxh{display:flex;justify-content:space-between;align-items:baseline;font-weight:600;font-size:.9rem;margin-bottom:4px}
-.wxh small{font-weight:400;color:var(--ink2);font-size:.74rem}
+.wxbtn{align-items:center}
+.wxbtn small{display:flex;align-items:center;gap:4px;color:var(--ink);font-size:.8rem}
+.wxbtn small .wxi{display:inline-block}
+#wxb{padding-top:6px}
+#wxobs:empty{display:none}
 .wxnow{display:flex;align-items:center;gap:10px}
 .wxnow b{font-size:1.7rem;font-weight:700}
 .wxnow span{display:flex;flex-direction:column;font-size:.88rem}
