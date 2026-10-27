@@ -359,3 +359,8 @@ body.in3d .locbtn{z-index:46;bottom:140px}
 .msgtoast.show{opacity:1;transform:translateX(-50%)}
 .me3d{width:15px;height:15px;border-radius:50%;background:#2f7df6;border:3px solid #fff;box-shadow:0 0 0 8px rgba(47,125,246,.18),0 2px 6px rgba(0,0,0,.3)}
 @media (max-width:700px){.locbtn{right:12px;bottom:106px}}
+
+.northbtn{position:absolute;right:16px;bottom:160px;z-index:3}
+.northbtn svg{transition:transform .15s}
+body.in3d .northbtn{z-index:46;bottom:190px}
+@media (max-width:700px){.northbtn{right:12px;bottom:156px}}

@@ -814,6 +814,12 @@ document.addEventListener('click',e=>{const m=document.getElementById('bmmenu');
 document.getElementById('bmmenu').addEventListener('keydown',e=>{if(e.key==='Escape'){bmToggle(false);document.getElementById('bmbtn').focus()}});
 document.getElementById('b3d').onclick=()=>open3D();
 document.getElementById('loc').onclick=locate;
+// north button: in 3D, first click turns the view to face north, a second click looks straight down again;
+// the needle shows which way north is. The globe view always has north up, so there it just levels the view.
+function northNeedle(){const sv=document.querySelector('#north svg');if(!sv)return;const b=m3d.map&&m3d.el&&!m3d.el.hidden?m3d.map.getBearing():0;sv.style.transform=`rotate(${-b}deg)`}
+document.getElementById('north').onclick=()=>{const map=m3d.map;
+  if(map&&m3d.el&&!m3d.el.hidden){if(Math.abs(map.getBearing())>0.5)map.easeTo({bearing:0,duration:600});else map.easeTo({pitch:0,duration:600});return}
+  rot[2]=0;vel=[0,0];draw()};
 
 // 3D view: MapLibre GL with terrain, opened over the globe at the same spot; left-drag pans, right-drag (or
 // Ctrl+drag) tilts and turns, the wheel zooms. Uses the current base map; satellite gets English place names.
@@ -855,7 +861,8 @@ async function open3D(){let el=m3d.el;
   const lon=-rot[0],lat=clamp(-rot[1],-85,85),zoom=k2z(k,lat);
   if(m3d.map){m3d.map.jumpTo({center:[lon,lat],zoom,pitch:0,bearing:0});m3d.map.resize();m3dSync();return}
   try{const map=m3d.map=new lib.Map({container:'m3dmap',style:m3dStyleDef(),center:[lon,lat],zoom,pitch:0,bearing:0,maxPitch:85,attributionControl:{compact:true},hash:false,dragRotate:true,pitchWithRotate:true});
-    map.addControl(new lib.NavigationControl({visualizePitch:true}),'bottom-right');
+    map.addControl(new lib.NavigationControl({showCompass:false}),'bottom-right');
+    map.on('rotate',northNeedle);map.on('pitch',northNeedle);
     map.on('style.load',()=>{m3d.mode=null;m3dExtras(map);m3dSync()});
     map.on('zoomend',()=>m3dMode(map));map.on('moveend',()=>{if(m3d.me&&myLoc)m3dMe()});
     map.on('click',m3dClick);
@@ -875,7 +882,7 @@ function m3dWheelButton(map){const c=map.getCanvasContainer();let st=null;
     const pv=m3d.pivot,pt=pv&&map.project(pv),r=map.getContainer().getBoundingClientRect();
     const onScreen=pt&&pt.x>=0&&pt.y>=0&&pt.x<=r.width&&pt.y<=r.height;
     st={x:e.clientX,y:e.clientY,b:map.getBearing(),p:map.getPitch(),pv:onScreen?pv:null,pt:onScreen?[pt.x,pt.y]:null};c.style.cursor='grabbing'});
-  window.addEventListener('mousemove',e=>{if(!st)return;map.jumpTo({bearing:st.b-(e.clientX-st.x)*0.35,pitch:clamp(st.p-(e.clientY-st.y)*0.3,0,85)});
+  window.addEventListener('mousemove',e=>{if(!st)return;if(!(e.buttons&4)){st=null;c.style.cursor='';return}map.jumpTo({bearing:st.b-(e.clientX-st.x)*0.35,pitch:clamp(st.p-(e.clientY-st.y)*0.3,0,85)});
     // move the centre so the clicked place returns to where it was on screen (two passes for terrain and the globe's curve)
     if(st.pv)for(let i=0;i<3;i++){const q=map.project(st.pv),dx=q.x-st.pt[0],dy=q.y-st.pt[1];if(!isFinite(dx)||Math.hypot(dx,dy)<0.5)break;
       const cc=map.project(map.getCenter());map.jumpTo({center:map.unproject([cc.x+dx,cc.y+dy])})}});
@@ -884,7 +891,7 @@ function m3dWheelButton(map){const c=map.getCanvasContainer();let st=null;
 function close3D(){if(!m3d.el)return;const map=m3d.map;
   if(map){const c=map.getCenter(),lat=clamp(c.lat,-85,85);rot=[-c.lng,-lat,0];k=kT=z2k(map.getZoom(),lat);fly=null;vel=[0,0]}
   if(m3d.pin){m3d.pin.remove();m3d.pin=null}m3d.pivot=null;
-  m3d.el.hidden=true;document.body.classList.remove('in3d');bmToggle(false);hideInfo();draw()}
+  m3d.el.hidden=true;document.body.classList.remove('in3d');northNeedle();bmToggle(false);hideInfo();draw()}
 
 // everything from the globe drawn into the 3D view as map layers, kept in step with the app
 const M3D_OWN='m3d-';
@@ -1376,8 +1383,13 @@ const WX_RANK={city:4,town:3,village:2,suburb:1};
 // under the name); zoomed out, cities with a major airport (badge carries the name). Bigger places first.
 function wxCands(){const out=[];
   if(WX.mapNames){for(const L of MAPLAB){const r=WX_RANK[L.cls];if(!r)continue;
-      out.push({name:L.name,v:L.v,lat:Math.asin(clamp(L.v[2],-1,1))*DEG,lon:Math.atan2(L.v[1],L.v[0])*DEG,pri:r*1000+L.pri,under:true,sx:L.x,sy:L.y})}}
-  else if(airports){if(!WX.cities){const seen=new Set();WX.cities=[];for(const a of airports)if(a[6]===1&&!seen.has(a[2]+a[3])){seen.add(a[2]+a[3]);WX.cities.push({name:String(a[2]||a[1]).replace(/ am Main$/,''),lat:a[4],lon:a[5],v:vec(a[5],a[4]),pri:0})}}
+      out.push({name:L.name,v:L.v,lat:Math.asin(clamp(L.v[2],-1,1))*DEG,lon:Math.atan2(L.v[1],L.v[0])*DEG,pri:1e5+r*1000+L.pri,under:true})}
+    // towns in the map data whose names didn't fit on screen: these badges carry the name themselves
+    const shownNames=new Set(MAPLAB.map(l=>l.name));
+    for(const dk of vtUsed){const dd=vdata.get(dk);if(!dd||!dd.ok)continue;
+      for(const L of vtLabels(dk,dd)){const r=WX_RANK[L.cls];if(L.kind!=='place'||!r||r<2||shownNames.has(L.name))continue;
+        out.push({name:L.name,v:L.v,lat:Math.asin(clamp(L.v[2],-1,1))*DEG,lon:Math.atan2(L.v[1],L.v[0])*DEG,pri:r*1000+L.pri})}}}
+  if(airports){if(!WX.cities){const seen=new Set();WX.cities=[];for(const a of airports)if(a[6]===1&&!seen.has(a[2]+a[3])){seen.add(a[2]+a[3]);WX.cities.push({name:String(a[2]||a[1]).replace(/ am Main$/,''),lat:a[4],lon:a[5],v:vec(a[5],a[4]),pri:-1})}}
     out.push(...WX.cities)}
   else loadAirports().then(()=>draw()).catch(()=>{});
   return out.sort((a,b)=>b.pri-a.pri)}
@@ -1393,7 +1405,7 @@ async function wxFetch(){if(!showWeather||WX.busy||Date.now()<(WX.wait||0))retur
   draw();m3dSync()}
 // badges sit just under the town's name on the street map; zoomed out they carry the city name themselves
 function wxDraw(mapNames){WX.mapNames=mapNames;const font='600 12px "Bricolage Grotesque", "Segoe UI", sans-serif',nfont='500 11px "Bricolage Grotesque", "Segoe UI", sans-serif',boxes=placed.map(r=>[r.x0,r.y0,r.x1,r.y1]);
-  WX.boxes=[];WX.shown=[];const cap=clamp(Math.round(W*H/(mapNames?95000:45000)),5,mapNames?18:30),gap=mapNames?170:120,names=new Set(),at=[];let n=0;
+  WX.boxes=[];WX.shown=[];const cap=clamp(Math.round(W*H/(mapNames?80000:45000)),6,mapNames?20:30),gap=mapNames?150:120,names=new Set(),at=[];let n=0;
   if(mapNames)boxes.push(...MAPBOX);
   ctx.save();ctx.textBaseline='middle';ctx.textAlign='left';
   for(const p of wxCands()){if(n>=cap)break;const v=p.v,X=M[0]*v[0]+M[1]*v[1]+M[2]*v[2];if(X<0.12)continue;
