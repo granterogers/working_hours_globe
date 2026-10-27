@@ -704,9 +704,9 @@ let infoTok=0;
 function showInfo(title,where,tz,ll){activeFav=null;draft=null;infoTok++;const z=D.zones[tz]||[0,0],o=z[season],b=band(o),other=z[1-season];
   document.getElementById('infob').innerHTML=`<h2>${esc(title)}</h2><p class="where">${esc(where&&where!==title?where:' ')}</p>
   <div class="big"><i style="background:${pal['b'+b]}"></i>${hours(o)}</div><p class="bandname">${BANDS[b].name}, ${season?'summer':'winter'}</p>
-  <dl><dt>${season?'Winter':'Summer'}</dt><dd>${hours(other)}</dd><dt>Difference</dt><dd>${vsUK(o)}</dd><dt>Time zone</dt><dd>${utc(o)}</dd></dl>${ll?flightsBlock():''}`;
-  wireFlights(ll);document.getElementById('info').classList.add('show');}
-function hideInfo(){document.getElementById('info').classList.remove('show');if(typeof CL!=='undefined'&&CL.sel){CL.sel=null;draw()}if(selected||activeFav||draft){selected=null;activeFav=null;draft=null;draw()}}
+  <dl><dt>${season?'Winter':'Summer'}</dt><dd>${hours(other)}</dd><dt>Difference</dt><dd>${vsUK(o)}</dd><dt>Time zone</dt><dd>${utc(o)}</dd></dl>${ll?photosBlock():''}${ll?flightsBlock():''}`;
+  wireFlights(ll);photosLoad(ll);document.getElementById('info').classList.add('show');}
+function hideInfo(){document.getElementById('info').classList.remove('show');PH.tok++;if(typeof CL!=='undefined'&&CL.sel){CL.sel=null;draw()}if(selected||activeFav||draft){selected=null;activeFav=null;draft=null;draw()}}
 document.getElementById('infox').onclick=hideInfo;
 
 // panel & controls
@@ -863,8 +863,8 @@ function clShow(x){activeFav=null;draft=null;selected=null;CL.sel=x;if(typeof in
     <h2>${esc(x.n)}</h2><p class="where">${esc([x.a,x.c].filter(Boolean).join(', '))}</p>
     <dl class="meta">${rows.map(([a,b])=>`<dt>${a}</dt><dd>${esc(b)}</dd>`).join('')}</dl>
     ${x.src==='estimate'&&x.eur!=null?'<p class="clsmall">Price is colivingDB’s estimate; check with the host.</p>':''}
-    <div class="cllinks">${links}</div><div>${hoursBlock(tzAt([x.lon,x.lat]))}</div>${flightsBlock()}`;
-  wireFlights([x.lon,x.lat]);document.getElementById('info').classList.add('show');}
+    <div class="cllinks">${links}</div><div>${hoursBlock(tzAt([x.lon,x.lat]))}</div>${photosBlock()}${flightsBlock()}`;
+  wireFlights([x.lon,x.lat]);photosLoad([x.lon,x.lat]);document.getElementById('info').classList.add('show');}
 function clGo(x){if(!CL.vis.includes(x)){CL.f=Object.assign({},CL_DEF);clSync();clApply()}flyTo(x.lon,x.lat,0.6);clShow(x);draw()}
 
 // Map layers row and the filter card
@@ -944,6 +944,122 @@ async function clCheck(){const res=document.getElementById('clres'),btn=document
 
 Promise.all([fetch('data/coliving.json').then(r=>{if(!r.ok)throw new Error(r.status);return r.json()}),fetch('data/coliving-updates.json').then(r=>r.ok?r.json():null).catch(()=>null)])
   .then(([list,meta])=>{clSetData(list,meta);if(typeof renderLayers==='function')renderLayers()}).catch(()=>{});
+
+// Photos near a clicked spot, from open sources that need no key: Wikimedia Commons, Wikidata, iNaturalist,
+// Panoramax, KartaView and OpenStreetMap. All are asked at once; results are merged, de-duplicated and
+// sorted nearest first. The search widens (500 m → 2 km → 10 km → 50 km) until about ten photos turn up.
+// Any source that fails is skipped. Mapillary is used too if a token is set in this browser
+// (localStorage 'whg.mapillary'); none is built in, since a public page would expose it.
+const PH={cache:new Map(),list:[],tok:0,box:null,i:0};
+const PH_RADII=[500,2000,10000,50000],PH_WANT=10,PH_SHOW=9;
+const phDist=(a,b,c,d)=>{const R=6371000,r=Math.PI/180,x=Math.sin((c-a)*r/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin((d-b)*r/2)**2;return 2*R*Math.asin(Math.sqrt(x))};
+const phFmtD=m=>m<10?'<10 m':m<1000?Math.round(m/10)*10+' m':m<10000?(m/1000).toFixed(1)+' km':Math.round(m/1000)+' km';
+const phStrip=h=>{const d=document.createElement('div');d.innerHTML=String(h||'');return d.textContent.replace(/\s+/g,' ').trim()};
+const phJSON=(u,o)=>fetch(u,o).then(r=>{if(!r.ok)throw new Error(r.status);return r.json()});
+const phTimeout=(p,ms)=>Promise.race([p,new Promise((_,j)=>setTimeout(()=>j(new Error('timeout')),ms))]);
+const phFile=t=>String(t||'').replace(/^(File|Image):/i,'').replace(/_/g,' ').trim();
+const phFilePath=(f,w)=>`https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(f.replace(/ /g,'_'))}?width=${w}`;
+function phBox(lat,lon,m){const dl=m/111320,dn=m/(111320*Math.max(0.2,Math.cos(lat*Math.PI/180)));return[lon-dn,lat-dl,lon+dn,lat+dl]}
+
+// --- sources: each returns [{key,thumb,full,lat,lon,src,author,lic,date,link,title}] ---
+async function phCommons(lat,lon,r){const rad=Math.min(r,10000);
+  const u=`https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=geosearch&ggscoord=${lat}|${lon}&ggsradius=${rad}&ggsnamespace=6&ggslimit=50&prop=imageinfo|coordinates&iiprop=url|extmetadata|size|mime&iiurlwidth=400&iiextmetadatafilter=Artist|LicenseShortName|DateTimeOriginal|ObjectName`;
+  const j=await phJSON(u);return Object.values((j.query||{}).pages||{}).map(p=>{const ii=(p.imageinfo||[])[0],c=(p.coordinates||[])[0];if(!ii||!c||!/^image\/(jpeg|png|webp)/.test(ii.mime||''))return null;const m=ii.extmetadata||{};
+    return{key:'c:'+phFile(p.title),thumb:ii.thumburl||ii.url,full:ii.width>1600?(ii.thumburl||'').replace(/\/\d+px-/,'/1600px-'):ii.url,lat:c.lat,lon:c.lon,src:'Wikimedia Commons',
+      author:phStrip(m.Artist&&m.Artist.value),lic:phStrip(m.LicenseShortName&&m.LicenseShortName.value),date:phStrip(m.DateTimeOriginal&&m.DateTimeOriginal.value).slice(0,10),link:ii.descriptionurl,title:phStrip(m.ObjectName&&m.ObjectName.value)||phFile(p.title).replace(/\.\w+$/,'')}}).filter(Boolean)}
+async function phWikidata(lat,lon,r){const km=Math.min(r,50000)/1000;
+  const q=`SELECT ?item ?itemLabel ?img ?coord WHERE { SERVICE wikibase:around { ?item wdt:P625 ?coord. bd:serviceParam wikibase:center "Point(${lon} ${lat})"^^geo:wktLiteral; wikibase:radius "${km}". } ?item wdt:P18 ?img. SERVICE wikibase:label { bd:serviceParam wikibase:language "en,[AUTO_LANGUAGE]". } } LIMIT 60`;
+  const j=await phJSON('https://query.wikidata.org/sparql?format=json&query='+encodeURIComponent(q),{headers:{Accept:'application/sparql-results+json'}});
+  return(j.results.bindings||[]).map(b=>{const m=/Point\(([-\d.]+) ([-\d.]+)\)/.exec(b.coord.value);if(!m)return null;const f=phFile(decodeURIComponent(b.img.value.split('/').pop()));
+    return{key:'c:'+f,file:f,thumb:phFilePath(f,400),full:phFilePath(f,1600),lat:+m[2],lon:+m[1],src:'Wikidata',author:'',lic:'',date:'',link:b.item.value,title:b.itemLabel?b.itemLabel.value:''}}).filter(Boolean)}
+async function phINat(lat,lon,r){const j=await phJSON(`https://api.inaturalist.org/v1/observations?lat=${lat}&lng=${lon}&radius=${Math.max(0.1,r/1000)}&photos=true&per_page=40&order_by=observed_on&quality_grade=research`);
+  const out=[];for(const o of j.results||[]){const loc=String(o.location||'').split(',').map(Number);if(loc.length<2||!isFinite(loc[0]))continue;const p=(o.photos||[])[0];if(!p||!p.url)continue;
+    const t=o.taxon||{};out.push({key:'i:'+p.id,thumb:p.url.replace('square','medium'),full:p.url.replace('square','large'),lat:loc[0],lon:loc[1],src:'iNaturalist',
+      author:(o.user&&(o.user.name||o.user.login))||'',lic:p.license_code?p.license_code.toUpperCase():'All rights reserved',date:o.observed_on||'',link:o.uri||`https://www.inaturalist.org/observations/${o.id}`,title:t.preferred_common_name||t.name||'Observation'})}
+  return out}
+async function phPanoramax(lat,lon,r){const b=phBox(lat,lon,Math.min(r,5000)).map(v=>v.toFixed(5)).join(',');
+  const j=await phJSON(`https://api.panoramax.xyz/api/search?bbox=${b}&limit=20`);
+  return(j.features||[]).map(f=>{const a=f.assets||{},th=a.thumb||Object.values(a).find(x=>(x.roles||[]).includes('thumbnail')),sd=a.sd||Object.values(a).find(x=>(x.roles||[]).includes('visual'))||a.hd;
+    const g=f.geometry&&f.geometry.coordinates;if(!th||!g)return null;const pr=f.properties||{},prov=(f.providers||pr.providers||[]).map(x=>x.name).filter(Boolean)[0];
+    return{key:'p:'+f.id,thumb:th.href,full:(sd||th).href,lat:g[1],lon:g[0],src:'Panoramax',author:prov||'',lic:pr.license||'',date:String(pr.datetime||'').slice(0,10),
+      link:`https://api.panoramax.xyz/?pic=${encodeURIComponent(f.id)}&focus=pic`,title:'Street-level photo'}}).filter(Boolean)}
+async function phKarta(lat,lon,r){const fd=new URLSearchParams({lat,lng:lon,radius:Math.min(r,5000)});
+  const j=await phJSON('https://api.openstreetcam.org/1.0/list/nearby-photos/',{method:'POST',body:fd});
+  const items=j.currentPageItems||j.osv&&j.osv.photos||[];
+  return items.map(p=>{const la=+p.lat,lo=+(p.lng||p.lon);if(!isFinite(la)||!isFinite(lo)||!(p.lth_name||p.th_name))return null;const base='https://api.openstreetcam.org/';
+    return{key:'k:'+p.id,thumb:base+(p.th_name||p.lth_name),full:base+(p.lth_name||p.name||p.th_name),lat:la,lon:lo,src:'KartaView',author:p.username||'',lic:'CC BY-SA 4.0',
+      date:String(p.shot_date||p.date_added||'').slice(0,10),link:p.sequence_id?`https://kartaview.org/details/${p.sequence_id}/${p.sequence_index||0}`:'https://kartaview.org/',title:'Street-level photo'}}).filter(Boolean)}
+async function phOverpass(lat,lon,r){const rad=Math.min(r,2000);
+  const q=`[out:json][timeout:15];nwr(around:${rad},${lat},${lon})[~"^(image|wikimedia_commons)$"~"."];out center tags 40;`;
+  const j=await phJSON('https://overpass-api.de/api/interpreter',{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'}});
+  const out=[];for(const e of j.elements||[]){const t=e.tags||{},la=e.lat??(e.center&&e.center.lat),lo=e.lon??(e.center&&e.center.lon);if(la==null)continue;
+    const name=t['name:en']||t.name||'';const link=`https://www.openstreetmap.org/${e.type}/${e.id}`;
+    const wc=t.wikimedia_commons;if(wc&&/^File:/i.test(wc)){const f=phFile(wc);out.push({key:'c:'+f,file:f,thumb:phFilePath(f,400),full:phFilePath(f,1600),lat:la,lon:lo,src:'OpenStreetMap',author:'',lic:'',date:'',link,title:name});continue}
+    const im=t.image;if(im&&/^https:\/\/.+\.(jpe?g|png|webp)(\?.*)?$/i.test(im))out.push({key:'u:'+im,thumb:im,full:im,lat:la,lon:lo,src:'OpenStreetMap',author:'',lic:'See source',date:'',link,title:name});
+    else if(im&&/^File:/i.test(im)){const f=phFile(im);out.push({key:'c:'+f,file:f,thumb:phFilePath(f,400),full:phFilePath(f,1600),lat:la,lon:lo,src:'OpenStreetMap',author:'',lic:'',date:'',link,title:name})}}
+  return out}
+async function phMapillary(lat,lon,r){let tok='';try{tok=localStorage.getItem('whg.mapillary')||''}catch(e){}if(!tok)return[];
+  // small boxes only: the centre one, widened by tiling a 3×3 grid on the larger steps
+  const step=0.004,n=r<=500?0:1,boxes=[];for(let i=-n;i<=n;i++)for(let j=-n;j<=n;j++){const cx=lon+i*step*2,cy=lat+j*step*2;boxes.push([cx-step,cy-step,cx+step,cy+step].map(v=>v.toFixed(5)).join(','))}
+  const res=await Promise.all(boxes.map(b=>phJSON(`https://graph.mapillary.com/images?fields=id,thumb_256_url,thumb_1024_url,captured_at,geometry,creator&bbox=${b}&limit=20`,{headers:{Authorization:'OAuth '+tok}}).catch(()=>({data:[]}))));
+  return res.flatMap(j=>j.data||[]).map(p=>{const g=p.geometry&&p.geometry.coordinates;if(!g)return null;
+    return{key:'m:'+p.id,thumb:p.thumb_256_url,full:p.thumb_1024_url||p.thumb_256_url,lat:g[1],lon:g[0],src:'Mapillary',author:(p.creator&&p.creator.username)||'',lic:'CC BY-SA (© Mapillary contributors)',
+      date:p.captured_at?new Date(p.captured_at).toISOString().slice(0,10):'',link:`https://www.mapillary.com/app/?pKey=${p.id}`,title:'Street-level photo'}}).filter(Boolean)}
+const PH_SOURCES=[phCommons,phWikidata,phINat,phPanoramax,phKarta,phOverpass,phMapillary];
+// author and licence for Commons files found through Wikidata or OpenStreetMap
+async function phFillCommons(list){const need=list.filter(p=>p.file&&!p.lic).slice(0,50);if(!need.length)return;
+  try{const j=await phTimeout(phJSON('https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&prop=imageinfo&iiprop=extmetadata|url&iiextmetadatafilter=Artist|LicenseShortName|DateTimeOriginal&titles='+encodeURIComponent(need.map(p=>'File:'+p.file).join('|'))),8000);
+    const by={};for(const p of Object.values((j.query||{}).pages||{})){const ii=(p.imageinfo||[])[0];if(ii)by[phFile(p.title)]=ii}
+    for(const p of need){const ii=by[p.file];if(!ii)continue;const m=ii.extmetadata||{};p.author=phStrip(m.Artist&&m.Artist.value);p.lic=phStrip(m.LicenseShortName&&m.LicenseShortName.value);
+      p.date=p.date||phStrip(m.DateTimeOriginal&&m.DateTimeOriginal.value).slice(0,10);p.commons=ii.descriptionurl}}catch(e){}}
+
+async function phSearch(lat,lon,onStep){const seen=new Map();let radius=0;
+  for(const r of PH_RADII){radius=r;const key=lat.toFixed(4)+','+lon.toFixed(4)+','+r;
+    let got=PH.cache.get(key);
+    if(!got){const res=await Promise.allSettled(PH_SOURCES.map(f=>phTimeout(f(lat,lon,r),12000)));got=res.flatMap(x=>x.status==='fulfilled'?x.value:[]);PH.cache.set(key,got);
+      if(PH.cache.size>60)PH.cache.delete(PH.cache.keys().next().value)}
+    for(const p of got){const k=p.key.toLowerCase();const d=phDist(lat,lon,p.lat,p.lon);if(d>r*1.05)continue;
+      const prev=seen.get(k);if(!prev||(prev.src==='Wikidata'||prev.src==='OpenStreetMap')&&p.src==='Wikimedia Commons')seen.set(k,Object.assign({},p,{d}))}
+    if(onStep&&onStep(r)===false)return null;
+    if(seen.size>=PH_WANT)break;}
+  const list=[...seen.values()].sort((a,b)=>a.d-b.d);await phFillCommons(list);return{list,radius}}
+
+// --- card section ---
+const photosBlock=()=>`<div class="phs" id="phs"><div class="phh">Photos nearby <small id="phst">Searching…</small></div><div class="phg" id="phg"></div></div>`;
+function photosLoad(ll){if(!ll)return;const tok=++PH.tok,st=()=>document.getElementById('phst'),g=()=>document.getElementById('phg');
+  g().innerHTML=Array(6).fill('<span class="phsk"></span>').join('');
+  phSearch(ll[1],ll[0],r=>{if(tok!==PH.tok)return false;if(st())st().textContent=`Searching within ${phFmtD(r)}…`}).then(res=>{
+    if(!res||tok!==PH.tok||!g())return;PH.list=res.list;const n=res.list.length;
+    if(!n){st().textContent='';g().innerHTML=`<p class="clsmall">No photos found within ${phFmtD(res.radius)}.</p>`;return}
+    st().textContent=`${n} within ${phFmtD(res.radius)}`;
+    const shown=res.list.slice(0,PH_SHOW);
+    g().innerHTML=shown.map((p,i)=>{const more=i===PH_SHOW-1&&n>PH_SHOW;
+      return`<button type="button" class="pht" data-i="${i}" title="${esc([p.title,phFmtD(p.d)+' away',p.src,p.author&&'© '+p.author,p.lic,p.date].filter(Boolean).join(' · '))}" aria-label="${esc((p.title||'Photo')+', '+phFmtD(p.d)+' away, '+p.src)}">`+
+        `<img src="${esc(p.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.pht').classList.add('bad')">`+
+        (more?`<b class="phmore">+${n-PH_SHOW+1}</b>`:`<small>${phFmtD(p.d)}</small>`)+`</button>`}).join('');
+    g().querySelectorAll('.pht').forEach(b=>b.onclick=()=>phOpen(+b.dataset.i))})}
+
+// --- full-size gallery: 80% of the screen, arrows by click, keyboard or swipe ---
+function phOpen(i){if(!PH.list.length)return;let el=PH.box;
+  if(!el){el=PH.box=document.createElement('div');el.className='phbox';el.setAttribute('role','dialog');el.setAttribute('aria-modal','true');el.setAttribute('aria-label','Photo gallery');
+    el.innerHTML=`<button class="phx" aria-label="Close gallery">×</button><button class="pha phprev" aria-label="Previous photo">‹</button><figure><div class="phimg"><img alt="" referrerpolicy="no-referrer"><span class="phspin"></span></div><figcaption></figcaption></figure><button class="pha phnext" aria-label="Next photo">›</button>`;
+    document.body.appendChild(el);
+    el.querySelector('.phx').onclick=phClose;el.querySelector('.phprev').onclick=()=>phGo(-1);el.querySelector('.phnext').onclick=()=>phGo(1);
+    el.addEventListener('click',e=>{if(e.target===el)phClose()});
+    const img=el.querySelector('img');img.onload=()=>el.classList.remove('loading');img.onerror=()=>{const p=PH.list[PH.i];if(p&&img.src!==p.thumb){img.src=p.thumb}else el.classList.remove('loading')};
+    let sx=null;el.addEventListener('touchstart',e=>{sx=e.touches[0].clientX},{passive:true});el.addEventListener('touchend',e=>{if(sx==null)return;const dx=e.changedTouches[0].clientX-sx;if(Math.abs(dx)>50)phGo(dx<0?1:-1);sx=null})}
+  PH.prevFocus=document.activeElement;el.hidden=false;document.addEventListener('keydown',phKey,true);phShow(i);el.querySelector('.phnext').focus({preventScroll:true})}
+function phShow(i){const n=PH.list.length;PH.i=(i+n)%n;const p=PH.list[PH.i],el=PH.box,img=el.querySelector('img');el.classList.add('loading');img.src=p.full;img.alt=p.title||'Photo';
+  const credit=[p.author?'© '+p.author:'',p.lic].filter(Boolean).join(' · ')||'Licence: see source';
+  el.querySelector('figcaption').innerHTML=`<b>${esc(p.title||'Photo')}</b><span>${phFmtD(p.d)} away · ${esc(p.src)}${p.date?' · '+esc(p.date):''}</span><span>${esc(credit)}</span>`+
+    `<span class="phlinks"><a href="${esc(p.link)}" target="_blank" rel="noopener noreferrer">Original ↗</a>${p.commons&&p.commons!==p.link?` <a href="${esc(p.commons)}" target="_blank" rel="noopener noreferrer">Commons file ↗</a>`:''}<em>${PH.i+1} / ${n}</em></span>`;
+  el.querySelectorAll('.pha').forEach(b=>b.hidden=n<2);
+  for(const d of[1,-1]){const q=PH.list[(PH.i+d+n)%n];if(q){const im=new Image();im.referrerPolicy='no-referrer';im.src=q.full}}}
+function phGo(d){phShow(PH.i+d)}
+function phClose(){if(!PH.box)return;PH.box.hidden=true;document.removeEventListener('keydown',phKey,true);if(PH.prevFocus&&PH.prevFocus.focus)PH.prevFocus.focus({preventScroll:true})}
+function phKey(e){if(e.key==='ArrowRight'){phGo(1)}else if(e.key==='ArrowLeft'){phGo(-1)}else if(e.key==='Escape'){phClose()}
+  else if(e.key==='Tab'){const f=[...PH.box.querySelectorAll('button:not([hidden]),a')];const a=f.indexOf(document.activeElement);e.preventDefault();f[(a+(e.shiftKey?-1:1)+f.length)%f.length].focus()}
+  else return;e.preventDefault();e.stopPropagation()}
 
 // start
 window.addEventListener('resize',resize);setSeason(season);theme();resize();
