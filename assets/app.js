@@ -1609,10 +1609,13 @@ function sunNow(t){const n=(t/864e5)+2440587.5-2451545.0,rad=Math.PI/180;
   const dec=Math.asin(Math.sin(eps)*Math.sin(lam)),ra=Math.atan2(Math.cos(eps)*Math.sin(lam),Math.cos(lam));
   const gmst=(18.697374558+24.06570982441908*n)%24;let lon=(ra/rad-gmst*15)%360;if(lon>180)lon-=360;if(lon<-180)lon+=360;
   return[lon,dec/rad]}
-const NIGHT_BANDS=[90,87,84,81,78,75,72];
-function drawNight(){const sp=sunNow(Date.now()),anti=[sp[0]+180>180?sp[0]-180:sp[0]+180,-sp[1]];
-  ctx.save();ctx.fillStyle=dark?'rgba(2,6,22,.085)':'rgba(8,14,40,.075)';
-  for(const r of NIGHT_BANDS){ctx.beginPath();path(d3.geoCircle().center(anti).radius(r).precision(2)());ctx.fill()}
+// The shading is built from many thin rings around the point opposite the sun, each a touch darker, chosen so the
+// total darkness follows a smooth curve: nothing while the sun is 3° up, deepening through twilight to full night
+// once it is 18° below the horizon. That reads as one soft gradient rather than visible steps.
+const NIGHT_BANDS=(()=>{const out=[],maxA=0.52,step=1;let prev=0;
+  for(let d=93;d>=72;d-=step){const t=(93-d)/21,T=maxA*t*t*(3-2*t),a=1-(1-T)/(1-prev);prev=T;out.push([d,a])}return out})();
+function drawNight(){const sp=sunNow(Date.now()),anti=[sp[0]+180>180?sp[0]-180:sp[0]+180,-sp[1]],col=dark?'2,6,22':'8,14,40';
+  ctx.save();for(const [r,a] of NIGHT_BANDS){ctx.beginPath();path(d3.geoCircle().center(anti).radius(r).precision(1)());ctx.fillStyle=`rgba(${col},${a.toFixed(4)})`;ctx.fill()}
   ctx.restore()}
 setInterval(()=>{if(showNight&&!running)draw()},60000);
 
