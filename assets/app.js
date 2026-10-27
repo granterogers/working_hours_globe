@@ -122,7 +122,7 @@ function draw(){
   ctx.save();ctx.beginPath();path({type:'Sphere'});ctx.clip();
   const sg=ctx.createRadialGradient(cx-s*.42,cy-s*.48,0,cx,cy,s*1.02);sg.addColorStop(0,pal.shadeLite);sg.addColorStop(.55,'rgba(0,0,0,0)');sg.addColorStop(1,pal.shadeDark);
   ctx.fillStyle=sg;ctx.fillRect(0,0,W,H);ctx.restore();
-  drawOverlays();if(typeof clDraw==='function')clDraw();const mapNames=showNames&&shown&&(!raster||BM().labels);drawLabels();if(showWeather)wxDraw(mapNames);if(showNames&&shown&&(!raster||BM().labels))drawMapLabels(tileA);drawPin();
+  drawOverlays();if(typeof clDraw==='function')clDraw();const mapNames=showNames&&shown&&(!raster||BM().labels);drawLabels();MAPLAB.length=0;MAPBOX.length=0;if(mapNames)drawMapLabels(tileA);if(showWeather)wxDraw(mapNames);drawPin();
 }
 
 function drawOverlays(){overlays.forEach(L=>{if(!L.on)return;L.fc.features.forEach(f=>{const g=f.geometry;if(!g||/Point/.test(g.type))return;
@@ -474,7 +474,7 @@ let vtZ=0;
 function drawMapLabels(alpha){
   const cand=[];for(const dk of vtUsed){const dd=vdata.get(dk);if(dd&&dd.ok)for(const L of vtLabels(dk,dd))if(vtZ>=L.minz)cand.push(L)}
   if(!cand.length)return;cand.sort((p,q)=>q.pri-p.pri);
-  const boxes=placed.map(r=>[r.x0,r.y0,r.x1,r.y1]).concat(showWeather?WX.boxes:[]),seen=new Map();
+  const boxes=MAPBOX;boxes.push(...placed.map(r=>[r.x0,r.y0,r.x1,r.y1]));const seen=new Map();
   const free=bs=>!bs.some(b=>b[0]<0||b[1]<0||b[2]>W||b[3]>H||boxes.some(q=>b[0]-3<q[2]&&b[2]+3>q[0]&&b[1]-2<q[3]&&b[3]+2>q[1]));
   const near=(name,x,y,gap)=>{const s=seen.get(name);return s&&s.some(q=>Math.hypot(q[0]-x,q[1]-y)<gap)};
   const mark=(name,q)=>{if(!seen.has(name))seen.set(name,[]);seen.get(name).push(q)};
@@ -505,7 +505,7 @@ function drawMapLabels(alpha){
       text(L.name,x,y+13,font,L.kind==='peak'?LINK.peak:L.color);if(ele)text(ele,x,y+26,LF.small,LINK.peak);n++;continue}
     const font=L.kind==='water'?LF.water:L.cls==='city'?LF.city:L.cls==='town'?LF.town:/hamlet|neighbourhood|locality|isolated|islet/.test(L.cls)?LF.small:LF.place;
     const w=tw(L.name,font)+6,h=L.cls==='city'?18:15,bx=[x-w/2,y-h/2,x+w/2,y+h/2];
-    if(near(L.name,x,y,600)||!free([bx]))continue;boxes.push(bx);mark(L.name,q);
+    if(near(L.name,x,y,600)||!free([bx]))continue;boxes.push(bx);mark(L.name,q);if(L.kind==='place')MAPLAB.push({name:L.name,x,y,v:L.v,cls:L.cls,pri:L.pri});
     text(L.name,x,y,font,L.kind==='water'?LINK.water:/city|town|village|island/.test(L.cls)?LINK.place:LINK.small,L.cls==='city'?3.5:3);n++;}
   ctx.restore();}
 
@@ -1346,10 +1346,14 @@ const wxTempCol=t=>t<=-10?'#5b6ee1':t<=0?'#4f9de0':t<=10?'#39b6c8':t<=18?'#4cc38
 const wxKey=(lat,lon)=>lat.toFixed(2)+','+lon.toFixed(2);
 // which places get a reading: the towns and cities on the street map once zoomed in, otherwise cities with a
 // major airport. Most important first; the drawing step keeps them from overlapping.
+// places drawn on the map this frame (filled by drawMapLabels), and their label boxes
+const MAPLAB=[],MAPBOX=[];
+const WX_RANK={city:4,town:3,village:2,suburb:1};
+// which places get a reading: once zoomed in, only towns whose names are actually shown on the map (badge just
+// under the name); zoomed out, cities with a major airport (badge carries the name). Bigger places first.
 function wxCands(){const out=[];
-  if(WX.mapNames){for(const dk of vtUsed){const dd=vdata.get(dk);if(!dd||!dd.ok)continue;
-      for(const L of vtLabels(dk,dd))if(L.kind==='place'&&vtZ>=L.minz&&/city|town|village|suburb/.test(L.cls)){
-        const lat=Math.asin(clamp(L.v[2],-1,1))*DEG,lon=Math.atan2(L.v[1],L.v[0])*DEG;out.push({name:L.name,v:L.v,lat,lon,pri:L.pri,under:true})}}}
+  if(WX.mapNames){for(const L of MAPLAB){const r=WX_RANK[L.cls];if(!r)continue;
+      out.push({name:L.name,v:L.v,lat:Math.asin(clamp(L.v[2],-1,1))*DEG,lon:Math.atan2(L.v[1],L.v[0])*DEG,pri:r*1000+L.pri,under:true,sx:L.x,sy:L.y})}}
   else if(airports){if(!WX.cities){const seen=new Set();WX.cities=[];for(const a of airports)if(a[6]===1&&!seen.has(a[2]+a[3])){seen.add(a[2]+a[3]);WX.cities.push({name:String(a[2]||a[1]).replace(/ am Main$/,''),lat:a[4],lon:a[5],v:vec(a[5],a[4]),pri:0})}}
     out.push(...WX.cities)}
   else loadAirports().then(()=>draw()).catch(()=>{});
@@ -1366,13 +1370,15 @@ async function wxFetch(){if(!showWeather||WX.busy||Date.now()<(WX.wait||0))retur
   draw();m3dSync()}
 // badges sit just under the town's name on the street map; zoomed out they carry the city name themselves
 function wxDraw(mapNames){WX.mapNames=mapNames;const font='600 12px "Bricolage Grotesque", "Segoe UI", sans-serif',nfont='500 11px "Bricolage Grotesque", "Segoe UI", sans-serif',boxes=placed.map(r=>[r.x0,r.y0,r.x1,r.y1]);
-  WX.boxes=[];WX.shown=[];const cap=clamp(Math.round(W*H/26000),12,70),names=new Set();let n=0;
+  WX.boxes=[];WX.shown=[];const cap=clamp(Math.round(W*H/(mapNames?95000:45000)),5,mapNames?18:30),gap=mapNames?170:120,names=new Set(),at=[];let n=0;
+  if(mapNames)boxes.push(...MAPBOX);
   ctx.save();ctx.textBaseline='middle';ctx.textAlign='left';
   for(const p of wxCands()){if(n>=cap)break;const v=p.v,X=M[0]*v[0]+M[1]*v[1]+M[2]*v[2];if(X<0.12)continue;
     const x=cx+SC*(M[3]*v[0]+M[4]*v[1]),y=cy-SC*(M[6]*v[0]+M[7]*v[1]+M[8]*v[2]);if(x<20||y<20||x>W-20||y>H-20)continue;
+    if(at.some(a=>Math.hypot(a[0]-x,a[1]-y)<gap))continue;
     if(names.has(p.name))continue;
     const q=WX.pts.get(wxKey(p.lat,p.lon)),tt=q?Math.round(q.temp)+'°':'…',name=p.under?'':p.name,nw=name?tw(name,nfont)+6:0,w=nw+tw(tt,font)+34,h=24,by=p.under?y+12:y-h/2,bx=[x-w/2,by,x+w/2,by+h];
-    if(boxes.some(b=>bx[0]<b[2]+3&&bx[2]+3>b[0]&&bx[1]<b[3]+2&&bx[3]+2>b[1]))continue;boxes.push(bx);WX.boxes.push(bx);WX.shown.push(p);names.add(p.name);n++;if(!q)continue;
+    if(boxes.some(b=>bx[0]<b[2]+3&&bx[2]+3>b[0]&&bx[1]<b[3]+2&&bx[3]+2>b[1]))continue;boxes.push(bx);WX.boxes.push(bx);WX.shown.push(p);names.add(p.name);at.push([x,y]);n++;if(!q)continue;
     ctx.beginPath();ctx.roundRect?ctx.roundRect(bx[0],bx[1],w,h,12):ctx.rect(bx[0],bx[1],w,h);ctx.fillStyle=dark&&!mapNames?'rgba(14,20,36,.85)':'rgba(255,255,255,.92)';ctx.fill();
     ctx.lineWidth=2;ctx.strokeStyle=wxTempCol(q.temp);ctx.stroke();
     const im=wxImg(q.code,q.day);if(im.complete&&im.naturalWidth)ctx.drawImage(im,bx[0]+5,by+2,20,20);
