@@ -15,6 +15,7 @@ const BANDS=[
   {lo:21,hi:29,name:"Overnight",sub:"starts 21:00–05:00",dark:"#5a6bdc",light:"#4656c8"}];
 const DEG=180/Math.PI, MINK=0.85, MAXK=9000;
 let S=12,E=20,season=0,W=0,H=0,dpr=1,base=300,cx=0,cy=0;
+let showCw=(()=>{try{return localStorage.getItem('whg.cw')==='on'}catch(e){return false}})();
 let showCams=(()=>{try{return localStorage.getItem('whg.cams')==='on'}catch(e){return false}})();
 let showWeather=(()=>{try{return localStorage.getItem('whg.weather')==='on'}catch(e){return false}})();
 let showNames=(()=>{try{return localStorage.getItem('whg.names')!=='off'}catch(e){return true}})();
@@ -123,7 +124,7 @@ function draw(){
   ctx.save();ctx.beginPath();path({type:'Sphere'});ctx.clip();
   const sg=ctx.createRadialGradient(cx-s*.42,cy-s*.48,0,cx,cy,s*1.02);sg.addColorStop(0,pal.shadeLite);sg.addColorStop(.55,'rgba(0,0,0,0)');sg.addColorStop(1,pal.shadeDark);
   ctx.fillStyle=sg;ctx.fillRect(0,0,W,H);ctx.restore();
-  drawOverlays();if(typeof clDraw==='function')clDraw();if(showCams)camDraw();const mapNames=showNames&&shown&&(!raster||BM().labels);drawLabels();MAPLAB.length=0;MAPBOX.length=0;if(mapNames)drawMapLabels(tileA);if(showWeather)wxDraw(mapNames);drawPin();
+  drawOverlays();if(typeof clDraw==='function')clDraw();if(showCams)camDraw();if(showCw)cwDraw();const mapNames=showNames&&shown&&(!raster||BM().labels);drawLabels();MAPLAB.length=0;MAPBOX.length=0;if(mapNames)drawMapLabels(tileA);if(showWeather)wxDraw(mapNames);drawPin();
 }
 
 function drawOverlays(){overlays.forEach(L=>{if(!L.on)return;L.fc.features.forEach(f=>{const g=f.geometry;if(!g||/Point/.test(g.type))return;
@@ -732,6 +733,8 @@ function clickAt(x,y){
   const fh=placed.find(q=>q.L.fav&&x>=q.x0&&x<=q.x1&&y>=q.y0&&y<=q.y1);
   if(fh){if(selected)selected=null;showFav(fh.L.fav);draw();return}
   if(activeFav){activeFav=null;draw()}
+  const cw=showCw?cwHit(x,y):null;if(cw){cwShow(cw);draw();return}
+  if(CW.sel){CW.sel=null;draw()}
   const wc=showCams?camHit(x,y):null;if(wc){camShow(wc);draw();return}
   if(CAM.sel){CAM.sel=null;draw()}
   const ch=typeof clHit==='function'?clHit(x,y):null;if(ch){clShow(ch);draw();return}
@@ -769,7 +772,7 @@ function showInfo(title,where,tz,ll){activeFav=null;draft=null;infoTok++;const z
   <div class="big"><i style="background:${pal['b'+b]}"></i>${hours(o)}</div><p class="bandname">${BANDS[b].name}, ${season?'summer':'winter'}</p>
   <dl><dt>${season?'Winter':'Summer'}</dt><dd>${hours(other)}</dd><dt>Difference</dt><dd>${vsUK(o)}</dd><dt>Time zone</dt><dd>${utc(o)}</dd></dl>${ll?wxBlock():''}${ll?photosBlock():''}${ll?flightsBlock():''}`;
   wireFlights(ll);wxLoad(ll);photosLoad(ll);document.getElementById('info').classList.add('show');}
-function hideInfo(){document.getElementById('info').classList.remove('show');if(typeof CAM!=='undefined'&&CAM.sel){CAM.sel=null;draw()}PH.tok++;if(clickPin){clickPin=null;draw()}if(typeof CL!=='undefined'&&CL.sel){CL.sel=null;draw()}if(selected||activeFav||draft){selected=null;activeFav=null;draft=null;draw()}}
+function hideInfo(){document.getElementById('info').classList.remove('show');if(typeof CW!=='undefined'&&CW.sel){CW.sel=null;draw()}if(typeof CAM!=='undefined'&&CAM.sel){CAM.sel=null;draw()}PH.tok++;if(clickPin){clickPin=null;draw()}if(typeof CL!=='undefined'&&CL.sel){CL.sel=null;draw()}if(selected||activeFav||draft){selected=null;activeFav=null;draft=null;draw()}}
 document.getElementById('infox').onclick=hideInfo;
 
 // panel & controls
@@ -797,17 +800,25 @@ function stripKey(o){const el=document.getElementById('strip');if(!el)return;el.
 // base map menu (top right)
 function setShow(k,v){if(k==='hours'){showHours=v;try{localStorage.setItem('whg.hours',v?'on':'off')}catch(e){}ui()}
   else if(k==='names'){showNames=v;try{localStorage.setItem('whg.names',v?'on':'off')}catch(e){}}
+  else if(k==='cw'){showCw=v;try{localStorage.setItem('whg.cw',v?'on':'off')}catch(e){}if(v)cwQueue();else if(CW.sel){CW.sel=null;hideInfo()}}
   else if(k==='cams'){showCams=v;try{localStorage.setItem('whg.cams',v?'on':'off')}catch(e){}if(v)camQueue();else if(CAM.sel){CAM.sel=null;hideInfo()}}
   else if(k==='weather'){showWeather=v;try{localStorage.setItem('whg.weather',v?'on':'off')}catch(e){}if(v){wxQueue();if(m3d.map)m3dWx()}}
   else if(k==='cl'){CL.on=v;clStore.set('whg.clOn',v);if(!v&&CL.sel){CL.sel=null;hideInfo()}stripRender()}
   draw();m3dSync()}
 // Layers panel (bottom left, open unless you fold it): what's drawn on the map
+const LYI={
+  hours:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  cl:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="#2fb36a" stroke="#fff" stroke-width="2"/></svg>',
+  cw:'<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5" fill="#2f6fe0" stroke="#fff" stroke-width="1.5"/><rect x="7" y="7.5" width="10" height="6.5" fill="#fff"/><rect x="8.5" y="9" width="7" height="3.6" fill="#2f6fe0"/><rect x="5.5" y="15" width="13" height="2" fill="#fff"/></svg>',
+  names:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12.5V5a2 2 0 0 1 2-2h7.5l8.5 8.5-9.5 9.5z"/><circle cx="8" cy="8" r="1.6" fill="currentColor"/></svg>',
+  weather:()=>`<img src="data:image/svg+xml,${encodeURIComponent(WXI.psun)}" alt="">`,
+  cams:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#1f2937" stroke="#fff" stroke-width="1.5"/><rect x="6.5" y="9" width="8" height="6" rx="1" fill="#fff"/><path d="M14.5 11l3.5-2v6l-3.5-2z" fill="#fff"/><circle cx="19" cy="5" r="2.6" fill="#e2453c"/></svg>'};
 function lyrRender(){const m=document.getElementById('lyrb');if(!m)return;
-  const tick=(k,on,label,extra)=>`<label class="bmtick"><input type="checkbox" data-show="${k}" ${on?'checked':''}><span>${label}</span>${extra||''}</label>`;
+  const ic=k=>`<i class="lyi" aria-hidden="true">${typeof LYI[k]==='function'?LYI[k]():LYI[k]}</i>`;
+  const tick=(k,on,label,extra)=>`<label class="bmtick"><input type="checkbox" data-show="${k}" ${on?'checked':''}>${ic(k)}<span>${label}</span>${extra||''}</label>`;
   m.innerHTML=tick('hours',showHours,'Working hours')+
     (CL.data.length?tick('cl',CL.on,'Colivings',`<small class="clcnt" id="clcnt"></small><button type="button" class="clfb${clActive(CL.f)?' on':''}" id="clfb" aria-label="Filter colivings" title="Filter and updates">${FUNNEL}</button>`):'')+
-    tick('names',showNames,'Place names')+tick('weather',showWeather,'Weather now','<small class="clcnt">°C</small>')+
-    tick('cams',showCams,'Webcams');
+    tick('cw',showCw,'Coworking spaces')+tick('cams',showCams,'Webcams')+tick('weather',showWeather,'Weather now','<small class="clcnt">°C</small>')+tick('names',showNames,'Place names');
   m.querySelectorAll('[data-show]').forEach(c=>c.onchange=()=>setShow(c.dataset.show,c.checked));
   const fb=m.querySelector('#clfb');if(fb)fb.onclick=e=>{e.preventDefault();e.stopPropagation();clToggle()};clCounts();lyrFit()}
 function lyrFold(open){const el=document.getElementById('lyr'),h=document.getElementById('lyrh');el.classList.toggle('folded',!open);h.setAttribute('aria-expanded',String(open));
@@ -927,11 +938,12 @@ function m3dGeo(){
   overlays.forEach((L,li)=>{if(L.on)L.fc.features.forEach((f,fi)=>{if(f.geometry)ov.features.push({type:'Feature',properties:{li,fi,c:L.color,n:(f.properties&&f.properties.name)||''},geometry:f.geometry})})});
   const wx={type:'FeatureCollection',features:showWeather?(WX.shown3d||[]).map(p=>{const q=WX.pts.get(wxKey(p.lat,p.lon));return q&&{type:'Feature',properties:{t:p.name+'  '+Math.round(q.temp)+'°',c:wxTempCol(q.temp),ic:'wx-'+wxKind(q.code,q.day)},geometry:{type:'Point',coordinates:[p.lon,p.lat]}}}).filter(Boolean):[]};
   const cm={type:'FeatureCollection',features:showCams?[...CAM.list.values()].map(c=>({type:'Feature',properties:{id:c.id,live:c.src==='windy'?1:0},geometry:{type:'Point',coordinates:[c.lon,c.lat]}})):[]};
-  return{tz,lab,cl,fv,ov,wx,cm}}
+  const cwk={type:'FeatureCollection',features:showCw?[...CW.list.values()].map(c=>({type:'Feature',properties:{id:c.id},geometry:{type:'Point',coordinates:[c.lon,c.lat]}})):[]};
+  return{tz,lab,cl,fv,ov,wx,cm,cwk}}
 function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.getStyle())return}catch(e){return}
   try{g=m3dGeo()}catch(e){return}
   const src=(id,data)=>{const s=map.getSource(M3D_OWN+id);if(s)s.setData(data);else map.addSource(M3D_OWN+id,{type:'geojson',data})};
-  try{src('tz',g.tz);src('lab',g.lab);src('cl',g.cl);src('fv',g.fv);src('ov',g.ov);src('wx',g.wx);src('cm',g.cm)}catch(e){return}
+  try{src('tz',g.tz);src('lab',g.lab);src('cl',g.cl);src('fv',g.fv);src('ov',g.ov);src('wx',g.wx);src('cm',g.cm);src('cwk',g.cwk)}catch(e){return}
   const font=['Noto Sans Bold'],dk=BM().dark||false;
   const lay=(def,before)=>{if(!map.getLayer(def.id))map.addLayer(def,before)};
   // working-hours colours fade out as you zoom in, like on the globe
@@ -955,6 +967,7 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
       'text-allow-overlap':true,'icon-allow-overlap':true,'icon-optional':true},
     paint:{'text-color':'#ffffff','text-halo-color':'rgba(10,16,30,.85)','text-halo-width':1.8}});
   lay({id:M3D_OWN+'cm',type:'circle',source:M3D_OWN+'cm',paint:{'circle-color':['case',['==',['get','live'],1],'#1f2937','#ffffff'],'circle-radius':7,'circle-stroke-color':['case',['==',['get','live'],1],'#e2453c','#1f2937'],'circle-stroke-width':2}});
+  lay({id:M3D_OWN+'cwk',type:'circle',source:M3D_OWN+'cwk',paint:{'circle-color':'#2f6fe0','circle-radius':6.5,'circle-stroke-color':'#fff','circle-stroke-width':1.8}});
   // the base map's own names follow the Place names switch
   for(const l of map.getStyle().layers)if(l.type==='symbol'&&!l.id.startsWith(M3D_OWN))try{map.setLayoutProperty(l.id,'visibility',showNames?'visible':'none')}catch(e){}}
 // weather in 3D: towns and cities spread across the view, bigger places first, about 140 px apart
@@ -965,10 +978,11 @@ function m3dWx(){const map=m3d.map;if(!map||!showWeather||m3d.el.hidden)return;c
     if(at.some(a=>Math.hypot(a[0]-q.x,a[1]-q.y)<140))continue;at.push([q.x,q.y]);out.push(p)}
   WX.shown3d=out;m3dSync();wxFetch()}
 // clicks in 3D open the same cards as on the globe
-function m3dClick(e){const map=m3d.map,hits=map.queryRenderedFeatures(e.point,{layers:[M3D_OWN+'cm',M3D_OWN+'fv',M3D_OWN+'cl',M3D_OWN+'ovp',M3D_OWN+'ovl',M3D_OWN+'ovf'].filter(id=>map.getLayer(id))});
+function m3dClick(e){const map=m3d.map,hits=map.queryRenderedFeatures(e.point,{layers:[M3D_OWN+'cwk',M3D_OWN+'cm',M3D_OWN+'fv',M3D_OWN+'cl',M3D_OWN+'ovp',M3D_OWN+'ovl',M3D_OWN+'ovf'].filter(id=>map.getLayer(id))});
   const ll=[e.lngLat.lng,e.lngLat.lat];if(m3d.pin){m3d.pin.remove();m3d.pin=null}
   m3d.pivot=e.lngLat;   // turning and tilting now orbit around this spot
   const h=hits[0];
+  if(h&&h.layer.id===M3D_OWN+'cwk'){const c=CW.list.get(h.properties.id);if(c){cwShow(c);return}}
   if(h&&h.layer.id===M3D_OWN+'cm'){const c=CAM.list.get(h.properties.id);if(c){camShow(c);return}}
   if(h&&h.layer.id===M3D_OWN+'fv'){const f=favs[h.properties.i];if(f){showFav(f);return}}
   if(h&&h.layer.id===M3D_OWN+'cl'){const x=CL.byId.get(h.properties.id);if(x){clShow(x);return}}
@@ -1062,7 +1076,7 @@ function renderLayers(){const ul=document.getElementById('layers');ul.innerHTML=
 // tucked behind one button in Map layers, a details card per listing, and a check for new additions.
 // data/coliving.json is refreshed by .github/workflows/coliving.yml (scripts/coliving.py update).
 const CL={data:[],vis:[],byId:new Map(),on:true,sel:null,meta:null,f:null};
-const CLT={p:{name:'Permanent coliving',short:'Permanent',col:'#2fb36a'},u:{name:'Pop-up or dated edition',short:'Pop-up',col:'#f08a24'},f:{name:'Nomad festival',short:'Festival',col:'#a35bd6'}};
+const CLT={p:{name:'Permanent coliving',short:'Permanent',col:'#2fb36a'},u:{name:'Pop-up or dated edition',short:'Pop-up',col:'#2fb36a'},f:{name:'Nomad festival',short:'Festival',col:'#2fb36a'}};
 const CL_MAX=3000,CL_STEP=50;
 const CL_DEF={q:'',types:['p','u','f'],min:0,max:CL_MAX,nop:true,rooms:[],stay:0,rating:0,tags:[],vibes:[],region:'',month:''};
 const CL_TAGS=['community','coworking','wellness','city','beach','rural','surf','island','mountain','eco','startup','ski'];
@@ -1522,7 +1536,8 @@ async function camFetch(){if(!showCams||CAM.busy||Date.now()<CAM.wait)return;con
             camAdd({id:'d'+b.item.value.split('/').pop(),src:'wikidata',title:b.itemLabel?b.itemLabel.value:'Webcam',lat:+m[2],lon:+m[1],link:b.url.value,place:''})}}).catch(()=>{}))}}
     await Promise.all(jobs)}
   finally{CAM.busy=false}
-  if(CAM.list.size>1500){let n=CAM.list.size-1200;for(const kk of CAM.list.keys()){CAM.list.delete(kk);if(--n<=0)break}}
+  // keep the saved Windy list whole; only the OpenStreetMap/Wikidata extras are trimmed if they pile up
+  const extra=[...CAM.list.values()].filter(c=>c.src!=='windy');if(extra.length>1500)for(const c of extra.slice(0,extra.length-1200))CAM.list.delete(c.id);
   draw();m3dSync()}
 function camProj(v){if(M[0]*v[0]+M[1]*v[1]+M[2]*v[2]<0.03)return null;return[cx+SC*(M[3]*v[0]+M[4]*v[1]),cy-SC*(M[6]*v[0]+M[7]*v[1]+M[8]*v[2])]}
 // a small camera marker: dark with a red live dot for Windy cams, light for listed links (zoomed in only)
@@ -1542,6 +1557,45 @@ function camShow(x){activeFav=null;draft=null;selected=null;if(typeof CL!=='unde
     `<div>${hoursBlock(tzAt([x.lon,x.lat]))}</div>${wxBlock()}`;
   wxLoad([x.lon,x.lat]);
   document.getElementById('info').classList.add('show')}
+
+// Coworking spaces from OpenStreetMap (amenity=coworking_space, office=coworking), the largest open,
+// worldwide list. Loaded for the area in view in 4°×4° squares (each fetched once), from a regional zoom in.
+const CW={list:new Map(),sel:null,timer:0,busy:false,done:new Set(),wait:0,cell:4};
+function cwQueue(){if(!showCw)return;clearTimeout(CW.timer);CW.timer=setTimeout(cwFetch,600)}
+async function cwFetch(){if(!showCw||CW.busy||Date.now()<CW.wait)return;const vw=camView();if(!vw)return;
+  if(vw.e-vw.w>40||vw.n-vw.s>30){return}   // too wide: zoom in a little first
+  const c=CW.cell,cells=[];
+  for(let la=Math.floor(vw.s/c)*c;la<vw.n;la+=c)for(let lo=Math.floor(vw.w/c)*c;lo<vw.e;lo+=c){const key=la+','+lo;if(!CW.done.has(key))cells.push([la,lo,key])}
+  if(!cells.length)return;CW.busy=true;
+  // nearest the centre first, a few squares per round
+  const cy=(vw.s+vw.n)/2,cxl=(vw.w+vw.e)/2;cells.sort((a,b)=>Math.hypot(a[0]+c/2-cy,a[1]+c/2-cxl)-Math.hypot(b[0]+c/2-cy,b[1]+c/2-cxl));
+  try{for(const [la,lo,key] of cells.slice(0,4)){const bb=`${la},${lo},${la+c},${lo+c}`;
+      try{const j=await phJSON('https://overpass-api.de/api/interpreter',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+          body:'data='+encodeURIComponent(`[out:json][timeout:25];(nwr["amenity"="coworking_space"](${bb});nwr["office"="coworking"](${bb}););out center tags;`)});
+        CW.done.add(key);
+        for(const e of j.elements||[]){const t=e.tags||{},lat=e.lat??(e.center&&e.center.lat),lon=e.lon??(e.center&&e.center.lon);if(lat==null)continue;
+          const addr=[[t['addr:street'],t['addr:housenumber']].filter(Boolean).join(' '),t['addr:city']||t['addr:place']].filter(Boolean).join(', ');
+          CW.list.set(e.type+e.id,{id:e.type+e.id,name:t['name:en']||t.name||'Coworking space',lat,lon,v:vec(lon,lat),addr,web:t.website||t['contact:website']||t.url||'',
+            hours:t.opening_hours||'',phone:t.phone||t['contact:phone']||'',osm:`https://www.openstreetmap.org/${e.type}/${e.id}`})}}
+      catch(e){CW.wait=Date.now()+(/429/.test(String(e&&e.message))?60000:20000);break}}}
+  finally{CW.busy=false}
+  draw();m3dSync();if(Date.now()>=CW.wait)cwQueue()}
+// marker: a blue rounded square with a little laptop
+function cwMark(X,Y,r,sel){ctx.beginPath();ctx.roundRect?ctx.roundRect(X-r,Y-r,2*r,2*r,r*0.45):ctx.rect(X-r,Y-r,2*r,2*r);ctx.fillStyle='#2f6fe0';ctx.fill();
+  ctx.lineWidth=sel?3:1.5;ctx.strokeStyle=sel?'#ffd27a':'#fff';ctx.stroke();const s=r/8;ctx.fillStyle='#fff';
+  ctx.fillRect(X-4.5*s,Y-4*s,9*s,5.5*s);ctx.fillStyle='#2f6fe0';ctx.fillRect(X-3.3*s,Y-2.9*s,6.6*s,3.4*s);ctx.fillStyle='#fff';ctx.fillRect(X-6*s,Y+2.2*s,12*s,1.8*s)}
+function cwDraw(){cwQueue();if(!CW.list.size)return;const r=k<8?6:8,at=[];ctx.save();
+  for(const x of CW.list.values()){const p=camProj(x.v);if(!p||p[0]<-10||p[1]<-10||p[0]>W+10||p[1]>H+10)continue;
+    if(x!==CW.sel&&at.some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<r*2.2))continue;at.push(p);cwMark(p[0],p[1],r,x===CW.sel)}
+  ctx.restore()}
+function cwHit(x,y){let best=null,bd=12;for(const c of CW.list.values()){const p=camProj(c.v);if(!p)continue;const d=Math.hypot(p[0]-x,p[1]-y);if(d<bd){bd=d;best=c}}return best}
+function cwShow(x){activeFav=null;draft=null;selected=null;if(typeof CL!=='undefined')CL.sel=null;CAM.sel=null;clickPin=null;CW.sel=x;infoTok++;
+  const rows=[['Address',x.addr],['Opening hours',x.hours],['Phone',x.phone]].filter(r=>r[1]);
+  document.getElementById('infob').innerHTML=`<p class="cltype"><i style="background:#2f6fe0;border-radius:3px"></i>Coworking space</p><h2>${esc(x.name)}</h2>`+
+    (rows.length?`<dl class="meta">${rows.map(([a,b])=>`<dt>${a}</dt><dd>${esc(b)}</dd>`).join('')}</dl>`:'')+
+    `<div class="cllinks">${x.web?`<a class="clbtn" href="${esc(/^https?:/.test(x.web)?x.web:'https://'+x.web)}" target="_blank" rel="noopener noreferrer">Website ↗</a>`:''}<a class="clbtn" href="${esc(x.osm)}" target="_blank" rel="noopener noreferrer">OpenStreetMap ↗</a></div>`+
+    `<div>${hoursBlock(tzAt([x.lon,x.lat]))}</div>${wxBlock()}${photosBlock()}${flightsBlock()}`;
+  wxLoad([x.lon,x.lat]);photosLoad([x.lon,x.lat]);wireFlights([x.lon,x.lat]);document.getElementById('info').classList.add('show')}
 
 // start
 window.addEventListener('resize',resize);setSeason(season);theme();resize();
