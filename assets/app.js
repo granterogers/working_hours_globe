@@ -15,6 +15,7 @@ const BANDS=[
   {lo:21,hi:29,name:"Overnight",sub:"starts 21:00–05:00",dark:"#5a6bdc",light:"#4656c8"}];
 const DEG=180/Math.PI, MINK=0.85, MAXK=9000;
 let S=12,E=20,season=0,W=0,H=0,dpr=1,base=300,cx=0,cy=0;
+let showNight=(()=>{try{return localStorage.getItem('whg.night')!=='off'}catch(e){return true}})();
 let showCw=(()=>{try{return localStorage.getItem('whg.cw')==='on'}catch(e){return false}})();
 let showCams=(()=>{try{return localStorage.getItem('whg.cams')==='on'}catch(e){return false}})();
 let showWeather=(()=>{try{return localStorage.getItem('whg.weather')==='on'}catch(e){return false}})();
@@ -110,8 +111,9 @@ function draw(){
   // pick detail by zoom; drop one level while the globe is moving, then redraw crisp at rest
   const lv=k<2.5?0:k<5?1:2;
   const TZ=[D.tzL,D.tzM,D.tz][lv],CB=[D.cbL,D.cbM,D.cb][lv];
-  const tileA=clamp((k-TILE_K)/4.5,0,1),bA=1-tileA,raster=basemap!=='street';
-  // whichever base map is chosen fades in as you zoom towards a country, replacing the time-zone colours once fully in
+  // with working hours on, the base map fades in as you zoom towards a country, replacing the time-zone colours;
+  // with them off, the base map shows in full at every zoom
+  const tileA=showHours?clamp((k-TILE_K)/4.5,0,1):1,bA=1-tileA,raster=basemap!=='street';
   if(bA>0.02){ctx.globalAlpha=bA;ctx.lineJoin='round';strokeFC(CB,pal.coast1,k>4?9:6);strokeFC(CB,pal.coast2,k>4?3.5:2.5);ctx.globalAlpha=1}
   fillBands(D.gaps);fillBands(TZ);
   const shown=tileA>0&&drawTiles();if(shown){ctx.globalAlpha=tileA;ctx.drawImage(tcv,0,0,W,H);ctx.globalAlpha=1}
@@ -124,6 +126,7 @@ function draw(){
   ctx.save();ctx.beginPath();path({type:'Sphere'});ctx.clip();
   const sg=ctx.createRadialGradient(cx-s*.42,cy-s*.48,0,cx,cy,s*1.02);sg.addColorStop(0,pal.shadeLite);sg.addColorStop(.55,'rgba(0,0,0,0)');sg.addColorStop(1,pal.shadeDark);
   ctx.fillStyle=sg;ctx.fillRect(0,0,W,H);ctx.restore();
+  if(showNight)drawNight();
   drawOverlays();if(typeof clDraw==='function')clDraw();if(showCams)camDraw();if(showCw)cwDraw();const mapNames=showNames&&shown&&(!raster||BM().labels);drawLabels();MAPLAB.length=0;MAPBOX.length=0;if(mapNames)drawMapLabels(tileA);if(showWeather)wxDraw(mapNames);drawPin();
 }
 
@@ -800,6 +803,7 @@ function stripKey(o){const el=document.getElementById('strip');if(!el)return;el.
 // base map menu (top right)
 function setShow(k,v){if(k==='hours'){showHours=v;try{localStorage.setItem('whg.hours',v?'on':'off')}catch(e){}ui()}
   else if(k==='names'){showNames=v;try{localStorage.setItem('whg.names',v?'on':'off')}catch(e){}}
+  else if(k==='night'){showNight=v;try{localStorage.setItem('whg.night',v?'on':'off')}catch(e){}}
   else if(k==='cw'){showCw=v;try{localStorage.setItem('whg.cw',v?'on':'off')}catch(e){}if(v)cwQueue();else if(CW.sel){CW.sel=null;hideInfo()}}
   else if(k==='cams'){showCams=v;try{localStorage.setItem('whg.cams',v?'on':'off')}catch(e){}if(v)camQueue();else if(CAM.sel){CAM.sel=null;hideInfo()}}
   else if(k==='weather'){showWeather=v;try{localStorage.setItem('whg.weather',v?'on':'off')}catch(e){}if(v){wxQueue();if(m3d.map)m3dWx()}}
@@ -812,13 +816,14 @@ const LYI={
   cw:'<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5" fill="#2f6fe0" stroke="#fff" stroke-width="1.5"/><rect x="7" y="7.5" width="10" height="6.5" fill="#fff"/><rect x="8.5" y="9" width="7" height="3.6" fill="#2f6fe0"/><rect x="5.5" y="15" width="13" height="2" fill="#fff"/></svg>',
   names:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12.5V5a2 2 0 0 1 2-2h7.5l8.5 8.5-9.5 9.5z"/><circle cx="8" cy="8" r="1.6" fill="currentColor"/></svg>',
   weather:()=>`<img src="data:image/svg+xml,${encodeURIComponent(WXI.psun)}" alt="">`,
+  night:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#ffc83d"/><path d="M12 3a9 9 0 0 1 0 18z" fill="#24305a"/><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
   cams:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#1f2937" stroke="#fff" stroke-width="1.5"/><rect x="6.5" y="9" width="8" height="6" rx="1" fill="#fff"/><path d="M14.5 11l3.5-2v6l-3.5-2z" fill="#fff"/><circle cx="19" cy="5" r="2.6" fill="#e2453c"/></svg>'};
 function lyrRender(){const m=document.getElementById('lyrb');if(!m)return;
   const ic=k=>`<i class="lyi" aria-hidden="true">${typeof LYI[k]==='function'?LYI[k]():LYI[k]}</i>`;
   const tick=(k,on,label,extra)=>`<label class="bmtick"><input type="checkbox" data-show="${k}" ${on?'checked':''}>${ic(k)}<span>${label}</span>${extra||''}</label>`;
   m.innerHTML=tick('hours',showHours,'Working hours')+
     (CL.data.length?tick('cl',CL.on,'Colivings',`<small class="clcnt" id="clcnt"></small><button type="button" class="clfb${clActive(CL.f)?' on':''}" id="clfb" aria-label="Filter colivings" title="Filter and updates">${FUNNEL}</button>`):'')+
-    tick('cw',showCw,'Coworking spaces')+tick('cams',showCams,'Webcams')+tick('weather',showWeather,'Weather now','<small class="clcnt">°C</small>')+tick('names',showNames,'Place names');
+    tick('cw',showCw,'Coworking spaces')+tick('cams',showCams,'Webcams')+tick('weather',showWeather,'Weather now','<small class="clcnt">°C</small>')+tick('night',showNight,'Day and night')+tick('names',showNames,'Place names');
   m.querySelectorAll('[data-show]').forEach(c=>c.onchange=()=>setShow(c.dataset.show,c.checked));
   const fb=m.querySelector('#clfb');if(fb)fb.onclick=e=>{e.preventDefault();e.stopPropagation();clToggle()};clCounts();lyrFit()}
 function lyrFold(open){const el=document.getElementById('lyr'),h=document.getElementById('lyrh');el.classList.toggle('folded',!open);h.setAttribute('aria-expanded',String(open));
@@ -1596,6 +1601,20 @@ function cwShow(x){activeFav=null;draft=null;selected=null;if(typeof CL!=='undef
     `<div class="cllinks">${x.web?`<a class="clbtn" href="${esc(/^https?:/.test(x.web)?x.web:'https://'+x.web)}" target="_blank" rel="noopener noreferrer">Website ↗</a>`:''}<a class="clbtn" href="${esc(x.osm)}" target="_blank" rel="noopener noreferrer">OpenStreetMap ↗</a></div>`+
     `<div>${hoursBlock(tzAt([x.lon,x.lat]))}</div>${wxBlock()}${photosBlock()}${flightsBlock()}`;
   wxLoad([x.lon,x.lat]);photosLoad([x.lon,x.lat]);wireFlights([x.lon,x.lat]);document.getElementById('info').classList.add('show')}
+
+// Day and night: the night side of the Earth shaded softly, with twilight bands (sun 0°, 6°, 12° and 18° below
+// the horizon) so the line between day and night (the terminator) fades rather than cuts. Moves with the clock.
+function sunNow(t){const n=(t/864e5)+2440587.5-2451545.0,rad=Math.PI/180;
+  const L=(280.460+0.9856474*n)%360,g=(357.528+0.9856003*n)*rad,lam=(L+1.915*Math.sin(g)+0.020*Math.sin(2*g))*rad,eps=(23.439-0.0000004*n)*rad;
+  const dec=Math.asin(Math.sin(eps)*Math.sin(lam)),ra=Math.atan2(Math.cos(eps)*Math.sin(lam),Math.cos(lam));
+  const gmst=(18.697374558+24.06570982441908*n)%24;let lon=(ra/rad-gmst*15)%360;if(lon>180)lon-=360;if(lon<-180)lon+=360;
+  return[lon,dec/rad]}
+const NIGHT_BANDS=[90,87,84,81,78,75,72];
+function drawNight(){const sp=sunNow(Date.now()),anti=[sp[0]+180>180?sp[0]-180:sp[0]+180,-sp[1]];
+  ctx.save();ctx.fillStyle=dark?'rgba(2,6,22,.085)':'rgba(8,14,40,.075)';
+  for(const r of NIGHT_BANDS){ctx.beginPath();path(d3.geoCircle().center(anti).radius(r).precision(2)());ctx.fill()}
+  ctx.restore()}
+setInterval(()=>{if(showNight&&!running)draw()},60000);
 
 // start
 window.addEventListener('resize',resize);setSeason(season);theme();resize();
