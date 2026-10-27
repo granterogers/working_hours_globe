@@ -15,6 +15,7 @@ const BANDS=[
   {lo:21,hi:29,name:"Overnight",sub:"starts 21:00–05:00",dark:"#5a6bdc",light:"#4656c8"}];
 const DEG=180/Math.PI, MINK=0.85, MAXK=9000;
 let S=12,E=20,season=0,W=0,H=0,dpr=1,base=300,cx=0,cy=0;
+let showCams=(()=>{try{return localStorage.getItem('whg.cams')==='on'}catch(e){return false}})();
 let showWeather=(()=>{try{return localStorage.getItem('whg.weather')==='on'}catch(e){return false}})();
 let showNames=(()=>{try{return localStorage.getItem('whg.names')!=='off'}catch(e){return true}})();
 let showHours=(()=>{try{return localStorage.getItem('whg.hours')!=='off'}catch(e){return true}})();
@@ -122,7 +123,7 @@ function draw(){
   ctx.save();ctx.beginPath();path({type:'Sphere'});ctx.clip();
   const sg=ctx.createRadialGradient(cx-s*.42,cy-s*.48,0,cx,cy,s*1.02);sg.addColorStop(0,pal.shadeLite);sg.addColorStop(.55,'rgba(0,0,0,0)');sg.addColorStop(1,pal.shadeDark);
   ctx.fillStyle=sg;ctx.fillRect(0,0,W,H);ctx.restore();
-  drawOverlays();if(typeof clDraw==='function')clDraw();const mapNames=showNames&&shown&&(!raster||BM().labels);drawLabels();MAPLAB.length=0;MAPBOX.length=0;if(mapNames)drawMapLabels(tileA);if(showWeather)wxDraw(mapNames);drawPin();
+  drawOverlays();if(typeof clDraw==='function')clDraw();if(showCams)camDraw();const mapNames=showNames&&shown&&(!raster||BM().labels);drawLabels();MAPLAB.length=0;MAPBOX.length=0;if(mapNames)drawMapLabels(tileA);if(showWeather)wxDraw(mapNames);drawPin();
 }
 
 function drawOverlays(){overlays.forEach(L=>{if(!L.on)return;L.fc.features.forEach(f=>{const g=f.geometry;if(!g||/Point/.test(g.type))return;
@@ -731,6 +732,8 @@ function clickAt(x,y){
   const fh=placed.find(q=>q.L.fav&&x>=q.x0&&x<=q.x1&&y>=q.y0&&y<=q.y1);
   if(fh){if(selected)selected=null;showFav(fh.L.fav);draw();return}
   if(activeFav){activeFav=null;draw()}
+  const wc=showCams?camHit(x,y):null;if(wc){camShow(wc);draw();return}
+  if(CAM.sel){CAM.sel=null;draw()}
   const ch=typeof clHit==='function'?clHit(x,y):null;if(ch){clShow(ch);draw();return}
   if(typeof CL!=='undefined'&&CL.sel){CL.sel=null;draw()}
   const oh=overlays.length?overlayHit(x,y):null;
@@ -766,7 +769,7 @@ function showInfo(title,where,tz,ll){activeFav=null;draft=null;infoTok++;const z
   <div class="big"><i style="background:${pal['b'+b]}"></i>${hours(o)}</div><p class="bandname">${BANDS[b].name}, ${season?'summer':'winter'}</p>
   <dl><dt>${season?'Winter':'Summer'}</dt><dd>${hours(other)}</dd><dt>Difference</dt><dd>${vsUK(o)}</dd><dt>Time zone</dt><dd>${utc(o)}</dd></dl>${ll?wxBlock():''}${ll?photosBlock():''}${ll?flightsBlock():''}`;
   wireFlights(ll);wxLoad(ll);photosLoad(ll);document.getElementById('info').classList.add('show');}
-function hideInfo(){document.getElementById('info').classList.remove('show');PH.tok++;if(clickPin){clickPin=null;draw()}if(typeof CL!=='undefined'&&CL.sel){CL.sel=null;draw()}if(selected||activeFav||draft){selected=null;activeFav=null;draft=null;draw()}}
+function hideInfo(){document.getElementById('info').classList.remove('show');if(typeof CAM!=='undefined'&&CAM.sel){CAM.sel=null;draw()}PH.tok++;if(clickPin){clickPin=null;draw()}if(typeof CL!=='undefined'&&CL.sel){CL.sel=null;draw()}if(selected||activeFav||draft){selected=null;activeFav=null;draft=null;draw()}}
 document.getElementById('infox').onclick=hideInfo;
 
 // panel & controls
@@ -794,6 +797,7 @@ function stripKey(o){const el=document.getElementById('strip');if(!el)return;el.
 // base map menu (top right)
 function setShow(k,v){if(k==='hours'){showHours=v;try{localStorage.setItem('whg.hours',v?'on':'off')}catch(e){}ui()}
   else if(k==='names'){showNames=v;try{localStorage.setItem('whg.names',v?'on':'off')}catch(e){}}
+  else if(k==='cams'){showCams=v;try{localStorage.setItem('whg.cams',v?'on':'off')}catch(e){}if(v)camQueue();else if(CAM.sel){CAM.sel=null;hideInfo()}}
   else if(k==='weather'){showWeather=v;try{localStorage.setItem('whg.weather',v?'on':'off')}catch(e){}if(v)wxQueue()}
   else if(k==='cl'){CL.on=v;clStore.set('whg.clOn',v);if(!v&&CL.sel){CL.sel=null;hideInfo()}stripRender()}
   draw();m3dSync()}
@@ -801,10 +805,11 @@ function bmRender(){const m=document.getElementById('bmmenu');
   const tick=(k,on,label,extra)=>`<label class="bmtick"><input type="checkbox" data-show="${k}" ${on?'checked':''}><span>${label}</span>${extra||''}</label>`;
   m.innerHTML=`<div class="bmh">Show</div>`+tick('hours',showHours,'Working hours')+
     (CL.data.length?tick('cl',CL.on,'Colivings',`<small class="clcnt" id="clcnt"></small><button type="button" class="clfb${clActive(CL.f)?' on':''}" id="clfb" aria-label="Filter colivings" title="Filter and updates">${FUNNEL}</button>`):'')+
-    tick('names',showNames,'Place names')+tick('weather',showWeather,'Weather now','<small class="clcnt">°C</small>')+`<div class="bmh bmh2">Base map</div>`+Object.entries(BASEMAPS).map(([id,b])=>`<button type="button" role="menuitemradio" aria-checked="${id===basemap}" data-id="${id}"><i class="bmdot"></i><span><b>${b.name}</b><small>${b.sub}</small></span></button>`).join('')+
+    tick('names',showNames,'Place names')+tick('weather',showWeather,'Weather now','<small class="clcnt">°C</small>')+tick('cams',showCams,'Webcams',`<button type="button" class="clfb" id="camkey" title="${camKey()?'Windy webcams key is set (click to change)':'Add a free Windy webcams key for live images'}" aria-label="Webcam key">${camKey()?'🔑':'＋'}</button>`)+`<div class="bmh bmh2">Base map</div>`+Object.entries(BASEMAPS).map(([id,b])=>`<button type="button" role="menuitemradio" aria-checked="${id===basemap}" data-id="${id}"><i class="bmdot"></i><span><b>${b.name}</b><small>${b.sub}</small></span></button>`).join('')+
     `<button type="button" class="bm3d" data-3d="1"><b>3D view</b><small>Fly around in 3D with terrain</small></button>`;
   m.querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>{setBasemap(b.dataset.id);bmToggle(false)});
   m.querySelectorAll('[data-show]').forEach(c=>c.onchange=()=>setShow(c.dataset.show,c.checked));
+  const kb=m.querySelector('#camkey');if(kb)kb.onclick=e=>{e.preventDefault();e.stopPropagation();camAskKey()};
   const fb=m.querySelector('#clfb');if(fb)fb.onclick=e=>{e.preventDefault();e.stopPropagation();bmToggle(false);clToggle(true)};clCounts();m.querySelector('[data-3d]').onclick=()=>{bmToggle(false);open3D()}}
 function setBasemap(id){if(!BASEMAPS[id]||id===basemap)return;basemap=id;try{localStorage.setItem('whg.basemap',id)}catch(e){}vtUsed.clear();if(m3d.map)m3dStyle();draw()}
 function bmToggle(open){const m=document.getElementById('bmmenu'),b=document.getElementById('bmbtn');const show=open==null?m.hidden:open;if(show)bmRender();m.hidden=!show;b.setAttribute('aria-expanded',String(show));
@@ -909,11 +914,12 @@ function m3dGeo(){
   const ov={type:'FeatureCollection',features:[]};
   overlays.forEach((L,li)=>{if(L.on)L.fc.features.forEach((f,fi)=>{if(f.geometry)ov.features.push({type:'Feature',properties:{li,fi,c:L.color,n:(f.properties&&f.properties.name)||''},geometry:f.geometry})})});
   const wx={type:'FeatureCollection',features:showWeather?(WX.shown||[]).map(p=>WX.pts.get(wxKey(p.lat,p.lon))).filter(Boolean).map(p=>({type:'Feature',properties:{t:Math.round(p.temp)+'°',c:wxTempCol(p.temp)},geometry:{type:'Point',coordinates:[p.lon,p.lat]}})):[]};
-  return{tz,lab,cl,fv,ov,wx}}
+  const cm={type:'FeatureCollection',features:showCams?[...CAM.list.values()].map(c=>({type:'Feature',properties:{id:c.id,live:c.src==='windy'?1:0},geometry:{type:'Point',coordinates:[c.lon,c.lat]}})):[]};
+  return{tz,lab,cl,fv,ov,wx,cm}}
 function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.getStyle())return}catch(e){return}
   try{g=m3dGeo()}catch(e){return}
   const src=(id,data)=>{const s=map.getSource(M3D_OWN+id);if(s)s.setData(data);else map.addSource(M3D_OWN+id,{type:'geojson',data})};
-  try{src('tz',g.tz);src('lab',g.lab);src('cl',g.cl);src('fv',g.fv);src('ov',g.ov);src('wx',g.wx)}catch(e){return}
+  try{src('tz',g.tz);src('lab',g.lab);src('cl',g.cl);src('fv',g.fv);src('ov',g.ov);src('wx',g.wx);src('cm',g.cm)}catch(e){return}
   const font=['Noto Sans Bold'],dk=BM().dark||false;
   const lay=(def,before)=>{if(!map.getLayer(def.id))map.addLayer(def,before)};
   // working-hours colours fade out as you zoom in, like on the globe
@@ -934,13 +940,15 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
     paint:{'text-color':dk||basemap==='street'?'#ffffff':'#ffffff','text-halo-color':'rgba(10,16,30,.8)','text-halo-width':1.6}});
   lay({id:M3D_OWN+'wx',type:'circle',source:M3D_OWN+'wx',paint:{'circle-color':'rgba(14,20,36,.8)','circle-radius':15,'circle-stroke-color':['get','c'],'circle-stroke-width':2.5}});
   lay({id:M3D_OWN+'wxt',type:'symbol',source:M3D_OWN+'wx',layout:{'text-field':['get','t'],'text-font':font,'text-size':12,'text-allow-overlap':true},paint:{'text-color':'#fff'}});
+  lay({id:M3D_OWN+'cm',type:'circle',source:M3D_OWN+'cm',paint:{'circle-color':['case',['==',['get','live'],1],'#1f2937','#ffffff'],'circle-radius':7,'circle-stroke-color':['case',['==',['get','live'],1],'#e2453c','#1f2937'],'circle-stroke-width':2}});
   // the base map's own names follow the Place names switch
   for(const l of map.getStyle().layers)if(l.type==='symbol'&&!l.id.startsWith(M3D_OWN))try{map.setLayoutProperty(l.id,'visibility',showNames?'visible':'none')}catch(e){}}
 // clicks in 3D open the same cards as on the globe
-function m3dClick(e){const map=m3d.map,hits=map.queryRenderedFeatures(e.point,{layers:[M3D_OWN+'fv',M3D_OWN+'cl',M3D_OWN+'ovp',M3D_OWN+'ovl',M3D_OWN+'ovf'].filter(id=>map.getLayer(id))});
+function m3dClick(e){const map=m3d.map,hits=map.queryRenderedFeatures(e.point,{layers:[M3D_OWN+'cm',M3D_OWN+'fv',M3D_OWN+'cl',M3D_OWN+'ovp',M3D_OWN+'ovl',M3D_OWN+'ovf'].filter(id=>map.getLayer(id))});
   const ll=[e.lngLat.lng,e.lngLat.lat];if(m3d.pin){m3d.pin.remove();m3d.pin=null}
   m3d.pivot=e.lngLat;   // turning and tilting now orbit around this spot
   const h=hits[0];
+  if(h&&h.layer.id===M3D_OWN+'cm'){const c=CAM.list.get(h.properties.id);if(c){camShow(c);return}}
   if(h&&h.layer.id===M3D_OWN+'fv'){const f=favs[h.properties.i];if(f){showFav(f);return}}
   if(h&&h.layer.id===M3D_OWN+'cl'){const x=CL.byId.get(h.properties.id);if(x){clShow(x);return}}
   if(h&&h.layer.id.startsWith(M3D_OWN+'ov')){const L=overlays[h.properties.li],f=L&&L.fc.features[h.properties.fi];if(f){selected={L,f};showFeature(L,f,ll);return}}
@@ -1457,6 +1465,65 @@ const ACC=[['wxbtn','wxb'],['phbtn','phg'],['fltog','flbody']];
 document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('#wxbtn,#phbtn,#fltog');if(!b)return;
   setTimeout(()=>{if(b.getAttribute('aria-expanded')!=='true')return;for(const [bt,bd] of ACC){if(bt===b.id)continue;const B=document.getElementById(bt),D=document.getElementById(bd);
     if(B&&D&&!D.hidden){D.hidden=true;B.setAttribute('aria-expanded','false')}}})});
+
+// Webcams layer. Live images come from Windy Webcams (free key, kept only in this browser: set it from the
+// layers menu or open the page once with #windy=KEY). Without a key, and in addition to it, webcams listed in
+// OpenStreetMap (contact:webcam / webcam tags) and Wikidata (webcam page URL) show as links once zoomed in.
+const CAM={list:new Map(),sel:null,timer:0,busy:false,done:new Set(),wait:0};
+(()=>{const m=/[#&]windy=([^&]+)/.exec(location.hash);if(!m)return;try{localStorage.setItem('whg.windy',decodeURIComponent(m[1]))}catch(e){}
+  history.replaceState(null,'',location.pathname+location.search)})();
+const camKey=()=>{try{return localStorage.getItem('whg.windy')||''}catch(e){return''}};
+function camAskKey(){const v=prompt('Windy Webcams API key (free from api.windy.com/keys). Stored only in this browser. Leave empty to remove.',camKey());if(v==null)return;
+  try{if(v.trim())localStorage.setItem('whg.windy',v.trim());else localStorage.removeItem('whg.windy')}catch(e){}CAM.done.clear();bmRender();camQueue()}
+function camQueue(){if(!showCams)return;clearTimeout(CAM.timer);CAM.timer=setTimeout(camFetch,700)}
+function camView(){const pts=[];for(let i=0;i<=6;i++)for(let j=0;j<=6;j++){const ll=proj.invert([W*i/6,H*j/6]);if(ll&&d3.geoDistance(ll,viewCap[0])<1.5)pts.push(ll)}
+  if(!pts.length)return null;const c=[-rot[0],-rot[1]],r=Math.max(...pts.map(p=>d3.geoDistance(p,c)))*6371;
+  return{c,rkm:r,s:Math.min(...pts.map(p=>p[1])),n:Math.max(...pts.map(p=>p[1])),w:Math.min(...pts.map(p=>p[0])),e:Math.max(...pts.map(p=>p[0]))}}
+const camAdd=x=>{if(!isFinite(x.lat)||!isFinite(x.lon))return;const o=CAM.list.get(x.id);CAM.list.set(x.id,Object.assign(o||{},x,{v:vec(x.lon,x.lat)}))};
+async function camFetch(){if(!showCams||CAM.busy||Date.now()<CAM.wait)return;const vw=camView();if(!vw||k<2.2)return;CAM.busy=true;
+  const key=camKey(),jobs=[];
+  try{
+    if(key){const r=Math.round(clamp(vw.rkm,5,250)),q='w:'+vw.c.map(v=>v.toFixed(1)).join(',')+':'+r;
+      if(!CAM.done.has(q)){CAM.done.add(q);jobs.push(phJSON(`https://api.windy.com/webcams/api/v3/webcams?nearby=${vw.c[1].toFixed(3)},${vw.c[0].toFixed(3)},${r}&limit=50&include=images,location,player,urls`,{headers:{'x-windy-api-key':key}})
+        .then(j=>{for(const w of j.webcams||[]){const L=w.location||{},im=(w.images||{}).current||{};camAdd({id:'w'+w.webcamId,src:'windy',title:w.title,lat:L.latitude,lon:L.longitude,place:[L.city,L.country].filter(Boolean).join(', '),
+          img:im.preview||im.thumbnail,player:(w.player||{}).day||(w.player||{}).live,link:(w.urls||{}).detail||`https://www.windy.com/webcams/${w.webcamId}`,t:Date.now()})}})
+        .catch(e=>{CAM.done.delete(q);if(/40[13]/.test(String(e&&e.message)))toastMsg('The Windy webcams key was not accepted. Check it from the layers menu.');CAM.wait=Date.now()+20000}))}}
+    if(k>=TILE_K&&vw.e-vw.w<6&&vw.n-vw.s<6){const bb=[vw.s,vw.w,vw.n,vw.e].map(v=>v.toFixed(2)),q='o:'+bb.join(',');
+      if(!CAM.done.has(q)){CAM.done.add(q);
+        jobs.push(phJSON('https://overpass-api.de/api/interpreter',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+          body:'data='+encodeURIComponent(`[out:json][timeout:15];(nwr["contact:webcam"](${bb});nwr["webcam"](${bb}););out center tags 80;`)})
+          .then(j=>{for(const e of j.elements||[]){const t=e.tags||{},u=t['contact:webcam']||t.webcam;if(!/^https?:\/\//.test(u||''))continue;
+            camAdd({id:'o'+e.type+e.id,src:'osm',title:t['name:en']||t.name||'Webcam',lat:e.lat??(e.center&&e.center.lat),lon:e.lon??(e.center&&e.center.lon),link:u,place:''})}}).catch(()=>CAM.done.delete(q)));
+        const km=Math.min(60,vw.rkm),qw=`SELECT ?item ?itemLabel ?url ?coord WHERE { SERVICE wikibase:around { ?item wdt:P625 ?coord. bd:serviceParam wikibase:center "Point(${vw.c[0]} ${vw.c[1]})"^^geo:wktLiteral; wikibase:radius "${km}". } ?item wdt:P4238 ?url. SERVICE wikibase:label { bd:serviceParam wikibase:language "en,[AUTO_LANGUAGE]". } } LIMIT 80`;
+        jobs.push(phJSON('https://query.wikidata.org/sparql?format=json&query='+encodeURIComponent(qw),{headers:{Accept:'application/sparql-results+json'}})
+          .then(j=>{for(const b of j.results.bindings||[]){const m=/Point\(([-\d.]+) ([-\d.]+)\)/.exec(b.coord.value);if(!m)continue;
+            camAdd({id:'d'+b.item.value.split('/').pop(),src:'wikidata',title:b.itemLabel?b.itemLabel.value:'Webcam',lat:+m[2],lon:+m[1],link:b.url.value,place:''})}}).catch(()=>{}))}}
+    await Promise.all(jobs)}
+  finally{CAM.busy=false}
+  if(CAM.list.size>1500){let n=CAM.list.size-1200;for(const kk of CAM.list.keys()){CAM.list.delete(kk);if(--n<=0)break}}
+  draw();m3dSync()}
+function camProj(v){if(M[0]*v[0]+M[1]*v[1]+M[2]*v[2]<0.03)return null;return[cx+SC*(M[3]*v[0]+M[4]*v[1]),cy-SC*(M[6]*v[0]+M[7]*v[1]+M[8]*v[2])]}
+// a small camera marker: dark with a red live dot for Windy cams, light for listed links (zoomed in only)
+function camDraw(){camQueue();if(!CAM.list.size)return;const r=k<6?7:9,at=[];ctx.save();ctx.lineJoin='round';
+  for(const x of CAM.list.values()){if(x.src!=='windy'&&k<TILE_K)continue;const p=camProj(x.v);if(!p||p[0]<-10||p[1]<-10||p[0]>W+10||p[1]>H+10)continue;
+    if(x!==CAM.sel&&at.some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<r*2.2))continue;at.push(p);
+    const [X,Y]=p,live=x.src==='windy';ctx.beginPath();ctx.arc(X,Y,r,0,7);ctx.fillStyle=live?'#1f2937':'rgba(255,255,255,.92)';ctx.fill();ctx.lineWidth=x===CAM.sel?3:1.6;ctx.strokeStyle=x===CAM.sel?'#2f7df6':live?'#fff':'#1f2937';ctx.stroke();
+    const s=r/9;ctx.fillStyle=live?'#fff':'#1f2937';ctx.fillRect(X-5*s,Y-3*s,7.5*s,6*s);ctx.beginPath();ctx.moveTo(X+2.5*s,Y-1*s);ctx.lineTo(X+5.5*s,Y-3*s);ctx.lineTo(X+5.5*s,Y+3*s);ctx.lineTo(X+2.5*s,Y+1*s);ctx.fill();
+    if(live){ctx.beginPath();ctx.arc(X+r*0.72,Y-r*0.72,2.6,0,7);ctx.fillStyle='#e2453c';ctx.fill()}}
+  ctx.restore()}
+function camHit(x,y){let best=null,bd=13;for(const c of CAM.list.values()){if(c.src!=='windy'&&k<TILE_K)continue;const p=camProj(c.v);if(!p)continue;const d=Math.hypot(p[0]-x,p[1]-y);if(d<bd){bd=d;best=c}}return best}
+function camShow(x){activeFav=null;draft=null;selected=null;if(typeof CL!=='undefined')CL.sel=null;clickPin=null;CAM.sel=x;if(typeof infoTok!=='undefined')infoTok++;
+  const src={windy:'Windy Webcams',osm:'OpenStreetMap',wikidata:'Wikidata'}[x.src];
+  document.getElementById('infob').innerHTML=`<p class="cltype"><i style="background:${x.src==='windy'?'#e2453c':'#1f2937'}"></i>Webcam${x.src==='windy'?' · live image':''}</p><h2>${esc(x.title||'Webcam')}</h2><p class="where">${esc(x.place||'')}</p>`+
+    (x.img?`<button type="button" class="camimg" id="camimg" title="Open larger"><img src="${esc(x.img)}" alt="${esc(x.title||'Webcam image')}" referrerpolicy="no-referrer"></button><p class="clsmall">Latest image from ${src}. Refreshes when you reopen it.</p>`:`<p class="clsmall">This webcam is listed on ${src}; its live view opens on the camera’s own site.</p>`)+
+    `<div class="cllinks">${x.player?`<a class="clbtn" href="${esc(x.player)}" target="_blank" rel="noopener noreferrer">Today’s timelapse ↗</a>`:''}<a class="clbtn" href="${esc(x.link)}" target="_blank" rel="noopener noreferrer">${x.src==='windy'?'Open on Windy ↗':'Open webcam ↗'}</a></div>`+
+    `<div>${hoursBlock(tzAt([x.lon,x.lat]))}</div>${wxBlock()}`;
+  wxLoad([x.lon,x.lat]);
+  const ib=document.getElementById('camimg');if(ib)ib.onclick=()=>{PH.list=[{key:x.id,thumb:x.img,full:x.img,lat:x.lat,lon:x.lon,d:0,src,author:'',lic:'See source',date:'live',link:x.link,title:x.title||'Webcam'}];phOpen(0)};
+  document.getElementById('info').classList.add('show');
+  // Windy image links expire after a while: fetch a fresh one for this camera
+  if(x.src==='windy'&&camKey()&&Date.now()-(x.t||0)>8*60e3)phJSON(`https://api.windy.com/webcams/api/v3/webcams/${x.id.slice(1)}?include=images,player`,{headers:{'x-windy-api-key':camKey()}})
+    .then(w=>{const im=((w.images||{}).current||{});x.img=im.preview||x.img;x.t=Date.now();if(CAM.sel===x)camShow(x)}).catch(()=>{})}
 
 // start
 window.addEventListener('resize',resize);setSeason(season);theme();resize();

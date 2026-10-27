@@ -364,3 +364,7 @@ body.in3d .locbtn{z-index:46;bottom:140px}
 .northbtn svg{transition:transform .15s}
 body.in3d .northbtn{z-index:46;bottom:190px}
 @media (max-width:700px){.northbtn{right:12px;bottom:156px}}
+
+.camimg{all:unset;display:block;cursor:zoom-in;margin:10px 0 2px;border-radius:10px;overflow:hidden;background:var(--field)}
+.camimg img{display:block;width:100%;height:auto;max-height:240px;object-fit:cover}
+.camimg:focus-visible{outline:2px solid var(--accent)}
