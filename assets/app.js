@@ -93,7 +93,9 @@ function ring(a,fill){const n=a.length/3;let pen=false;
   if(fill)ctx.closePath();}
 function fillBands(fc){const g=[[],[],[],[],[],[]];
   for(const f of fc.features){if(f.rings&&inView(f))g[band(off(f.properties.z))].push(f)}
-  g.forEach((arr,i)=>{if(!arr.length)return;ctx.beginPath();for(const f of arr)for(const r of f.rings)ring(r,true);ctx.fillStyle=showHours?pal['b'+i]:pal.land;ctx.fill('evenodd')});}
+  const a=typeof LAY==='undefined'?(showHours?1:0):LAY.hours;
+  g.forEach((arr,i)=>{if(!arr.length)return;ctx.beginPath();for(const f of arr)for(const r of f.rings)ring(r,true);
+    if(a<1){ctx.fillStyle=pal.land;ctx.fill('evenodd')}if(a>0){const o=ctx.globalAlpha;ctx.globalAlpha=o*a;ctx.fillStyle=pal['b'+i];ctx.fill('evenodd');ctx.globalAlpha=o}});}
 function strokeFC(fc,style,w){ctx.beginPath();for(const f of fc.features)if(f.rings&&inView(f))for(const r of f.rings)ring(r,false);ctx.strokeStyle=style;ctx.lineWidth=w;ctx.stroke();}
 
 function draw(){
@@ -113,7 +115,7 @@ function draw(){
   const TZ=[D.tzL,D.tzM,D.tz][lv],CB=[D.cbL,D.cbM,D.cb][lv];
   // with working hours on, the base map fades in as you zoom towards a country, replacing the time-zone colours;
   // with them off, the base map shows in full at every zoom
-  const tileA=showHours?clamp((k-TILE_K)/4.5,0,1):1,bA=1-tileA,raster=basemap!=='street';
+  const hA=LAY.hours,tileA=hA*clamp((k-TILE_K)/4.5,0,1)+(1-hA),bA=1-tileA,raster=basemap!=='street';
   if(bA>0.02){ctx.globalAlpha=bA;ctx.lineJoin='round';strokeFC(CB,pal.coast1,k>4?9:6);strokeFC(CB,pal.coast2,k>4?3.5:2.5);ctx.globalAlpha=1}
   fillBands(D.gaps);fillBands(TZ);
   const shown=tileA>0&&drawTiles();if(shown){ctx.globalAlpha=tileA;ctx.drawImage(tcv,0,0,W,H);drawPoleCaps();ctx.globalAlpha=1}
@@ -126,8 +128,11 @@ function draw(){
   ctx.save();ctx.beginPath();path({type:'Sphere'});ctx.clip();
   const sg=ctx.createRadialGradient(cx-s*.42,cy-s*.48,0,cx,cy,s*1.02);sg.addColorStop(0,pal.shadeLite);sg.addColorStop(.55,'rgba(0,0,0,0)');sg.addColorStop(1,pal.shadeDark);
   ctx.fillStyle=sg;ctx.fillRect(0,0,W,H);ctx.restore();
-  if(showNight)drawNight();
-  drawOverlays();if(typeof clDraw==='function')clDraw();if(showCams)camDraw();if(showCw)cwDraw();const mapNames=showNames&&shown&&(!raster||BM().labels);drawLabels();MAPLAB.length=0;MAPBOX.length=0;if(mapNames)drawMapLabels(tileA);if(showWeather)wxDraw(mapNames);drawPin();
+  // each layer is drawn at its own opacity, so switching one on or off fades it rather than blinking
+  const withA=(a,fn)=>{if(a<=0)return;ctx.save();ctx.globalAlpha=a;fn();ctx.restore()};
+  withA(LAY.night,drawNight);
+  drawOverlays();withA(LAY.cl,clDraw);withA(LAY.cams,camDraw);withA(LAY.cw,cwDraw);
+  const mapNames=LAY.names>0&&shown&&(!raster||BM().labels);drawLabels();MAPLAB.length=0;MAPBOX.length=0;if(mapNames)drawMapLabels(tileA*LAY.names);withA(LAY.weather,()=>wxDraw(mapNames));drawPin();
 }
 
 function drawOverlays(){overlays.forEach(L=>{if(!L.on)return;L.fc.features.forEach(f=>{const g=f.geometry;if(!g||/Point/.test(g.type))return;
@@ -801,6 +806,14 @@ function stripRender(){const el=document.getElementById('strip');if(!el)return;
 function stripKey(o){const el=document.getElementById('strip');if(!el)return;el._o2=o;const sb=el.querySelector('.sbands'),scl=el.querySelector('.scl');
   if(sb){sb.style.opacity=o;sb.hidden=!o}if(scl)scl.classList.toggle('alone',!o);el.style.visibility=o||scl?'':'hidden'}
 // base map menu (top right)
+// layer opacities, eased towards on (1) or off (0) over about a third of a second
+const LAY={};
+function layOn(k){return{hours:showHours,cl:CL.on,cw:showCw,cams:showCams,weather:showWeather,night:showNight,names:showNames}[k]?1:0}
+function layInit(){for(const k of ['hours','cl','cw','cams','weather','night','names'])LAY[k]=layOn(k)}
+let layRaf=0,layT=0;
+function layFade(){if(layRaf)return;layT=performance.now();const step=t=>{const dt=Math.min(64,t-layT);layT=t;let moving=false;
+    for(const k in LAY){const g=layOn(k),d=g-LAY[k];if(Math.abs(d)<0.005){LAY[k]=g;continue}LAY[k]+=Math.sign(d)*Math.min(Math.abs(d),dt/320);moving=true}
+    draw();layRaf=moving?requestAnimationFrame(step):0};layRaf=requestAnimationFrame(step)}
 function setShow(k,v){if(k==='hours'){showHours=v;try{localStorage.setItem('whg.hours',v?'on':'off')}catch(e){}ui()}
   else if(k==='names'){showNames=v;try{localStorage.setItem('whg.names',v?'on':'off')}catch(e){}}
   else if(k==='night'){showNight=v;try{localStorage.setItem('whg.night',v?'on':'off')}catch(e){}}
@@ -808,7 +821,7 @@ function setShow(k,v){if(k==='hours'){showHours=v;try{localStorage.setItem('whg.
   else if(k==='cams'){showCams=v;try{localStorage.setItem('whg.cams',v?'on':'off')}catch(e){}if(v)camQueue();else if(CAM.sel){CAM.sel=null;hideInfo()}}
   else if(k==='weather'){showWeather=v;try{localStorage.setItem('whg.weather',v?'on':'off')}catch(e){}if(v){wxQueue();if(m3d.map)m3dWx()}}
   else if(k==='cl'){CL.on=v;clStore.set('whg.clOn',v);if(!v&&CL.sel){CL.sel=null;hideInfo()}stripRender()}
-  draw();m3dSync()}
+  layFade();m3dSync()}
 // Layers panel (bottom left, open unless you fold it): what's drawn on the map
 const LYI={
   hours:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
@@ -823,9 +836,10 @@ function lyrRender(){const m=document.getElementById('lyrb');if(!m)return;
   const tick=(k,on,label,extra)=>`<label class="bmtick"><input type="checkbox" data-show="${k}" ${on?'checked':''}>${ic(k)}<span>${label}</span>${extra||''}</label>`;
   m.innerHTML=tick('hours',showHours,'Working hours')+
     (CL.data.length?tick('cl',CL.on,'Colivings',`<small class="clcnt" id="clcnt"></small><button type="button" class="clfb${clActive(CL.f)?' on':''}" id="clfb" aria-label="Filter colivings" title="Filter and updates">${FUNNEL}</button>`):'')+
-    tick('cw',showCw,'Coworking spaces')+tick('cams',showCams,'Webcams')+tick('weather',showWeather,'Weather now','<small class="clcnt">°C</small>')+tick('night',showNight,'Day and night')+tick('names',showNames,'Place names');
+    tick('cw',showCw,'Coworking',`<small class="clcnt" id="cwcnt"></small><button type="button" class="clfb${cwActive()?' on':''}" id="cwfb" aria-label="Filter coworking spaces" title="Filter coworking spaces">${FUNNEL}</button>`)+tick('cams',showCams,'Webcams')+tick('weather',showWeather,'Weather now','<small class="clcnt">°C</small>')+tick('night',showNight,'Day and night')+tick('names',showNames,'Place names');
   m.querySelectorAll('[data-show]').forEach(c=>c.onchange=()=>setShow(c.dataset.show,c.checked));
-  const fb=m.querySelector('#clfb');if(fb)fb.onclick=e=>{e.preventDefault();e.stopPropagation();clToggle()};clCounts();lyrFit()}
+  const fb=m.querySelector('#clfb');if(fb)fb.onclick=e=>{e.preventDefault();e.stopPropagation();clToggle()};
+  const cb=m.querySelector('#cwfb');if(cb)cb.onclick=e=>{e.preventDefault();e.stopPropagation();cwToggle()};clCounts();cwCounts();lyrFit()}
 function lyrFold(open){const el=document.getElementById('lyr'),h=document.getElementById('lyrh');el.classList.toggle('folded',!open);h.setAttribute('aria-expanded',String(open));
   try{localStorage.setItem('whg.lyr',open?'open':'folded')}catch(e){}lyrFit()}
 // keep the working-hours panel clear of the Layers panel below it
@@ -943,7 +957,7 @@ function m3dGeo(){
   overlays.forEach((L,li)=>{if(L.on)L.fc.features.forEach((f,fi)=>{if(f.geometry)ov.features.push({type:'Feature',properties:{li,fi,c:L.color,n:(f.properties&&f.properties.name)||''},geometry:f.geometry})})});
   const wx={type:'FeatureCollection',features:showWeather?(WX.shown3d||[]).map(p=>{const q=WX.pts.get(wxKey(p.lat,p.lon));return q&&{type:'Feature',properties:{t:p.name+'  '+Math.round(q.temp)+'°',c:wxTempCol(q.temp),ic:'wx-'+wxKind(q.code,q.day)},geometry:{type:'Point',coordinates:[p.lon,p.lat]}}}).filter(Boolean):[]};
   const cm={type:'FeatureCollection',features:showCams?[...CAM.list.values()].map(c=>({type:'Feature',properties:{id:c.id,live:c.src==='windy'?1:0},geometry:{type:'Point',coordinates:[c.lon,c.lat]}})):[]};
-  const cwk={type:'FeatureCollection',features:showCw?[...CW.list.values()].map(c=>({type:'Feature',properties:{id:c.id},geometry:{type:'Point',coordinates:[c.lon,c.lat]}})):[]};
+  const cwk={type:'FeatureCollection',features:showCw?CW.vis.map(c=>({type:'Feature',properties:{id:c.id},geometry:{type:'Point',coordinates:[c.lon,c.lat]}})):[]};
   return{tz,lab,cl,fv,ov,wx,cm,cwk}}
 function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.getStyle())return}catch(e){return}
   try{g=m3dGeo()}catch(e){return}
@@ -1116,7 +1130,7 @@ function clSetData(list,meta){CL.data=list.filter(x=>isFinite(x.lat)&&isFinite(x
 
 // drawing: dots always (cheap, no overlap test), names once zoomed in close
 function clProj(v){if(M[0]*v[0]+M[1]*v[1]+M[2]*v[2]<0.02)return null;return[cx+SC*(M[3]*v[0]+M[4]*v[1]),cy-SC*(M[6]*v[0]+M[7]*v[1]+M[8]*v[2])]}
-function clDraw(){if(!CL.on||!CL.vis.length)return;const r=k<2?3:k<6?3.6:k<30?4.4:5.4;ctx.lineWidth=1.4;ctx.strokeStyle=pal.halo;
+function clDraw(){if(!CL.vis.length)return;const r=k<2?3:k<6?3.6:k<30?4.4:5.4;ctx.lineWidth=1.4;ctx.strokeStyle=pal.halo;
   for(const t of['p','u','f']){ctx.beginPath();let any=false;
     for(const x of CL.vis){if(x.t!==t)continue;const s=clProj(x.v);if(!s||s[0]<-8||s[1]<-8||s[0]>W+8||s[1]>H+8)continue;ctx.moveTo(s[0]+r,s[1]);ctx.arc(s[0],s[1],r,0,7);any=true}
     if(any){ctx.fillStyle=CLT[t].col;ctx.fill();ctx.stroke()}}
@@ -1151,7 +1165,7 @@ function clRow(){const li=document.createElement('li');li.className='builtin clr
 function clCounts(){const c=document.getElementById('clcnt');if(c)c.textContent=CL.data.length?(CL.vis.length===CL.total?CL.total:`${CL.vis.length}/${CL.total}`):'';
   const b=document.getElementById('clfb');if(b)b.classList.toggle('on',clActive(CL.f));
   const s=document.getElementById('clshow');if(s)s.textContent=CL.vis.length?`Show ${CL.vis.length}`:'None match'}
-function clToggle(open){let el=document.getElementById('clf');if(!el)el=clBuild();const show=open==null?el.hidden:open;el.hidden=!show;
+function clToggle(open){let el=document.getElementById('clf');{const w=document.getElementById('cwf');if(w&&(open==null||open))w.hidden=true}if(!el)el=clBuild();const show=open==null?el.hidden:open;el.hidden=!show;
   const b=document.getElementById('clfb');if(b)b.setAttribute('aria-expanded',String(show));if(show){clSync();el.querySelector('#clq').focus({preventScroll:true})}}
 const chip=(k,v,label,dot)=>`<button type="button" class="clchip" data-k="${k}" data-v="${v}" aria-pressed="false">${dot?`<i style="background:${dot}"></i>`:''}${label}</button>`;
 function clBuild(){const el=document.createElement('aside');el.className='clf glass';el.id='clf';el.hidden=true;el.setAttribute('aria-label','Coliving filters');
@@ -1563,42 +1577,58 @@ function camShow(x){activeFav=null;draft=null;selected=null;if(typeof CL!=='unde
   wxLoad([x.lon,x.lat]);
   document.getElementById('info').classList.add('show')}
 
-// Coworking spaces from OpenStreetMap (amenity=coworking_space, office=coworking), the largest open,
-// worldwide list. Loaded for the area in view in 4°×4° squares (each fetched once), from a regional zoom in.
-const CW={list:new Map(),sel:null,timer:0,busy:false,done:new Set(),wait:0,cell:4};
-function cwQueue(){if(!showCw)return;clearTimeout(CW.timer);CW.timer=setTimeout(cwFetch,600)}
-async function cwFetch(){if(!showCw||CW.busy||Date.now()<CW.wait)return;const vw=camView();if(!vw)return;
-  if(vw.e-vw.w>40||vw.n-vw.s>30){return}   // too wide: zoom in a little first
-  const c=CW.cell,cells=[];
-  for(let la=Math.floor(vw.s/c)*c;la<vw.n;la+=c)for(let lo=Math.floor(vw.w/c)*c;lo<vw.e;lo+=c){const key=la+','+lo;if(!CW.done.has(key))cells.push([la,lo,key])}
-  if(!cells.length)return;CW.busy=true;
-  // nearest the centre first, a few squares per round
-  const cy=(vw.s+vw.n)/2,cxl=(vw.w+vw.e)/2;cells.sort((a,b)=>Math.hypot(a[0]+c/2-cy,a[1]+c/2-cxl)-Math.hypot(b[0]+c/2-cy,b[1]+c/2-cxl));
-  try{for(const [la,lo,key] of cells.slice(0,4)){const bb=`${la},${lo},${la+c},${lo+c}`;
-      try{const j=await phJSON('https://overpass-api.de/api/interpreter',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
-          body:'data='+encodeURIComponent(`[out:json][timeout:25];(nwr["amenity"="coworking_space"](${bb});nwr["office"="coworking"](${bb}););out center tags;`)});
+// Coworking spaces. A weekly job (scripts/coworking.py) merges Overture Maps Places (businesses from Meta,
+// Microsoft and others, category "coworking") with OpenStreetMap (amenity=coworking_space, office=coworking)
+// into data/coworking/, one file per 10°×10° square, loaded for the area in view. Until that has run, the
+// layer asks OpenStreetMap's Overpass service directly, in 4° squares, once zoomed in to a region.
+const CW={list:new Map(),sel:null,timer:0,busy:false,done:new Set(),wait:0,cell:4,idx:null,idxP:null,vis:[]};
+const CWF_DEF={q:'',kind:'all',web:false,hours:false,conf:false};
+CW.f=Object.assign({},CWF_DEF,(()=>{try{return JSON.parse(localStorage.getItem('whg.cwF')||'{}')}catch(e){return{}}})());
+const CW_CHAIN=/\b(regus|spaces|wework|industrious|iwg|servcorp|impact hub|mindspace|knotel|convene|ucommune|the office group|signature by regus|hq global|premier business|venture x|serendipity labs|workspace|clockwise|launchpad|bizspace|uptown|mindspace)\b/i;
+function cwPass(x,f){if(f.q.trim()){const s=(x.name+' '+x.addr).toLowerCase();if(!f.q.trim().toLowerCase().split(/\s+/).every(w=>s.includes(w)))return false}
+  if(f.kind==='chain'&&!x.chain)return false;if(f.kind==='indep'&&x.chain)return false;
+  if(f.web&&!x.web)return false;if(f.hours&&!x.hours)return false;if(f.conf&&!(x.conf>=70||x.src.includes('o')))return false;return true}
+function cwApply(){CW.vis=[...CW.list.values()].filter(x=>cwPass(x,CW.f));try{localStorage.setItem('whg.cwF',JSON.stringify(CW.f))}catch(e){}cwCounts();draw();m3dSync()}
+const cwAdd=x=>{x.v=vec(x.lon,x.lat);x.chain=!!x.brand||CW_CHAIN.test(x.name);CW.list.set(x.id,x)};
+function cwQueue(){if(!showCw)return;clearTimeout(CW.timer);CW.timer=setTimeout(cwFetch,500)}
+function cwIndex(){if(CW.idxP)return CW.idxP;CW.idxP=fetch('data/coworking/index.json').then(r=>{if(!r.ok)throw 0;return r.json()}).then(j=>CW.idx=j).catch(()=>{CW.idx=false});return CW.idxP}
+async function cwFetch(){if(!showCw||CW.busy||Date.now()<CW.wait)return;const vw=camView();if(!vw)return;CW.busy=true;let added=false;
+  try{await cwIndex();
+    if(CW.idx){const c=CW.idx.cell||10,span=Math.max(vw.e-vw.w,vw.n-vw.s);
+      if(span>100){if(!CW.toldZoom){CW.toldZoom=true;toastMsg('Zoom in a little to load coworking spaces.')}return}
+      const want=[];for(let la=Math.floor(vw.s/c)*c;la<vw.n;la+=c)for(let lo=Math.floor(vw.w/c)*c;lo<vw.e;lo+=c){const key=`${la}_${lo}`;if(CW.idx.cells[key]&&!CW.done.has(key))want.push(key)}
+      for(const key of want.slice(0,10)){CW.done.add(key);
+        try{const rows=await phJSON(`data/coworking/${key}.json`);rows.forEach((r,i)=>cwAdd({id:key+':'+i,name:r[0],lat:r[1],lon:r[2],addr:r[3],web:r[4],phone:r[5],hours:r[6],src:r[7],conf:r[8],brand:r[9]}));added=true}
+        catch(e){CW.done.delete(key)}}
+      if(want.length>10)cwQueue();return}
+    // fallback: live OpenStreetMap
+    if(vw.e-vw.w>40||vw.n-vw.s>30){if(!CW.toldZoom){CW.toldZoom=true;toastMsg('Zoom in to a region to load coworking spaces.')}return}
+    const c=CW.cell,cells=[];
+    for(let la=Math.floor(vw.s/c)*c;la<vw.n;la+=c)for(let lo=Math.floor(vw.w/c)*c;lo<vw.e;lo+=c){const key=la+','+lo;if(!CW.done.has(key))cells.push([la,lo,key])}
+    const cy=(vw.s+vw.n)/2,cxl=(vw.w+vw.e)/2;cells.sort((a,b)=>Math.hypot(a[0]+c/2-cy,a[1]+c/2-cxl)-Math.hypot(b[0]+c/2-cy,b[1]+c/2-cxl));
+    for(const [la,lo,key] of cells.slice(0,3)){const bb=`${la},${lo},${la+c},${lo+c}`;
+      try{const j=await phTimeout(phJSON('https://overpass-api.de/api/interpreter',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+          body:'data='+encodeURIComponent(`[out:json][timeout:25];(nwr["amenity"="coworking_space"](${bb});nwr["office"="coworking"](${bb}););out center tags;`)}),30000);
         CW.done.add(key);
         for(const e of j.elements||[]){const t=e.tags||{},lat=e.lat??(e.center&&e.center.lat),lon=e.lon??(e.center&&e.center.lon);if(lat==null)continue;
           const addr=[[t['addr:street'],t['addr:housenumber']].filter(Boolean).join(' '),t['addr:city']||t['addr:place']].filter(Boolean).join(', ');
-          CW.list.set(e.type+e.id,{id:e.type+e.id,name:t['name:en']||t.name||'Coworking space',lat,lon,v:vec(lon,lat),addr,web:t.website||t['contact:website']||t.url||'',
-            hours:t.opening_hours||'',phone:t.phone||t['contact:phone']||'',osm:`https://www.openstreetmap.org/${e.type}/${e.id}`})}}
-      catch(e){CW.wait=Date.now()+(/429/.test(String(e&&e.message))?60000:20000);break}}}
-  finally{CW.busy=false}
-  draw();m3dSync();if(Date.now()>=CW.wait)cwQueue()}
-// marker: a blue rounded square with a little laptop
+          cwAdd({id:e.type+e.id,name:t['name:en']||t.name||'Coworking space',lat,lon,addr,web:t.website||t['contact:website']||t.url||'',hours:t.opening_hours||'',phone:t.phone||t['contact:phone']||'',src:'o',conf:-1,brand:t.brand||''});added=true}}
+      catch(e){CW.wait=Date.now()+30000;toastMsg('OpenStreetMap is busy right now; coworking spaces will load in a moment.');break}}
+    if(cells.length>3)cwQueue()}
+  finally{CW.busy=false;if(added)cwApply()}}
 function cwMark(X,Y,r,sel){ctx.beginPath();ctx.roundRect?ctx.roundRect(X-r,Y-r,2*r,2*r,r*0.45):ctx.rect(X-r,Y-r,2*r,2*r);ctx.fillStyle='#2f6fe0';ctx.fill();
   ctx.lineWidth=sel?3:1.5;ctx.strokeStyle=sel?'#ffd27a':'#fff';ctx.stroke();const s=r/8;ctx.fillStyle='#fff';
   ctx.fillRect(X-4.5*s,Y-4*s,9*s,5.5*s);ctx.fillStyle='#2f6fe0';ctx.fillRect(X-3.3*s,Y-2.9*s,6.6*s,3.4*s);ctx.fillStyle='#fff';ctx.fillRect(X-6*s,Y+2.2*s,12*s,1.8*s)}
-function cwDraw(){cwQueue();if(!CW.list.size)return;const r=k<8?6:8,at=[];ctx.save();
-  for(const x of CW.list.values()){const p=camProj(x.v);if(!p||p[0]<-10||p[1]<-10||p[0]>W+10||p[1]>H+10)continue;
+function cwDraw(){cwQueue();if(!CW.vis.length)return;const r=k<8?6:8,at=[];ctx.save();
+  for(const x of CW.vis){const p=camProj(x.v);if(!p||p[0]<-10||p[1]<-10||p[0]>W+10||p[1]>H+10)continue;
     if(x!==CW.sel&&at.some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<r*2.2))continue;at.push(p);cwMark(p[0],p[1],r,x===CW.sel)}
   ctx.restore()}
-function cwHit(x,y){let best=null,bd=12;for(const c of CW.list.values()){const p=camProj(c.v);if(!p)continue;const d=Math.hypot(p[0]-x,p[1]-y);if(d<bd){bd=d;best=c}}return best}
+function cwHit(x,y){let best=null,bd=12;for(const c of CW.vis){const p=camProj(c.v);if(!p)continue;const d=Math.hypot(p[0]-x,p[1]-y);if(d<bd){bd=d;best=c}}return best}
 function cwShow(x){activeFav=null;draft=null;selected=null;if(typeof CL!=='undefined')CL.sel=null;CAM.sel=null;clickPin=null;CW.sel=x;infoTok++;
-  const rows=[['Address',x.addr],['Opening hours',x.hours],['Phone',x.phone]].filter(r=>r[1]);
-  document.getElementById('infob').innerHTML=`<p class="cltype"><i style="background:#2f6fe0;border-radius:3px"></i>Coworking space</p><h2>${esc(x.name)}</h2>`+
+  const rows=[['Address',x.addr],['Opening hours',x.hours],['Phone',x.phone],['Listed in',{v:'Overture Maps',o:'OpenStreetMap',vo:'Overture Maps and OpenStreetMap'}[x.src]||'']].filter(r=>r[1]);
+  document.getElementById('infob').innerHTML=`<p class="cltype"><i style="background:#2f6fe0;border-radius:3px"></i>Coworking space${x.chain?' · chain':''}</p><h2>${esc(x.name)}</h2>`+
     (rows.length?`<dl class="meta">${rows.map(([a,b])=>`<dt>${a}</dt><dd>${esc(b)}</dd>`).join('')}</dl>`:'')+
-    `<div class="cllinks">${x.web?`<a class="clbtn" href="${esc(/^https?:/.test(x.web)?x.web:'https://'+x.web)}" target="_blank" rel="noopener noreferrer">Website ↗</a>`:''}<a class="clbtn" href="${esc(x.osm)}" target="_blank" rel="noopener noreferrer">OpenStreetMap ↗</a></div>`+
+    `<div class="cllinks">${x.web?`<a class="clbtn" href="${esc(/^https?:/.test(x.web)?x.web:'https://'+x.web)}" target="_blank" rel="noopener noreferrer">Website ↗</a>`:''}<a class="clbtn" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(x.name+' '+x.lat.toFixed(5)+','+x.lon.toFixed(5))}" target="_blank" rel="noopener noreferrer">Reviews & photos ↗</a></div>`+
     `<div>${hoursBlock(tzAt([x.lon,x.lat]))}</div>${wxBlock()}${photosBlock()}${flightsBlock()}`;
   wxLoad([x.lon,x.lat]);photosLoad([x.lon,x.lat]);wireFlights([x.lon,x.lat]);document.getElementById('info').classList.add('show')}
 
@@ -1632,7 +1662,29 @@ function drawPoleCaps(){const c=POLE[basemap]||POLE.street,a0=ctx.globalAlpha;
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='127.0.0.1'))navigator.serviceWorker.register('sw.js').catch(()=>{});
 setTimeout(()=>{const go=()=>m3dLoad().catch(()=>{});'requestIdleCallback' in window?requestIdleCallback(go,{timeout:8000}):go()},6000);
 
+// coworking filter card (opens from the filter button next to Coworking spaces)
+const cwActive=()=>JSON.stringify(CW.f)!==JSON.stringify(CWF_DEF);
+function cwCounts(){const c=document.getElementById('cwcnt');if(c)c.textContent=CW.list.size?(CW.vis.length===CW.list.size?CW.list.size:`${CW.vis.length}/${CW.list.size}`):'';
+  const b=document.getElementById('cwfb');if(b)b.classList.toggle('on',cwActive());const s=document.getElementById('cwshow');if(s)s.textContent=CW.vis.length?`Show ${CW.vis.length}`:'None match'}
+function cwToggle(open){let el=document.getElementById('cwf');
+  if(!el){el=document.createElement('aside');el.className='clf glass cwf';el.id='cwf';el.hidden=true;el.setAttribute('aria-label','Coworking filters');
+    el.innerHTML=`<div class="clfh"><b>Coworking spaces</b><button class="x" id="cwfx" aria-label="Close filters">×</button></div>
+      <input id="cwq" class="flin" type="search" placeholder="Search name or address" autocomplete="off">
+      <div class="clg"><span class="cll">Kind</span><div class="clchips">${[['all','All'],['indep','Independent'],['chain','Chains (Regus, WeWork…)']].map(([v,l])=>`<button type="button" class="clchip" data-cwk="${v}">${l}</button>`).join('')}</div></div>
+      <div class="clg"><label class="clchk"><input type="checkbox" id="cwweb"> Has a website</label><label class="clchk"><input type="checkbox" id="cwhrs"> Opening hours listed</label>
+        <label class="clchk"><input type="checkbox" id="cwconf"> Well-established listings only</label></div>
+      <div class="clfoot"><button type="button" class="flb2" id="cwreset">Reset</button><button type="button" class="primary" id="cwshow"></button></div>
+      <p class="clsmall">From <a href="https://overturemaps.org/" target="_blank" rel="noopener noreferrer">Overture Maps</a> and <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>, refreshed weekly. Loaded for the area you're looking at.</p>`;
+    document.body.appendChild(el);const $=id=>el.querySelector('#'+id),sync=()=>{$('cwq').value=CW.f.q;el.querySelectorAll('[data-cwk]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.cwk===CW.f.kind)));
+      $('cwweb').checked=CW.f.web;$('cwhrs').checked=CW.f.hours;$('cwconf').checked=CW.f.conf;cwCounts()};el._sync=sync;
+    $('cwfx').onclick=()=>cwToggle(false);$('cwshow').onclick=()=>cwToggle(false);$('cwreset').onclick=()=>{CW.f=Object.assign({},CWF_DEF);cwApply();sync()};
+    $('cwq').oninput=e=>{CW.f.q=e.target.value;cwApply()};$('cwweb').onchange=e=>{CW.f.web=e.target.checked;cwApply()};$('cwhrs').onchange=e=>{CW.f.hours=e.target.checked;cwApply()};$('cwconf').onchange=e=>{CW.f.conf=e.target.checked;cwApply()};
+    el.addEventListener('click',e=>{const b=e.target.closest('[data-cwk]');if(b){CW.f.kind=b.dataset.cwk;cwApply();sync()}});
+    el.addEventListener('keydown',e=>{if(e.key==='Escape')cwToggle(false)})}
+  const show=open==null?el.hidden:open;el.hidden=!show;if(show){const c=document.getElementById('clf');if(c)c.hidden=true;el._sync();el.querySelector('#cwq').focus({preventScroll:true})}}
+
 // start
+layInit();
 window.addEventListener('resize',resize);setSeason(season);theme();resize();
 const intro=()=>{if(matchMedia('(prefers-reduced-motion: reduce)').matches){k=kT=1;draw();return}
   const t0=performance.now(),r0=[-70,-20,0],r1=rot.slice();

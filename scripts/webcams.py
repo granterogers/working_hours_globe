@@ -86,8 +86,22 @@ def main():
     print(f'{len(data)} webcams from {len(countries)} countries written to data/webcams.json')
 
 
+def coworking():
+    """The weekly workflow also refreshes the coworking-spaces layer (scripts/coworking.py). Its files are
+    staged here, because the workflow's own commit step only adds data/webcams.json."""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import coworking as cw
+        if cw.main():
+            import subprocess
+            subprocess.run(['git', 'add', '-A', 'data/coworking'], cwd=ROOT, check=False)
+    except Exception as e:  # noqa: BLE001
+        print('Coworking update skipped:', e)
+
+
 if __name__ == '__main__':
     KEY = os.environ.get('WINDY_WEBCAMS_KEY', '').strip()
     if not KEY:
         sys.exit('Set WINDY_WEBCAMS_KEY')
     main()
+    coworking()
