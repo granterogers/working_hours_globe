@@ -1623,14 +1623,14 @@ function cwMark(X,Y,r,sel){ctx.beginPath();ctx.roundRect?ctx.roundRect(X-r,Y-r,2
   ctx.lineWidth=sel?3:1.4;ctx.strokeStyle=sel?'#ffd27a':pal.halo;ctx.stroke();const s=r/8;ctx.fillStyle='#fff';
   ctx.fillRect(X-4.5*s,Y-4*s,9*s,5.5*s);ctx.fillStyle='#2f6fe0';ctx.fillRect(X-3.3*s,Y-2.9*s,6.6*s,3.4*s);ctx.fillStyle='#fff';ctx.fillRect(X-6*s,Y+2.2*s,12*s,1.8*s)}
 // At globe scale, places that would overlap merge into one count badge; pressing a badge flies to it
-const CW_CLUSTER_K=8;
+const CW_CLUSTER_K=18;
 function cwCluster(){const cells=new Map();
   for(const x of CW.vis){const p=camProj(x.v);if(!p||p[0]<-30||p[1]<-30||p[0]>W+30||p[1]>H+30)continue;
     const key=Math.floor(p[0]/26)+','+Math.floor(p[1]/26);let c=cells.get(key);if(!c){c={x:0,y:0,lon:0,lat:0,n:0,one:null};cells.set(key,c)}
     c.x+=p[0];c.y+=p[1];c.lon+=x.lon;c.lat+=x.lat;c.n++;c.one=x}
   const out=[...cells.values()];for(const c of out){c.x/=c.n;c.y/=c.n;c.lon/=c.n;c.lat/=c.n}return out}
 function cwClusterAt(x,y){let best=null,bd=18;for(const c of CW.cl||[]){if(c.n<2)continue;const d=Math.hypot(c.x-x,c.y-y);if(d<bd){bd=d;best=c}}return best}
-function cwDraw(){if(!CW.vis.length)return;const r=k<8?5:6.5,at=[];ctx.save();
+function cwDraw(){if(!CW.vis.length)return;const r=k<CW_CLUSTER_K?4.5:5.5,at=[];ctx.save();
   if(k<CW_CLUSTER_K){CW.cl=cwCluster();for(const c of CW.cl){if(c.n===1){cwMark(c.x,c.y,r,c.one===CW.sel);continue}
       ctx.beginPath();ctx.arc(c.x,c.y,11,0,Math.PI*2);ctx.fillStyle='#2f6fe0';ctx.fill();ctx.lineWidth=1.4;ctx.strokeStyle=pal.halo;ctx.stroke();
       ctx.fillStyle='#fff';ctx.font='700 10px "Bricolage Grotesque", "Segoe UI", sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
