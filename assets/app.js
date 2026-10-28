@@ -84,7 +84,7 @@ function planetsNow(){const d=Date.now()/864e5+2440587.5-2451543.5,D=Math.PI/180
     return{name,col,ra:rv(Math.atan2(Y,X)/D),dec:Math.atan2(Z,Math.hypot(X,Y))/D}})}
 // the night sky as seen from the place at the centre of the globe, for the time now: the zenith is the centre of the
 // screen, and the local sidereal time (Greenwich sidereal time plus the longitude) turns the sky as the globe turns.
-// It fills the whole screen with stars, and labels the brightest named stars and the planets.
+// It fills the whole screen with stars, with the planets marked as coloured dots.
 function stars(){const r=sc.getBoundingClientRect();sc.width=r.width*dpr;sc.height=r.height*dpr;const s=sc.getContext('2d');s.clearRect(0,0,sc.width,sc.height);
   if(!dark||!SKYD)return;const rad=Math.PI/180;
   const olon=-rot[0],olat=clamp(-rot[1],-90,90),jd=Date.now()/864e5+2440587.5,lst=((280.46061837+360.98564736629*(jd-2451545.0)+olon)%360+360)%360;
@@ -99,12 +99,7 @@ function stars(){const r=sc.getBoundingClientRect();sc.width=r.width*dpr;sc.heig
   for(const[ra,dec,mag]of SKYD.stars){const p=P(ra,dec);if(!p)continue;
     const rr=Math.max(0.35,(6.2-mag)*0.3)*dpr,a=Math.min(1,Math.max(0.3,1.05-mag*0.13));
     s.fillStyle=`rgba(226,235,255,${a})`;s.beginPath();s.arc(p[0],p[1],rr,0,7);s.fill()}
-  s.font=`${11*dpr}px "Bricolage Grotesque", "Segoe UI", sans-serif`;s.textAlign='left';s.textBaseline='middle';
-  s.fillStyle='rgba(200,215,255,0.7)';
-  for(const[name,ra,dec]of SKYD.named){const p=P(ra,dec);if(p)s.fillText(name,p[0]+6*dpr,p[1])}
-  for(const pl of planetsNow()){const p=P(pl.ra,pl.dec);if(!p)continue;
-    s.fillStyle=pl.col;s.beginPath();s.arc(p[0],p[1],3.4*dpr,0,7);s.fill();
-    s.fillStyle='rgba(235,240,255,0.9)';s.fillText(pl.name,p[0]+7*dpr,p[1])}
+  for(const pl of planetsNow()){const p=P(pl.ra,pl.dec);if(!p)continue;s.fillStyle=pl.col;s.beginPath();s.arc(p[0],p[1],3.4*dpr,0,7);s.fill()}
 }
 
 // time helpers
@@ -182,7 +177,7 @@ function draw(){
   const withA=(a,fn)=>{if(a<=0)return;ctx.save();ctx.globalAlpha=a;fn();ctx.restore()};
   withA(LAY.night,drawNight);
   drawOverlays();withA(LAY.cl,clDraw);withA(LAY.cams,camDraw);withA(LAY.cw,cwDraw);
-  const mapNames=LAY.names>0&&shown&&(!raster||BM().labels);drawLabels();MAPLAB.length=0;MAPBOX.length=0;if(mapNames)drawMapLabels(tileA*LAY.names);withA(LAY.weather,()=>wxDraw(mapNames));drawPin();
+  const mapNames=LAY.names>0&&shown&&(!raster||BM().labels);withA(LAY.names,drawLabels);MAPLAB.length=0;MAPBOX.length=0;if(mapNames)drawMapLabels(tileA*LAY.names);withA(LAY.weather,()=>wxDraw(mapNames));drawPin();
 }
 
 function drawOverlays(){overlays.forEach(L=>{if(!L.on)return;L.fc.features.forEach(f=>{const g=f.geometry;if(!g||/Point/.test(g.type))return;
@@ -1069,7 +1064,10 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
   for(const p of['circle-opacity','circle-stroke-opacity'])map.setPaintProperty(M3D_OWN+'cwk',p,['interpolate',['linear'],['zoom'],5,0,7,1]);
   map.setPaintProperty(M3D_OWN+'cwk','circle-radius',['interpolate',['linear'],['zoom'],2,2.5,8,3.5,14,4.5]);
   // the base map's own names follow the Place names switch
-  for(const l of map.getStyle().layers)if(l.type==='symbol'&&!l.id.startsWith(M3D_OWN))try{map.setLayoutProperty(l.id,'visibility',showNames?'visible':'none')}catch(e){}}
+  // names and weather fade in and out: MapLibre animates a change of opacity, so they are never switched off at once
+  map.setPaintProperty(M3D_OWN+'lab','text-opacity',showNames?1:0);
+  map.setPaintProperty(M3D_OWN+'wxt','text-opacity',showWeather?1:0);map.setPaintProperty(M3D_OWN+'wxt','icon-opacity',showWeather?1:0);
+  for(const l of map.getStyle().layers)if(l.type==='symbol'&&!l.id.startsWith(M3D_OWN))try{map.setPaintProperty(l.id,'text-opacity',showNames?1:0)}catch(e){}}
 // weather in 3D: towns and cities spread across the view, bigger places first, about 140 px apart
 function m3dWx(){const map=m3d.map;if(!map||!showWeather||m3d.el.hidden)return;const c=wxCities();if(!c)return;
   const W3=map.getContainer().clientWidth,H3=map.getContainer().clientHeight,cap=clamp(Math.round(W3*H3/60000),8,30),at=[],out=[],b=map.getBounds();
