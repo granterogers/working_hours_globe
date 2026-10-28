@@ -178,7 +178,7 @@ function draw(){
   const withA=(a,fn)=>{if(a<=0)return;ctx.save();ctx.globalAlpha=a;fn();ctx.restore()};
   withA(LAY.night,drawNight);withA(LAY.night,drawLights);
   drawOverlays();withA(LAY.cl,clDraw);withA(LAY.cams,camDraw);withA(LAY.cw,cwDraw);
-  const mapNames=LAY.names>0&&shown&&(!raster||BM().labels);withA(LAY.names,drawLabels);MAPLAB.length=0;MAPBOX.length=0;if(mapNames)drawMapLabels(tileA*LAY.names);withA(LAY.weather,()=>wxDraw(mapNames));drawPin();
+  const mapNames=LAY.names>0&&shown&&(!raster||BM().labels);withA(LAY.names,drawLabels);MAPLAB.length=0;MAPBOX.length=0;if(mapNames)drawMapLabels(tileA*LAY.names);withA(LAY.weather,()=>wxDraw(mapNames));if(showFavs)drawFavs();drawPin();
 }
 
 function drawOverlays(){overlays.forEach(L=>{if(!L.on)return;L.fc.features.forEach(f=>{const g=f.geometry;if(!g||/Point/.test(g.type))return;
@@ -195,7 +195,6 @@ function drawLabels(){
   placed=[];const ctr=viewCap[0],ppd=base*k/DEG,cand=[];
   overlays.forEach(L=>{if(!L.on)return;L.fc.features.forEach(f=>{const g=f.geometry;if(!g)return;
     (g.type==='Point'?[g.coordinates]:g.type==='MultiPoint'?g.coordinates:[]).forEach(p=>cand.push({ov:L,f,lon:p[0],lat:p[1],name:(f.properties&&f.properties.name)||'',pri:4e9,a:1}))})});
-  if(showFavs)for(const f of favs)cand.push({fav:f,v:f.v,lon:f.lon,lat:f.lat,name:f.name,pri:5e9,a:1});
   if(typeof clLabels==='function')clLabels(cand);
   // One label per country, then extra labels only where they add something: a region on a different
   // clock, a separate island, or a repeat of the country's hours once the last one is far off screen.
@@ -593,12 +592,23 @@ function showFav(f,focus){activeFav=f;selected=null;draft=null;
   nm.oninput=commit;nt.oninput=commit;
   document.getElementById('fdel').onclick=()=>{favs=favs.filter(x=>x!==f);saveFavs();renderFavs();activeFav=null;document.getElementById('info').classList.remove('show');draw()};
   document.getElementById('info').classList.add('show');if(focus)setTimeout(()=>nt.focus(),50);}
-function renderFavs(){const ul=document.getElementById('favs');if(!ul)return;
+// favourites: a heart for each one, drawn over the labels so it is always there, and clickable
+function drawFavs(){for(const f of favs){const p=scr([f.lon,f.lat]);if(!p||p[0]<-30||p[1]<-30||p[0]>W+30||p[1]>H+30)continue;
+  const on=activeFav===f,sz=on?9:7.5;heart(p[0],p[1],sz,FAVC,pal.halo);
+  placed.push({x0:p[0]-14,x1:p[0]+14,y0:p[1]-24,y1:p[1]+12,L:{fav:f,name:f.name}});
+  ctx.font=F.ov;ctx.lineWidth=4;ctx.strokeStyle=pal.halo;ctx.strokeText(f.name,p[0],p[1]-14);ctx.fillStyle=pal.ink;ctx.fillText(f.name,p[0],p[1]-14)}}
+// the favourites list, opened by the gear beside Favourites in the Layers panel
+function renderFavs(){const ul=document.getElementById('favlistul');if(!ul)return;
   if(!favs.length){ul.innerHTML='<li class="empty">Click any place on the globe and press the heart to save it.</li>';return}
   ul.innerHTML='';favs.slice().sort((a,b)=>a.name.localeCompare(b.name)).forEach(f=>{const li=document.createElement('li'),b=document.createElement('button');
     const o=f.tz&&D.zones[f.tz]?D.zones[f.tz][season]:null;
     b.innerHTML=`<span class="fh" aria-hidden="true">♥</span><span class="fn">${esc(f.name)}</span>${o!=null?`<span class="fhrs">${hours(o)}</span>`:''}`;
-    b.onclick=()=>{flyTo(f.lon,f.lat,2);showFav(f)};li.appendChild(b);ul.appendChild(li)});}
+    b.onclick=()=>{favListToggle(false);flyTo(f.lon,f.lat,2);showFav(f)};li.appendChild(b);ul.appendChild(li)});}
+function favListToggle(open){let el=document.getElementById('favlist');
+  if(!el){el=document.createElement('aside');el.className='clf glass';el.id='favlist';el.hidden=true;el.setAttribute('aria-label','Favourites');
+    el.innerHTML='<div class="clfh"><b>Favourites</b><button class="x" id="favlistx" aria-label="Close favourites">×</button></div><ul class="favs" id="favlistul"></ul>';
+    document.body.appendChild(el);el.querySelector('#favlistx').onclick=()=>favListToggle(false)}
+  const show=open==null?el.hidden:open;el.hidden=!show;if(show){renderFavs();const c=document.getElementById('clf');if(c)c.hidden=true}}
 
 
 
@@ -883,12 +893,13 @@ const LYI={
 function lyrRender(){const m=document.getElementById('lyrb');if(!m)return;
   const ic=k=>`<i class="lyi" aria-hidden="true">${typeof LYI[k]==='function'?LYI[k]():LYI[k]}</i>`;
   const tick=(k,on,label,extra)=>`<label class="bmtick"><input type="checkbox" data-show="${k}" ${on?'checked':''}>${ic(k)}<span>${label}</span>${extra||''}</label>`;
-  m.innerHTML=tick('hours',showHours,'Working hours')+tick('fav',showFavs,'Favourites')+
+  m.innerHTML=tick('hours',showHours,'Working hours')+tick('fav',showFavs,'Favourites',`<button type="button" class="clfb" id="favgear" aria-label="Show favourites list" title="Show favourites list"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>`)+
     (CL.data.length?tick('cl',CL.on,'Colivings',`<small class="clcnt" id="clcnt"></small><button type="button" class="clfb${clActive(CL.f)?' on':''}" id="clfb" aria-label="Filter colivings" title="Filter and updates">${FUNNEL}</button>`):'')+
     tick('cw',showCw,'Coworking spaces',`<small class="clcnt" id="cwcnt" aria-live="polite"></small><button type="button" class="clfb${cwActive()?' on':''}" id="cwfb" aria-label="Filter coworking spaces" title="Filter coworking spaces">${FUNNEL}</button>`)+tick('cams',showCams,'Webcams')+tick('weather',showWeather,'Weather now','<small class="clcnt">°C</small>')+tick('night',showNight,'Day and night')+tick('names',showNames,'Place names');
   m.querySelectorAll('[data-show]').forEach(c=>c.onchange=()=>setShow(c.dataset.show,c.checked));
   const fb=m.querySelector('#clfb');if(fb)fb.onclick=e=>{e.preventDefault();e.stopPropagation();clToggle()};
-  const cb=m.querySelector('#cwfb');if(cb)cb.onclick=e=>{e.preventDefault();e.stopPropagation();cwToggle()};clCounts();cwCounts();lyrFit()}
+  const cb=m.querySelector('#cwfb');if(cb)cb.onclick=e=>{e.preventDefault();e.stopPropagation();cwToggle()};
+  const gb=m.querySelector('#favgear');if(gb)gb.onclick=e=>{e.preventDefault();e.stopPropagation();favListToggle()};clCounts();cwCounts();lyrFit()}
 function lyrFold(open){const el=document.getElementById('lyr'),h=document.getElementById('lyrh');el.classList.toggle('folded',!open);h.setAttribute('aria-expanded',String(open));
   try{localStorage.setItem('whg.lyr',open?'open':'folded')}catch(e){}lyrFit()}
 // keep the working-hours panel clear of the Layers panel below it
@@ -897,7 +908,7 @@ document.getElementById('lyrh').onclick=()=>lyrFold(document.getElementById('lyr
 // base map menu (top right)
 function bmRender(){const m=document.getElementById('bmmenu');
   m.innerHTML=`<div class="bmh">Map layers</div><button type="button" class="add" id="add">Add a KML, KMZ or GeoJSON file</button><ul class="layers" id="layers"></ul>`+
-    `<div class="bmh">Favourites</div><ul class="favs" id="favs"></ul>`+
+
     `<div class="bmh">Base map</div>`+Object.entries(BASEMAPS).map(([id,b])=>`<button type="button" role="menuitemradio" aria-checked="${id===basemap}" data-id="${id}"><i class="bmdot"></i><span><b>${b.name}</b><small>${b.sub}</small></span></button>`).join('');
   m.querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>{setBasemap(b.dataset.id);bmToggle(false)});
   m.querySelector('#add').onclick=()=>document.getElementById('file').click();
@@ -1747,7 +1758,9 @@ const NIGHT_BANDS=(()=>{const out=[],maxA=0.4,step=1;let prev=0;
 // many tiers; the cap is filled with that darkness directly
 const poleNight=sign=>{const sd=Math.sin(sunNow(Date.now())[1]*Math.PI/180);let a=0;for(const[e,al]of NIGHT_TIERS)if(sign*sd<-Math.sin(e*Math.PI/180))a+=al;return a};
 function drawPoleNight(a,alphaScale){if(a<=0)return;for(const sign of[1,-1]){const pa=poleNight(sign)*alphaScale;if(pa<=0)continue;
-  ctx.beginPath();path(d3.geoCircle().center([0,sign*90]).radius(5).precision(2)());ctx.fillStyle=`rgba(${dark?'2,6,22':'8,14,40'},${pa.toFixed(4)})`;ctx.fill()}}
+  const col=dark?'2,6,22':'8,14,40';
+  ctx.beginPath();path(d3.geoCircle().center([0,sign*90]).radius(5.45).precision(2)());ctx.fillStyle=`rgba(${col},${(pa*0.35).toFixed(4)})`;ctx.fill();
+  ctx.beginPath();path(d3.geoCircle().center([0,sign*90]).radius(5).precision(2)());ctx.fillStyle=`rgba(${col},${pa.toFixed(4)})`;ctx.fill()}}
 function drawNight(){const nf=1-clamp((k-TILE_K)/4.5,0,1);if(nf<=0)return;const col=dark?'2,6,22':'8,14,40';
   // the night side is traced from the sun's position (see nightFeaturesGeo), so its edge stays clean over the poles
   ctx.save();for(const f of nightFeaturesGeo().features){ctx.beginPath();path(f);ctx.fillStyle=`rgba(${col},${(f.properties.a*nf).toFixed(4)})`;ctx.fill()}
@@ -1772,9 +1785,9 @@ setInterval(()=>{if(showNight&&!running)draw()},60000);
 // Web map tiles stop at 85° north and south, which left a dark disc over each pole. Fill those caps in the base
 // map's own colours: ice for Antarctica, sea for the Arctic, with a soft edge so the join doesn't show.
 const POLE={street:['#ddecec','#aad3df'],satellite:['#eef2f5','#1f4262'],s2:['#eef2f5','#1f4262'],topo:['#f4f7f7','#97d2e3'],ocean:['#e8eef0','#a8c4d4'],night:['#0b0d1a','#05070f']};
+// the polar caps the basemap stops short of: filled in its colours, with the edge feathered outwards
 function drawPoleCaps(){const c=POLE[basemap]||POLE.street,a0=ctx.globalAlpha;
-  for(const [lat,col] of [[-90,c[0]],[90,c[1]]]){
-    ctx.beginPath();path(d3.geoCircle().center([0,lat]).radius(5).precision(1)());ctx.globalAlpha=a0;ctx.fillStyle=col;ctx.fill()}
+  for(const [lat,col] of [[-90,c[0]],[90,c[1]]])for(let i=0;i<=6;i++){ctx.beginPath();path(d3.geoCircle().center([0,lat]).radius(5+i*0.12).precision(1)());ctx.globalAlpha=a0*(1-i/7);ctx.fillStyle=col;ctx.fill()}
   ctx.globalAlpha=a0}
 
 // keep tiles, terrain and the 3D library on this device between visits (see sw.js), and fetch the 3D library

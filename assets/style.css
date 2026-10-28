@@ -402,3 +402,14 @@ body.in3d .lyr{z-index:46}
 .bmmenu .add{justify-content:center;border:1px dashed var(--glass-b);margin:4px 2px;font-size:.86rem}
 .res button{font-size:.9rem;padding:8px 10px}
 .res small{font-size:.78rem}
+
+/* the photo gallery fills the screen; the photo's credit sits small along the bottom */
+.phbox figure{position:relative;width:100vw;height:100vh;flex:0 0 100vw}
+.phimg{position:absolute;inset:0}
+.phimg img{max-width:100vw;max-height:100vh;border-radius:0;box-shadow:none}
+.phbox figcaption{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);margin:0;max-width:calc(100vw - 140px);font-size:.7rem;line-height:1.35;padding:5px 12px;border-radius:999px;background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);opacity:.8;text-align:center;flex-direction:row;flex-wrap:wrap;justify-content:center;gap:2px 10px}
+.phbox figcaption b{font-size:.72rem}
+.phbox figcaption span{color:var(--ink2)}
+/* the favourites list, from the gear in the Layers panel */
+#favlist{position:absolute;left:16px;top:auto;bottom:330px;height:auto;width:260px;max-height:50vh;overflow:auto;padding:12px;border-radius:16px;z-index:44}
+#favlist .favs{max-height:none}
