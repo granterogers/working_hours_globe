@@ -996,7 +996,10 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
       'text-allow-overlap':true,'icon-allow-overlap':true,'icon-optional':true},
     paint:{'text-color':'#ffffff','text-halo-color':'rgba(10,16,30,.85)','text-halo-width':1.8}});
   lay({id:M3D_OWN+'cm',type:'circle',source:M3D_OWN+'cm',paint:{'circle-color':['case',['==',['get','live'],1],'#1f2937','#ffffff'],'circle-radius':7,'circle-stroke-color':['case',['==',['get','live'],1],'#e2453c','#1f2937'],'circle-stroke-width':2}});
-  lay({id:M3D_OWN+'cwk',type:'circle',source:M3D_OWN+'cwk',paint:{'circle-color':'#2f6fe0','circle-radius':6.5,'circle-stroke-color':'#fff','circle-stroke-width':1.8}});
+  lay({id:M3D_OWN+'cwk',type:'circle',source:M3D_OWN+'cwk',paint:{'circle-color':'#2f6fe0','circle-radius':4,'circle-stroke-color':'#fff','circle-stroke-width':1.4}});
+  // coworking fades in from zoom 5 to 7, so the layer stays out of the way of a wide view of the globe
+  for(const p of['circle-opacity','circle-stroke-opacity'])map.setPaintProperty(M3D_OWN+'cwk',p,['interpolate',['linear'],['zoom'],5,0,7,1]);
+  map.setPaintProperty(M3D_OWN+'cwk','circle-radius',['interpolate',['linear'],['zoom'],2,2.5,8,3.5,14,4.5]);
   // the base map's own names follow the Place names switch
   for(const l of map.getStyle().layers)if(l.type==='symbol'&&!l.id.startsWith(M3D_OWN))try{map.setLayoutProperty(l.id,'visibility',showNames?'visible':'none')}catch(e){}}
 // weather in 3D: towns and cities spread across the view, bigger places first, about 140 px apart
@@ -1011,7 +1014,7 @@ function m3dClick(e){const map=m3d.map,hits=map.queryRenderedFeatures(e.point,{l
   const ll=[e.lngLat.lng,e.lngLat.lat];if(m3d.pin){m3d.pin.remove();m3d.pin=null}
   m3d.pivot=e.lngLat;   // turning and tilting now orbit around this spot
   const h=hits[0];
-  if(h&&h.layer.id===M3D_OWN+'cwk'){const c=CW.list.get(h.properties.id);if(c){cwShow(c);return}}
+  if(h&&h.layer.id===M3D_OWN+'cwk'&&map.getZoom()>=7){const c=CW.list.get(h.properties.id);if(c){cwShow(c);return}}
   if(h&&h.layer.id===M3D_OWN+'cm'){const c=CAM.list.get(h.properties.id);if(c){camShow(c);return}}
   if(h&&h.layer.id===M3D_OWN+'fv'){const f=favs[h.properties.i];if(f){showFav(f);return}}
   if(h&&h.layer.id===M3D_OWN+'cl'){const x=CL.byId.get(h.properties.id);if(x){clShow(x);return}}
@@ -1623,22 +1626,25 @@ function cwMark(X,Y,r,sel){ctx.beginPath();ctx.roundRect?ctx.roundRect(X-r,Y-r,2
   ctx.lineWidth=sel?3:1.4;ctx.strokeStyle=sel?'#ffd27a':pal.halo;ctx.stroke();const s=r/8;ctx.fillStyle='#fff';
   ctx.fillRect(X-4.5*s,Y-4*s,9*s,5.5*s);ctx.fillStyle='#2f6fe0';ctx.fillRect(X-3.3*s,Y-2.9*s,6.6*s,3.4*s);ctx.fillStyle='#fff';ctx.fillRect(X-6*s,Y+2.2*s,12*s,1.8*s)}
 // At globe scale, places that would overlap merge into one purple dot; pressing a dot flies to it
-const CW_CLUSTER_K=18,CW_CELL=64;  // places within a 64 px square merge into one dot
+const CW_CLUSTER_K=18,CW_CELL=64,CW_SINGLE_K=9;  // places within a 64 px square merge into one dot
+// Zoomed out, only places that sit in a crowd show, so the globe isn't covered: a few hubs at globe scale, most
+// of a country's places once you're zoomed in to a region, and single places from region zoom on
+const cwMinN=()=>k<2.5?25:k<6?4:2;
 function cwCluster(){const cells=new Map();
   for(const x of CW.vis){const p=camProj(x.v);if(!p||p[0]<-30||p[1]<-30||p[0]>W+30||p[1]>H+30)continue;
     const key=Math.floor(p[0]/CW_CELL)+','+Math.floor(p[1]/CW_CELL);let c=cells.get(key);if(!c){c={x:0,y:0,lon:0,lat:0,n:0,one:null};cells.set(key,c)}
     c.x+=p[0];c.y+=p[1];c.lon+=x.lon;c.lat+=x.lat;c.n++;c.one=x}
   const out=[...cells.values()];for(const c of out){c.x/=c.n;c.y/=c.n;c.lon/=c.n;c.lat/=c.n}return out}
-function cwClusterAt(x,y){let best=null,bd=18;for(const c of CW.cl||[]){if(c.n<2)continue;const d=Math.hypot(c.x-x,c.y-y);if(d<bd){bd=d;best=c}}return best}
-function cwDraw(){if(!CW.vis.length)return;const r=k<CW_CLUSTER_K?4.5:5.5,at=[];ctx.save();
-  if(k<CW_CLUSTER_K){CW.cl=cwCluster();for(const c of CW.cl){if(c.n===1){cwMark(c.x,c.y,r,c.one===CW.sel);continue}
-      ctx.beginPath();ctx.arc(c.x,c.y,6,0,Math.PI*2);ctx.fillStyle='#8b5cf6';ctx.fill();ctx.lineWidth=1.4;ctx.strokeStyle=pal.halo;ctx.stroke()}
+function cwClusterAt(x,y){let best=null,bd=18;for(const c of CW.cl||[]){if(c.n<cwMinN())continue;const d=Math.hypot(c.x-x,c.y-y);if(d<bd){bd=d;best=c}}return best}
+function cwDraw(){if(!CW.vis.length)return;const r=k<CW_CLUSTER_K?3.5:4.5,at=[];ctx.save();
+  if(k<CW_CLUSTER_K){CW.cl=cwCluster();const min=cwMinN();for(const c of CW.cl){if(c.n<min||(c.n===1&&k<CW_SINGLE_K))continue;if(c.n===1){cwMark(c.x,c.y,r,c.one===CW.sel);continue}
+      ctx.beginPath();ctx.arc(c.x,c.y,4.5,0,Math.PI*2);ctx.fillStyle='#8b5cf6';ctx.fill();ctx.lineWidth=1.4;ctx.strokeStyle=pal.halo;ctx.stroke()}
     ctx.restore();return}
   CW.cl=null;
   for(const x of CW.vis){const p=camProj(x.v);if(!p||p[0]<-10||p[1]<-10||p[0]>W+10||p[1]>H+10)continue;
     if(x!==CW.sel&&at.some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<r*2.2))continue;at.push(p);cwMark(p[0],p[1],r,x===CW.sel)}
   ctx.restore()}
-function cwHit(x,y){let best=null,bd=12;for(const c of CW.vis){const p=camProj(c.v);if(!p)continue;const d=Math.hypot(p[0]-x,p[1]-y);if(d<bd){bd=d;best=c}}return best}
+function cwHit(x,y){if(k<CW_SINGLE_K)return null;let best=null,bd=12;for(const c of CW.vis){const p=camProj(c.v);if(!p)continue;const d=Math.hypot(p[0]-x,p[1]-y);if(d<bd){bd=d;best=c}}return best}
 function cwShow(x){activeFav=null;draft=null;selected=null;if(typeof CL!=='undefined')CL.sel=null;CAM.sel=null;clickPin=null;CW.sel=x;infoTok++;
   const rows=[['Address',x.addr],['Opening hours',x.hours],['Phone',x.phone],['Listed in',{v:'Overture Maps',o:'OpenStreetMap',vo:'Overture Maps and OpenStreetMap'}[x.src]||'']].filter(r=>r[1]);
   document.getElementById('infob').innerHTML=`<p class="cltype"><i style="background:#2f6fe0;border-radius:3px"></i>Coworking space${x.chain?' · chain':''}</p><h2>${esc(x.name)}</h2>`+
