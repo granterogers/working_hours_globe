@@ -106,6 +106,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 
 .toast{position:absolute;left:50%;top:22px;transform:translateX(-50%);padding:9px 16px;border-radius:999px;font-size:.86rem;color:var(--ink2);transition:opacity .8s}
 .toast.hide{opacity:0}
+/* the version number: small, quiet, out of the way of the map's controls */
+.ver{position:fixed;left:50%;bottom:3px;transform:translateX(-50%);font-size:10px;letter-spacing:.04em;color:var(--ink2);opacity:.45;pointer-events:none;z-index:1}
 
 @media (max-width:700px){
   .panel,.panel.collapsed{left:12px;top:12px;width:calc(100% - 128px);max-height:calc(100% - 120px);overflow:auto}
