@@ -1048,7 +1048,7 @@ function m3dGeo(){
   const cwk={type:'FeatureCollection',features:showCw?CW.vis.map(c=>({type:'Feature',properties:{id:c.id},geometry:{type:'Point',coordinates:[c.lon,c.lat]}})):[]};
   // the two polar caps, which the basemap's tiles stop short of, in the basemap's own colours
   const pc=POLE[basemap]||POLE.street,pole={type:'FeatureCollection',features:[[85,90,pc[1]],[-90,-85,pc[0]]].map(([a,b,c])=>({type:'Feature',properties:{c},geometry:{type:'Polygon',coordinates:[[[-180,a],[180,a],[180,b],[-180,b],[-180,a]]]}}))};
-  return{tz,lab,cl,fv,ov,wx,cm,cwk,night:showNight?nightFeaturesGeo():{type:'FeatureCollection',features:[]},pole}}
+  return{tz,lab,cl,fv,ov,wx,cm,cwk,night:nightFeaturesGeo(),pole}}
 // the night tiers: each is the sun below an angle of the horizon, with a small share of the darkness
 const NIGHT_TIERS=(()=>{const t=[];for(let e=0;e<=18;e+=1.5)t.push([e,0.4/13]);return t})();
 // 3D night side: the boundary of the night (sun below the horizon) and of the twilight (sun below 9°), traced one
@@ -1082,8 +1082,9 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
     (map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
   map.setPaintProperty(M3D_OWN+'tz','fill-opacity',['interpolate',['linear'],['zoom'],zA,op,zB,0]);
   try{map.setLayerZoomRange(M3D_OWN+'tz',0,Math.min(24,zB+0.3))}catch(e){}
-  lay({id:M3D_OWN+'night',type:'fill',source:M3D_OWN+'night',paint:{'fill-color':dk?'#02061a':'#080e28','fill-opacity':['get','a']}});
-  map.setPaintProperty(M3D_OWN+'night','fill-opacity',['*',['get','a'],['interpolate',['linear'],['zoom'],zA,1,zB,0]]);
+  lay({id:M3D_OWN+'night',type:'fill',source:M3D_OWN+'night',paint:{'fill-color':dk?'#02061a':'#080e28','fill-opacity':0}});
+  // on and off is a change of opacity, which the map animates, rather than the shading appearing all at once
+  map.setPaintProperty(M3D_OWN+'night','fill-opacity',['*',['get','a'],showNight?1:0,['interpolate',['linear'],['zoom'],zA,1,zB,0]]);
   lay({id:M3D_OWN+'ovf',type:'fill',source:M3D_OWN+'ov',filter:['==',['geometry-type'],'Polygon'],paint:{'fill-color':['get','c'],'fill-opacity':0.2}});
   lay({id:M3D_OWN+'ovl',type:'line',source:M3D_OWN+'ov',filter:['in',['geometry-type'],['literal',['LineString','Polygon']]],paint:{'line-color':['get','c'],'line-width':2.5}});
   lay({id:M3D_OWN+'ovp',type:'circle',source:M3D_OWN+'ov',filter:['==',['geometry-type'],'Point'],paint:{'circle-color':['get','c'],'circle-radius':5,'circle-stroke-color':'#fff','circle-stroke-width':1.5}});
@@ -1783,8 +1784,11 @@ function drawNight(){const nf=1-clamp((k-TILE_K)/4.5,0,1);if(nf<=0)return;const 
 // City lights: the Black Marble night imagery, shown only over the night side. It is drawn with the same tile
 // pipeline as the basemap, then masked by the night shading, so the lights are brightest where it is darkest.
 const lightsCv=document.createElement('canvas'),maskCv=document.createElement('canvas');
+let lightsKey='';
 function drawLights(){const lf=1-clamp((k-TILE_K)/4.5,0,1);if(lf<=0||basemap==='night')return;
-  const keep=basemap;basemap='night';let ok=false;try{ok=drawTiles()}finally{basemap=keep}
+  // the lights are rebuilt only when the view changes; a fade then just changes their opacity, so it stays smooth
+  const key=[rot.map(v=>v.toFixed(3)).join(','),k.toFixed(4),W,H,dpr,Math.floor(Date.now()/6e4),basemap].join('|');
+  if(key!==lightsKey){lightsKey='';const keep=basemap;basemap='night';let ok=false;try{ok=drawTiles()}finally{basemap=keep}
   if(!ok)return;
   if(lightsCv.width!==cv.width||lightsCv.height!==cv.height){lightsCv.width=maskCv.width=cv.width;lightsCv.height=maskCv.height=cv.height}
   const lc=lightsCv.getContext('2d'),mc=maskCv.getContext('2d');
@@ -1794,6 +1798,8 @@ function drawLights(){const lf=1-clamp((k-TILE_K)/4.5,0,1);if(lf<=0||basemap==='
   for(const f of nightFeaturesGeo().features){mc.beginPath();mp(f);mc.fillStyle=`rgba(255,255,255,${Math.min(1,f.properties.a*2.5).toFixed(4)})`;mc.fill()}
   for(const sign of[1,-1]){const pa=poleNight(sign);if(pa<=0)continue;mc.beginPath();mp(d3.geoCircle().center([0,sign*90]).radius(5).precision(2)());mc.fillStyle=`rgba(255,255,255,${Math.min(1,pa*2.5).toFixed(4)})`;mc.fill()}
   lc.setTransform(1,0,0,1,0,0);lc.globalCompositeOperation='destination-in';lc.drawImage(maskCv,0,0);lc.globalCompositeOperation='source-over';
+  lightsKey=key}
+  if(!lightsKey)return;
   ctx.save();ctx.globalAlpha=lf;ctx.drawImage(lightsCv,0,0,W,H);ctx.restore()}
 setInterval(()=>{if(showNight&&!running)draw()},60000);
 
