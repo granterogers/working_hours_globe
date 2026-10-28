@@ -387,3 +387,6 @@ body.in3d .lyr{z-index:46}
 .lyi{width:18px;height:18px;flex:none;display:grid;place-items:center;color:var(--ink2)}
 .lyi svg,.lyi img{width:18px;height:18px;display:block}
 .strip{display:none!important}
+
+/* the layer list shows names only, without counts */
+.clcnt{display:none}

@@ -61,27 +61,51 @@ let SKYD=null;fetch('data/sky.json').then(r=>{if(!r.ok)throw 0;return r.json()})
 let SKYKEY='';
 // redraw the sky when the view has turned by a quarter of a degree or a minute has passed
 function skyFrame(){const key=Math.round(rot[0]*4)+','+Math.round(rot[1]*4)+','+Math.floor(Date.now()/6e4);if(key!==SKYKEY){SKYKEY=key;stars()}}
+// planets: Paul Schlyter's low-precision orbital elements (good to a fraction of a degree): [node, inclination,
+// argument of perihelion, semi-major axis, eccentricity, mean anomaly], each as a value at 2000 Jan 0 plus a daily rate
+const PLANETS=[['Mercury','#c9b89a',[48.3313,3.24587e-5,7.0047,5e-8,29.1241,1.01444e-5,0.387098,0,0.205635,5.59e-10,168.6562,4.0923344368]],
+  ['Venus','#f6e7b0',[76.6799,2.4659e-5,3.3946,2.75e-8,54.891,1.38374e-5,0.72333,0,0.006773,-1.302e-9,48.0052,1.6021302244]],
+  ['Mars','#ff8a65',[49.5574,2.11081e-5,1.8497,-1.78e-8,286.5016,2.92961e-5,1.523688,0,0.093405,2.516e-9,18.6021,0.5240207766]],
+  ['Jupiter','#f2d7b0',[100.4542,2.76854e-5,1.303,-1.557e-7,273.8777,1.64505e-5,5.20256,0,0.048498,4.469e-9,19.895,0.0830853001]],
+  ['Saturn','#e8d9a8',[113.6634,2.3898e-5,2.4886,-1.081e-7,339.3939,2.97661e-5,9.55475,0,0.055546,-9.499e-9,316.967,0.0334442282]],
+  ['Uranus','#9fe3e8',[74.0005,1.3978e-5,0.7733,1.9e-8,96.6612,3.0565e-5,19.18171,-1.55e-8,0.047318,7.45e-9,142.5905,0.011725806]],
+  ['Neptune','#8fb0ff',[131.7806,3.0173e-5,1.77,-2.55e-7,272.8461,-6.027e-6,30.05826,3.313e-8,0.008606,2.15e-9,260.2471,0.005995147]]];
+// where each planet is in the sky now, as right ascension and declination in degrees
+function planetsNow(){const d=Date.now()/864e5+2440587.5-2451543.5,D=Math.PI/180,rv=x=>((x%360)+360)%360;
+  const solve=(M,e)=>{let E=M+e*Math.sin(M)*(1+e*Math.cos(M));for(let it=0;it<6;it++)E-=(E-e*Math.sin(E)-M)/(1-e*Math.cos(E));return E};
+  // the Earth's position (the Sun's is its opposite), to turn heliocentric planet positions into the sky from Earth
+  const ws=rv(282.9404+4.70935e-5*d)*D,es=0.016709-1.151e-9*d,Es=solve(rv(356.047+0.9856002585*d)*D,es);
+  const xs=Math.cos(Es)-es,ys=Math.sqrt(1-es*es)*Math.sin(Es),vs=Math.atan2(ys,xs),rs=Math.hypot(xs,ys);
+  const ex=-rs*Math.cos(vs+ws),ey=-rs*Math.sin(vs+ws),eps=23.4393*D;
+  return PLANETS.map(([name,col,q])=>{const g=k=>q[2*k]+q[2*k+1]*d,N=g(0)*D,i=g(1)*D,w=g(2)*D,a=g(3),e=g(4),M=rv(g(5))*D;
+    const E=solve(M,e),xv=a*(Math.cos(E)-e),yv=a*Math.sqrt(1-e*e)*Math.sin(E),v=Math.atan2(yv,xv),r=Math.hypot(xv,yv),vw=v+w;
+    const x=r*(Math.cos(N)*Math.cos(vw)-Math.sin(N)*Math.sin(vw)*Math.cos(i)),y=r*(Math.sin(N)*Math.cos(vw)+Math.cos(N)*Math.sin(vw)*Math.cos(i)),z=r*Math.sin(vw)*Math.sin(i);
+    const gx=x-ex,gy=y-ey,X=gx,Y=gy*Math.cos(eps)-z*Math.sin(eps),Z=gy*Math.sin(eps)+z*Math.cos(eps);
+    return{name,col,ra:rv(Math.atan2(Y,X)/D),dec:Math.atan2(Z,Math.hypot(X,Y))/D}})}
+// the night sky as seen from the place at the centre of the globe, for the time now: the zenith is the centre of the
+// screen, and the local sidereal time (Greenwich sidereal time plus the longitude) turns the sky as the globe turns.
+// It fills the whole screen with stars, and labels the brightest named stars and the planets.
 function stars(){const r=sc.getBoundingClientRect();sc.width=r.width*dpr;sc.height=r.height*dpr;const s=sc.getContext('2d');s.clearRect(0,0,sc.width,sc.height);
   if(!dark||!SKYD)return;const rad=Math.PI/180;
-  // the sky as seen from the place at the centre of the globe, right now: that place's zenith is the centre of the
-  // view, and the local sidereal time (Greenwich sidereal time plus the longitude) turns the sky as the globe turns
   const olon=-rot[0],olat=clamp(-rot[1],-90,90),jd=Date.now()/864e5+2440587.5,lst=((280.46061837+360.98564736629*(jd-2451545.0)+olon)%360+360)%360;
-  // forward: the zenith; up: the celestial north pole's direction across the view; right = forward × up
   const ra0=lst*rad,de0=olat*rad,f=[Math.cos(de0)*Math.cos(ra0),Math.cos(de0)*Math.sin(ra0),Math.sin(de0)];
   let u=[-f[2]*f[0],-f[2]*f[1],1-f[2]*f[2]];const un=Math.hypot(...u);u=u.map(x=>x/un);
   const R=[f[1]*u[2]-f[2]*u[1],f[2]*u[0]-f[0]*u[2],f[0]*u[1]-f[1]*u[0]];
-  const S=Math.min(sc.width,sc.height)*0.275,cx=sc.width/2,cy=sc.height/2;
+  // a stereographic projection that fills the screen: the corners sit about 120 degrees from the centre
+  const cx=sc.width/2,cy=sc.height/2,S=Math.hypot(sc.width,sc.height)/2*0.2887;
   const P=(ra,dec)=>{const a=ra*rad,b=dec*rad,v=[Math.cos(b)*Math.cos(a),Math.cos(b)*Math.sin(a),Math.sin(b)];
-    const c=v[0]*f[0]+v[1]*f[1]+v[2]*f[2];if(c<-0.02)return null;const k2=2*S/(1+c);
+    const c=v[0]*f[0]+v[1]*f[1]+v[2]*f[2];if(c<-0.8)return null;const k2=2*S/(1+c);
     return[cx+k2*(v[0]*R[0]+v[1]*R[1]+v[2]*R[2]),cy-k2*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2])]};
-  s.lineCap='round';s.strokeStyle='rgba(150,190,255,0.28)';s.lineWidth=0.8*dpr;
-  for(const c of SKYD.constellations)for(const seg of c.segs){let pen=false;s.beginPath();
-    for(const [ra,dec] of seg){const p=P(ra,dec);if(!p){pen=false;continue}if(!pen){s.moveTo(p[0],p[1]);pen=true}else s.lineTo(p[0],p[1])}s.stroke()}
-  for(const [ra,dec,mag] of SKYD.stars){const p=P(ra,dec);if(!p)continue;
+  for(const[ra,dec,mag]of SKYD.stars){const p=P(ra,dec);if(!p)continue;
     const rr=Math.max(0.35,(6.2-mag)*0.3)*dpr,a=Math.min(1,Math.max(0.3,1.05-mag*0.13));
     s.fillStyle=`rgba(226,235,255,${a})`;s.beginPath();s.arc(p[0],p[1],rr,0,7);s.fill()}
-  s.font=`${11*dpr}px "Bricolage Grotesque", "Segoe UI", sans-serif`;s.textAlign='center';s.textBaseline='middle';s.fillStyle='rgba(170,200,255,0.45)';
-  for(const c of SKYD.constellations){const p=P(c.at[0],c.at[1]);if(p)s.fillText(c.name,p[0],p[1])}}
+  s.font=`${11*dpr}px "Bricolage Grotesque", "Segoe UI", sans-serif`;s.textAlign='left';s.textBaseline='middle';
+  s.fillStyle='rgba(200,215,255,0.7)';
+  for(const[name,ra,dec]of SKYD.named){const p=P(ra,dec);if(p)s.fillText(name,p[0]+6*dpr,p[1])}
+  for(const pl of planetsNow()){const p=P(pl.ra,pl.dec);if(!p)continue;
+    s.fillStyle=pl.col;s.beginPath();s.arc(p[0],p[1],3.4*dpr,0,7);s.fill();
+    s.fillStyle='rgba(235,240,255,0.9)';s.fillText(pl.name,p[0]+7*dpr,p[1])}
+}
 
 // time helpers
 const off=tz=>(D.zones[tz]||[0,0])[season];
@@ -863,7 +887,7 @@ function lyrRender(){const m=document.getElementById('lyrb');if(!m)return;
   const tick=(k,on,label,extra)=>`<label class="bmtick"><input type="checkbox" data-show="${k}" ${on?'checked':''}>${ic(k)}<span>${label}</span>${extra||''}</label>`;
   m.innerHTML=tick('hours',showHours,'Working hours')+
     (CL.data.length?tick('cl',CL.on,'Colivings',`<small class="clcnt" id="clcnt"></small><button type="button" class="clfb${clActive(CL.f)?' on':''}" id="clfb" aria-label="Filter colivings" title="Filter and updates">${FUNNEL}</button>`):'')+
-    tick('cw',showCw,'Coworking',`<small class="clcnt" id="cwcnt" aria-live="polite"></small><button type="button" class="clfb${cwActive()?' on':''}" id="cwfb" aria-label="Filter coworking spaces" title="Filter coworking spaces">${FUNNEL}</button>`)+tick('cams',showCams,'Webcams')+tick('weather',showWeather,'Weather now','<small class="clcnt">°C</small>')+tick('night',showNight,'Day and night')+tick('names',showNames,'Place names');
+    tick('cw',showCw,'Coworking spaces',`<small class="clcnt" id="cwcnt" aria-live="polite"></small><button type="button" class="clfb${cwActive()?' on':''}" id="cwfb" aria-label="Filter coworking spaces" title="Filter coworking spaces">${FUNNEL}</button>`)+tick('cams',showCams,'Webcams')+tick('weather',showWeather,'Weather now','<small class="clcnt">°C</small>')+tick('night',showNight,'Day and night')+tick('names',showNames,'Place names');
   m.querySelectorAll('[data-show]').forEach(c=>c.onchange=()=>setShow(c.dataset.show,c.checked));
   const fb=m.querySelector('#clfb');if(fb)fb.onclick=e=>{e.preventDefault();e.stopPropagation();clToggle()};
   const cb=m.querySelector('#cwfb');if(cb)cb.onclick=e=>{e.preventDefault();e.stopPropagation();cwToggle()};clCounts();cwCounts();lyrFit()}
@@ -969,11 +993,11 @@ function close3D(){if(!m3d.el)return;const map=m3d.map;
 
 // everything from the globe drawn into the 3D view as map layers, kept in step with the app
 const M3D_OWN='m3d-';
-// Panning in 3D stops close to the spot you're looking at: once zoomed in to about town level, the view can only
+// Panning in 3D stops close to the spot you're looking at: once zoomed in to street level, the view can only
 // drift a short way from where the zoom last changed, so pulling down from a mountain top stops at its base
 // instead of sliding off across the map. Wider views are free to spin and travel.
-function m3dLimit(map){if(map.getZoom()<6){map.setMaxBounds(null);return}
-  const c=map.getCenter(),s=120/Math.pow(2,map.getZoom());map.setMaxBounds([[c.lng-s*2,c.lat-s],[c.lng+s*2,c.lat+s]])}
+function m3dLimit(map){if(map.getZoom()<13){map.setMaxBounds(null);return}
+  const c=map.getCenter(),s=200/Math.pow(2,map.getZoom());map.setMaxBounds([[c.lng-s*2,c.lat-s],[c.lng+s*2,c.lat+s]])}
 function m3dGeo(){
   const tz={type:'FeatureCollection',features:[]};
   if(showHours)for(const f of TZHIT.features.concat(D.gaps.features))tz.features.push({type:'Feature',properties:{c:pal['b'+band(off(f.properties.z))]},geometry:f.geometry});
