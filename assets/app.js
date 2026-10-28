@@ -580,7 +580,10 @@ function hoursBlock(tz){if(!tz||!D.zones[tz])return'';const z=D.zones[tz],o=z[se
 // a heart on every place card: saving it adds it to your favourites; a saved place opens its favourite
 function favAt(ll){return favs.find(f=>Math.abs(f.lon-ll[0])<2e-4&&Math.abs(f.lat-ll[1])<2e-4)}
 function favBtn(ll){const on=!!favAt(ll);return`<button type="button" class="favbtn${on?' on':''}" id="favadd" aria-pressed="${on}"><span class="fh" aria-hidden="true">♥</span> ${on?'Saved to favourites':'Add to favourites'}</button>`}
-function wireFav(name,ll,where,tz){const b=document.getElementById('favadd');if(!b)return;b.onclick=()=>{const f=favAt(ll);if(f)showFav(f);else addFav(name,ll,tz,where)}}
+function wireFav(name,ll,where,tz){const b=document.getElementById('favadd');if(!b)return;
+  // a place still being looked up is saved by its coordinates, which are already known
+  const nm=name&&!/Looking up this spot/.test(name)?name:`${ll[1].toFixed(4)}, ${ll[0].toFixed(4)}`;
+  b.onclick=()=>{const f=favAt(ll);if(f)showFav(f);else addFav(nm,ll,tz,where)}}
 function showFav(f,focus){activeFav=f;selected=null;draft=null;
   const when=new Date(f.created);const ds=isNaN(when)?'':when.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
   document.getElementById('infob').innerHTML=`<input class="ftitle" id="fname" value="${esc(f.name)}" aria-label="Favourite name" maxlength="80">
@@ -603,7 +606,10 @@ function renderFavs(){const ul=document.getElementById('favlistul');if(!ul)retur
   ul.innerHTML='';favs.slice().sort((a,b)=>a.name.localeCompare(b.name)).forEach(f=>{const li=document.createElement('li'),b=document.createElement('button');
     const o=f.tz&&D.zones[f.tz]?D.zones[f.tz][season]:null;
     b.innerHTML=`<span class="fh" aria-hidden="true">♥</span><span class="fn">${esc(f.name)}</span>${o!=null?`<span class="fhrs">${hours(o)}</span>`:''}`;
-    b.onclick=()=>{favListToggle(false);flyTo(f.lon,f.lat,2);showFav(f)};li.appendChild(b);ul.appendChild(li)});}
+    b.onclick=()=>{favListToggle(false);flyTo(f.lon,f.lat,2);showFav(f)};
+    const x=document.createElement('button');x.type='button';x.className='favx';x.setAttribute('aria-label',`Remove ${f.name} from favourites`);x.title='Remove';x.textContent='×';
+    x.onclick=()=>{favs=favs.filter(q=>q!==f);saveFavs();if(activeFav===f){activeFav=null;document.getElementById('info').classList.remove('show')}renderFavs();draw()};
+    li.appendChild(b);li.appendChild(x);ul.appendChild(li)});}
 function favListToggle(open){let el=document.getElementById('favlist');
   if(!el){el=document.createElement('aside');el.className='clf glass';el.id='favlist';el.hidden=true;el.setAttribute('aria-label','Favourites');
     el.innerHTML='<div class="clfh"><b>Favourites</b><button class="x" id="favlistx" aria-label="Close favourites">×</button></div><ul class="favs" id="favlistul"></ul>';
