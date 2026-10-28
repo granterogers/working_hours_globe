@@ -61,7 +61,9 @@ matchMedia('(prefers-color-scheme: light)').addEventListener('change',theme);
 let SKYD=null;fetch('data/sky.json').then(r=>{if(!r.ok)throw 0;return r.json()}).then(j=>{SKYD=j;stars()}).catch(()=>{});
 let SKYKEY='';
 // redraw the sky when the view has turned by a quarter of a degree or a minute has passed
-function skyFrame(){const key=Math.round(rot[0]*4)+','+Math.round(rot[1]*4)+','+Math.floor(Date.now()/6e4);if(key!==SKYKEY){SKYKEY=key;stars()}}
+// the place the sky is seen from: the centre of the globe, or the centre of the 3D map when that is showing
+function skyObs(){if(document.body.classList.contains('in3d')&&m3d.map){const c=m3d.map.getCenter();return{lon:c.lng,lat:clamp(c.lat,-90,90)}}return{lon:-rot[0],lat:clamp(-rot[1],-90,90)}}
+function skyFrame(){const o=skyObs();const key=Math.round(o.lon*4)+','+Math.round(o.lat*4)+','+Math.floor(Date.now()/6e4);if(key!==SKYKEY){SKYKEY=key;stars()}}
 // planets: Paul Schlyter's low-precision orbital elements (good to a fraction of a degree): [node, inclination,
 // argument of perihelion, semi-major axis, eccentricity, mean anomaly], each as a value at 2000 Jan 0 plus a daily rate
 const PLANETS=[['Mercury','#c9b89a',[48.3313,3.24587e-5,7.0047,5e-8,29.1241,1.01444e-5,0.387098,0,0.205635,5.59e-10,168.6562,4.0923344368]],
@@ -88,7 +90,7 @@ function planetsNow(){const d=Date.now()/864e5+2440587.5-2451543.5,D=Math.PI/180
 // It fills the whole screen with stars, with the planets marked as coloured dots.
 function stars(){const r=sc.getBoundingClientRect();sc.width=r.width*dpr;sc.height=r.height*dpr;const s=sc.getContext('2d');s.clearRect(0,0,sc.width,sc.height);
   if(!dark||!SKYD)return;const rad=Math.PI/180;
-  const olon=-rot[0],olat=clamp(-rot[1],-90,90),jd=Date.now()/864e5+2440587.5,lst=((280.46061837+360.98564736629*(jd-2451545.0)+olon)%360+360)%360;
+  const{lon:olon,lat:olat}=skyObs(),jd=Date.now()/864e5+2440587.5,lst=((280.46061837+360.98564736629*(jd-2451545.0)+olon)%360+360)%360;
   const ra0=lst*rad,de0=olat*rad,f=[Math.cos(de0)*Math.cos(ra0),Math.cos(de0)*Math.sin(ra0),Math.sin(de0)];
   let u=[-f[2]*f[0],-f[2]*f[1],1-f[2]*f[2]];const un=Math.hypot(...u);u=u.map(x=>x/un);
   const R=[f[1]*u[2]-f[2]*u[1],f[2]*u[0]-f[0]*u[2],f[0]*u[1]-f[1]*u[0]];
@@ -177,8 +179,9 @@ function draw(){
   // each layer is drawn at its own opacity, so switching one on or off fades it rather than blinking
   const withA=(a,fn)=>{if(a<=0)return;ctx.save();ctx.globalAlpha=a;fn();ctx.restore()};
   withA(LAY.night,drawNight);withA(LAY.night,drawLights);
+  const bk=document.getElementById('bandkey');if(bk){bk.hidden=LAY.hours<0.01;bk.style.opacity=LAY.hours}
   drawOverlays();withA(LAY.cl,clDraw);withA(LAY.cams,camDraw);withA(LAY.cw,cwDraw);
-  const mapNames=LAY.names>0&&shown&&(!raster||BM().labels);withA(LAY.names,drawLabels);MAPLAB.length=0;MAPBOX.length=0;if(mapNames)drawMapLabels(tileA*LAY.names);withA(LAY.weather,()=>wxDraw(mapNames));withA(LAY.fav,drawFavs);drawPin();
+  const mapNames=LAY.names>0&&shown&&(!raster||BM().labels);drawLabels();MAPLAB.length=0;MAPBOX.length=0;if(mapNames)drawMapLabels(tileA*LAY.names);withA(LAY.weather,()=>wxDraw(mapNames));withA(LAY.fav,drawFavs);drawPin();
 }
 
 function drawOverlays(){overlays.forEach(L=>{if(!L.on)return;L.fc.features.forEach(f=>{const g=f.geometry;if(!g||/Point/.test(g.type))return;
@@ -232,8 +235,8 @@ function drawLabels(){
     if(L.ov){ctx.beginPath();ctx.arc(x,y,4.5,0,7);ctx.fillStyle=L.ov.color;ctx.fill();ctx.lineWidth=2;ctx.strokeStyle=pal.halo;ctx.stroke();
       ctx.font=nf;ctx.lineWidth=4;ctx.strokeText(L.name,x,y-9);ctx.fillStyle=pal.ink;ctx.fillText(L.name,x,y-9);ctx.globalAlpha=1;continue;}
     ctx.lineWidth=4;ctx.strokeStyle=pal.halo;
-    if(nm){ctx.font=nf;ctx.strokeText(L.name,x,y-9);ctx.fillStyle=L.kind==='c'?pal.ink:pal.ink2;ctx.fillText(L.name,x,y-9)}
-    if(hr){ctx.font=F.hr;ctx.strokeText(hr,x,y+6);ctx.fillStyle=pal.ink;ctx.fillText(hr,x,y+6);}
+    if(nm){ctx.globalAlpha=L.a*LAY.names;ctx.font=nf;ctx.strokeText(L.name,x,y-9);ctx.fillStyle=L.kind==='c'?pal.ink:pal.ink2;ctx.fillText(L.name,x,y-9)}
+    if(hr){ctx.globalAlpha=L.a*LAY.hours;ctx.font=F.hr;ctx.strokeText(hr,x,y+6);ctx.fillStyle=pal.ink;ctx.fillText(hr,x,y+6);}
     ctx.globalAlpha=1;if(++n>450)break;
   }
 }
@@ -857,6 +860,7 @@ const bw=document.getElementById('w'),bs=document.getElementById('su');
 function setSeason(v){season=v;bw.setAttribute('aria-pressed',String(v===0));bs.setAttribute('aria-pressed',String(v===1));ui();draw();hideInfo()}
 bw.onclick=()=>setSeason(0);bs.onclick=()=>setSeason(1);
 function ui(){renderFavs();renderLayers();lyrRender();if(typeof m3dSync==='function')m3dSync();document.getElementById('sum').textContent=`${hhmm(S)}–${hhmm(E)} UK, ${season?'summer':'winter'}`;
+  const bl=document.getElementById('bandlist');if(bl)bl.innerHTML=BANDS.map((b,i)=>`<li><i style="background:${pal['b'+i]}"></i><span>${b.name}</span><small>${b.sub}</small></li>`).join('');
   document.getElementById('snote').textContent=season?'Late March to late October, while the UK is on BST.':'Late October to late March, while the UK is on GMT.';
   stripRender();}
 // colour key at the bottom: working-hours bands, then the coliving dot colours when that layer is on
@@ -982,7 +986,8 @@ async function open3D(){let el=m3d.el;
   if(m3d.map){m3d.map.jumpTo({center:[lon,lat],zoom,pitch:0,bearing:0});m3d.map.resize();m3dSync();return}
   try{const map=m3d.map=new lib.Map({container:'m3dmap',style:m3dStyleDef(),center:[lon,lat],zoom,pitch:0,bearing:0,maxPitch:85,attributionControl:false,hash:false,dragRotate:true,pitchWithRotate:true,maxTileCacheSize:3000,refreshExpiredTiles:false});
     map.on('rotate',northNeedle);map.on('pitch',northNeedle);
-    map.on('style.load',()=>{m3d.mode=null;m3dExtras(map);m3dSync()});
+    map.on('style.load',()=>{m3d.mode=null;m3dExtras(map);m3dSync();for(const l of map.getStyle().layers)if(l.type==='background')map.setPaintProperty(l.id,'background-color','rgba(0,0,0,0)');stars()});
+    map.on('move',()=>{if(document.body.classList.contains('in3d'))skyFrame()});
     map.on('zoomend',()=>{m3dMode(map);m3dLimit(map)});map.on('moveend',()=>{if(m3d.me&&myLoc)m3dMe()});
     map.on('click',m3dClick);map.on('moveend',m3dWx);map.on('load',()=>{m3dWx();m3dLimit(map)});map.on('moveend',()=>m3dAboveGround(map));
     m3dWheelButton(map);

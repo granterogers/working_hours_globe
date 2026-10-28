@@ -303,7 +303,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .bmdot{width:12px;height:12px;border-radius:50%;border:2px solid var(--ink2);margin-top:3px;flex:none;box-sizing:border-box}
 .bmmenu [aria-checked=true] .bmdot{border-color:var(--accent);background:radial-gradient(var(--accent) 45%,transparent 50%)}
 .bmmenu .bm3d{border-top:1px solid var(--glass-b);margin-top:4px;padding-top:9px;border-radius:0 0 10px 10px}
-.m3d{position:fixed;inset:0;z-index:45;background:#0b1020}
+.m3d{position:fixed;inset:0;z-index:45;background:transparent}
 .m3d[hidden]{display:none}
 .m3dmap{position:absolute;inset:0;width:100%;height:100%}
 .m3d .maplibregl-map{position:absolute}
@@ -433,3 +433,13 @@ body.in3d .lyr{z-index:46}
 #favlist .favs li .fn{display:inline-block;width:auto;flex:1 1 0;min-width:0}
 /* in 3D the page keeps its own look: the same bars, panels and buttons as on the globe */
 body.in3d #search,body.in3d .attrib{z-index:47}
+/* the working-hours colour key, under the hours card while the Working hours layer is on */
+.bandkey{position:absolute;left:16px;top:100px;z-index:2;width:290px;padding:10px 12px 8px;border-radius:14px;font-size:.84rem;transition:opacity .3s}
+.bandkey[hidden]{display:none}
+.bandkey h4{margin:0 0 6px;font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);font-weight:600}
+.bandkey ul{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.bandkey li{display:flex;align-items:baseline;gap:8px;min-width:0}
+.bandkey li i{width:12px;height:12px;border-radius:3px;flex:none;align-self:center}
+.bandkey li span{font-weight:600}
+.bandkey li small{color:var(--ink2);font-size:.76rem;margin-left:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.in3d #bandkey{z-index:47}
