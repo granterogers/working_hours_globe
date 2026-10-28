@@ -178,7 +178,7 @@ function draw(){
   const withA=(a,fn)=>{if(a<=0)return;ctx.save();ctx.globalAlpha=a;fn();ctx.restore()};
   withA(LAY.night,drawNight);withA(LAY.night,drawLights);
   drawOverlays();withA(LAY.cl,clDraw);withA(LAY.cams,camDraw);withA(LAY.cw,cwDraw);
-  const mapNames=LAY.names>0&&shown&&(!raster||BM().labels);withA(LAY.names,drawLabels);MAPLAB.length=0;MAPBOX.length=0;if(mapNames)drawMapLabels(tileA*LAY.names);withA(LAY.weather,()=>wxDraw(mapNames));if(showFavs)drawFavs();drawPin();
+  const mapNames=LAY.names>0&&shown&&(!raster||BM().labels);withA(LAY.names,drawLabels);MAPLAB.length=0;MAPBOX.length=0;if(mapNames)drawMapLabels(tileA*LAY.names);withA(LAY.weather,()=>wxDraw(mapNames));withA(LAY.fav,drawFavs);drawPin();
 }
 
 function drawOverlays(){overlays.forEach(L=>{if(!L.on)return;L.fc.features.forEach(f=>{const g=f.geometry;if(!g||/Point/.test(g.type))return;
@@ -592,11 +592,11 @@ function showFav(f,focus){activeFav=f;selected=null;draft=null;
   nm.oninput=commit;nt.oninput=commit;
   document.getElementById('fdel').onclick=()=>{favs=favs.filter(x=>x!==f);saveFavs();renderFavs();activeFav=null;document.getElementById('info').classList.remove('show');draw()};
   document.getElementById('info').classList.add('show');if(focus)setTimeout(()=>nt.focus(),50);}
-// favourites: a heart for each one, drawn over the labels so it is always there, and clickable
+// favourites: a heart for each one, drawn over the labels so it is always there, and clickable; the name shows
+// when you open the place
 function drawFavs(){for(const f of favs){const p=scr([f.lon,f.lat]);if(!p||p[0]<-30||p[1]<-30||p[0]>W+30||p[1]>H+30)continue;
   const on=activeFav===f,sz=on?9:7.5;heart(p[0],p[1],sz,FAVC,pal.halo);
-  placed.push({x0:p[0]-14,x1:p[0]+14,y0:p[1]-24,y1:p[1]+12,L:{fav:f,name:f.name}});
-  ctx.font=F.ov;ctx.lineWidth=4;ctx.strokeStyle=pal.halo;ctx.strokeText(f.name,p[0],p[1]-14);ctx.fillStyle=pal.ink;ctx.fillText(f.name,p[0],p[1]-14)}}
+  placed.push({x0:p[0]-14,x1:p[0]+14,y0:p[1]-24,y1:p[1]+12,L:{fav:f,name:f.name}})}}
 // the favourites list, opened by the gear beside Favourites in the Layers panel
 function renderFavs(){const ul=document.getElementById('favlistul');if(!ul)return;
   if(!favs.length){ul.innerHTML='<li class="empty">Click any place on the globe and press the heart to save it.</li>';return}
