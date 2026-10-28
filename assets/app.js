@@ -1516,10 +1516,11 @@ const WX_MODELS=['best_match','ecmwf_ifs025','icon_seamless','gfs_seamless','met
 const median=a=>{a=a.filter(v=>v!=null&&isFinite(v)).sort((x,y)=>x-y);if(!a.length)return null;const m=a.length>>1;return a.length%2?a[m]:(a[m-1]+a[m])/2};
 const wxPick=(blk,name,i)=>{const vals=WX_MODELS.map(m=>{const arr=blk[name+'_'+m];return Array.isArray(arr)?arr[i]:arr});return vals.some(v=>v!=null)?vals:[blk[name]&&(Array.isArray(blk[name])?blk[name][i]:blk[name])]};
 let wxTok=0;
-async function wxMetar(ll){const d=0.45,b=[ll[1]-d,ll[0]-d,ll[1]+d,ll[0]+d].map(v=>v.toFixed(2)).join(',');
-  const j=await phTimeout(phJSON(`https://aviationweather.gov/api/data/metar?bbox=${b}&format=json`),6000);
+// Station reports are saved worldwide by scripts/metar.py: the AviationWeather.gov API itself sends no CORS header,
+// so the page can't ask it directly
+async function wxMetar(ll){const j=await phTimeout(phJSON('data/metar.json'),6000);
   let best=null,bd=40000;for(const m of Array.isArray(j)?j:[]){if(m.temp==null||m.lat==null)continue;const dd=phDist(ll[1],ll[0],m.lat,m.lon);
-    const age=(Date.now()-(m.obsTime?m.obsTime*1000:Date.parse(m.reportTime||'')))/36e5;if(dd<bd&&age<3){bd=dd;best=Object.assign({d:dd,age},m)}}
+    const age=(Date.now()-(m.obsTime?m.obsTime*1000:Date.parse(m.reportTime||'')))/36e5;if(dd<bd&&age<4){bd=dd;best=Object.assign({d:dd,age},m)}}
   return best}
 function wxLoad(ll){if(!ll)return;const tok=++wxTok;
   const btn=document.getElementById('wxbtn');if(btn)btn.onclick=()=>{const b=document.getElementById('wxb');const open=b.hidden;b.hidden=!open;btn.setAttribute('aria-expanded',String(open))};
