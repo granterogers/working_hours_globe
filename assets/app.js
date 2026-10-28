@@ -908,7 +908,7 @@ function lyrRender(){const m=document.getElementById('lyrb');if(!m)return;
   const tick=(k,on,label,extra)=>`<label class="bmtick"><input type="checkbox" data-show="${k}" ${on?'checked':''}>${ic(k)}<span>${label}</span>${extra||''}</label>`;
   m.innerHTML=tick('hours',showHours,'Working hours')+tick('fav',showFavs,'Favourites',`<button type="button" class="clfb" id="favgear" aria-label="Show favourites list" title="Show favourites list"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>`)+
     (CL.data.length?tick('cl',CL.on,'Colivings',`<small class="clcnt" id="clcnt"></small><button type="button" class="clfb${clActive(CL.f)?' on':''}" id="clfb" aria-label="Filter colivings" title="Filter and updates">${FUNNEL}</button>`):'')+
-    tick('cw',showCw,'Coworking spaces',`<small class="clcnt" id="cwcnt" aria-live="polite"></small><button type="button" class="clfb${cwActive()?' on':''}" id="cwfb" aria-label="Filter coworking spaces" title="Filter coworking spaces">${FUNNEL}</button>`)+tick('cams',showCams,'Webcams')+tick('weather',showWeather,'Weather now','<small class="clcnt">°C</small>')+tick('night',showNight,'Day and night')+tick('names',showNames,'Place names');
+    tick('cw',showCw,'Coworking spaces',`<small class="clcnt" id="cwcnt" aria-live="polite"></small><button type="button" class="clfb${cwActive()?' on':''}" id="cwfb" aria-label="Filter coworking spaces" title="Filter coworking spaces">${FUNNEL}</button>`)+tick('cams',showCams,'Webcams')+tick('weather',showWeather,'Current weather','<small class="clcnt">°C</small>')+tick('night',showNight,'Day and night')+tick('names',showNames,'Place names');
   m.querySelectorAll('[data-show]').forEach(c=>c.onchange=()=>setShow(c.dataset.show,c.checked));
   const fb=m.querySelector('#clfb');if(fb)fb.onclick=e=>{e.preventDefault();e.stopPropagation();clToggle()};
   const cb=m.querySelector('#cwfb');if(cb)cb.onclick=e=>{e.preventDefault();e.stopPropagation();cwToggle()};
@@ -1546,7 +1546,7 @@ function phKey(e){if(e.key==='ArrowRight'){phGo(1)}else if(e.key==='ArrowLeft'){
   else if(e.key==='Tab'){const f=[...PH.box.querySelectorAll('button:not([hidden]),a')];const a=f.indexOf(document.activeElement);e.preventDefault();f[(a+(e.shiftKey?-1:1)+f.length)%f.length].focus()}
   else return;e.preventDefault();e.stopPropagation()}
 
-// Weather from Open-Meteo (https://open-meteo.com, free, no key). The "Weather now" layer shows current
+// Weather from Open-Meteo (https://open-meteo.com, free, no key). The "Current weather" layer shows current
 // temperature and conditions on a grid of points across the view; each card shows a 7-day forecast.
 const WMO={0:'Clear',1:'Mostly clear',2:'Partly cloudy',3:'Overcast',45:'Fog',48:'Freezing fog',51:'Light drizzle',53:'Drizzle',55:'Heavy drizzle',56:'Freezing drizzle',57:'Freezing drizzle',
   61:'Light rain',63:'Rain',65:'Heavy rain',66:'Freezing rain',67:'Freezing rain',71:'Light snow',73:'Snow',75:'Heavy snow',77:'Snow grains',80:'Showers',81:'Heavy showers',82:'Violent showers',
@@ -1609,7 +1609,7 @@ function wxDraw(mapNames){WX.mapNames=mapNames;const font='600 12px "Bricolage G
     const x=cx+SC*(M[3]*v[0]+M[4]*v[1]),y=cy-SC*(M[6]*v[0]+M[7]*v[1]+M[8]*v[2]);if(x<20||y<20||x>W-20||y>H-20)continue;
     if(at.some(a=>Math.hypot(a[0]-x,a[1]-y)<gap))continue;
     if(names.has(p.name))continue;
-    const q=WX.pts.get(wxKey(p.lat,p.lon)),tt=q?Math.round(q.temp)+'°':'…',name=p.under?'':p.name,nw=name?tw(name,nfont)+6:0,w=nw+tw(tt,font)+34,h=24,by=p.under?y+12:y-h/2,bx=[x-w/2,by,x+w/2,by+h];
+    const q=WX.pts.get(wxKey(p.lat,p.lon)),tt=q?Math.round(q.temp)+'°':'…',name='',nw=0,w=nw+tw(tt,font)+34,h=24,by=p.under?y+12:y-h/2,bx=[x-w/2,by,x+w/2,by+h];
     if(boxes.some(b=>bx[0]<b[2]+3&&bx[2]+3>b[0]&&bx[1]<b[3]+2&&bx[3]+2>b[1]))continue;boxes.push(bx);WX.boxes.push(bx);WX.shown.push(p);names.add(p.name);at.push([x,y]);n++;if(!q)continue;
     ctx.beginPath();ctx.roundRect?ctx.roundRect(bx[0],bx[1],w,h,12):ctx.rect(bx[0],bx[1],w,h);ctx.fillStyle=dark&&!mapNames?'rgba(14,20,36,.85)':'rgba(255,255,255,.92)';ctx.fill();
     ctx.lineWidth=2;ctx.strokeStyle=wxTempCol(q.temp);ctx.stroke();
