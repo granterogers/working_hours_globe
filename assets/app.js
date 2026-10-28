@@ -741,6 +741,7 @@ function clickAt(x,y){
   const fh=placed.find(q=>q.L.fav&&x>=q.x0&&x<=q.x1&&y>=q.y0&&y<=q.y1);
   if(fh){if(selected)selected=null;showFav(fh.L.fav);draw();return}
   if(activeFav){activeFav=null;draw()}
+  const cc=showCw&&k<CW_CLUSTER_K?cwClusterAt(x,y):null;if(cc){flyTo(cc.lon,cc.lat,12,1100);return}
   const cw=showCw?cwHit(x,y):null;if(cw){cwShow(cw);draw();return}
   if(CW.sel){CW.sel=null;draw()}
   const wc=showCams?camHit(x,y):null;if(wc){camShow(wc);draw();return}
@@ -958,11 +959,18 @@ function m3dGeo(){
   const wx={type:'FeatureCollection',features:showWeather?(WX.shown3d||[]).map(p=>{const q=WX.pts.get(wxKey(p.lat,p.lon));return q&&{type:'Feature',properties:{t:p.name+'  '+Math.round(q.temp)+'°',c:wxTempCol(q.temp),ic:'wx-'+wxKind(q.code,q.day)},geometry:{type:'Point',coordinates:[p.lon,p.lat]}}}).filter(Boolean):[]};
   const cm={type:'FeatureCollection',features:showCams?[...CAM.list.values()].map(c=>({type:'Feature',properties:{id:c.id,live:c.src==='windy'?1:0},geometry:{type:'Point',coordinates:[c.lon,c.lat]}})):[]};
   const cwk={type:'FeatureCollection',features:showCw?CW.vis.map(c=>({type:'Feature',properties:{id:c.id},geometry:{type:'Point',coordinates:[c.lon,c.lat]}})):[]};
-  return{tz,lab,cl,fv,ov,wx,cm,cwk}}
+  return{tz,lab,cl,fv,ov,wx,cm,cwk,night:{type:'FeatureCollection',features:showNight?nightFeatures():[]}}}
+// 3D night side: two soft bands (night, then twilight) as polygons around the point opposite the sun. Longitudes are
+// unwrapped first, so a polygon that crosses the 180° line is drawn as one piece rather than torn across the map.
+function nightFeatures(){const sp=sunNow(Date.now()),anti=[sp[0]+180>180?sp[0]-180:sp[0]+180,-sp[1]];
+  return[[90,0.4],[99,0.18]].map(([r,a])=>{const ring=d3.geoCircle().center(anti).radius(r).precision(2)().coordinates[0];
+    let prev=ring[0][0];const c=ring.map(([x,y],i)=>{if(i)x=prev+((x-prev+540)%360-180);prev=x;return[x,y]});
+    return{type:'Feature',properties:{a},geometry:{type:'Polygon',coordinates:[c]}}})}
+setInterval(()=>{if(showNight&&m3d&&m3d.map&&!m3d.el.hidden)m3dSync()},60000);
 function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.getStyle())return}catch(e){return}
   try{g=m3dGeo()}catch(e){return}
   const src=(id,data)=>{const s=map.getSource(M3D_OWN+id);if(s)s.setData(data);else map.addSource(M3D_OWN+id,{type:'geojson',data})};
-  try{src('tz',g.tz);src('lab',g.lab);src('cl',g.cl);src('fv',g.fv);src('ov',g.ov);src('wx',g.wx);src('cm',g.cm);src('cwk',g.cwk)}catch(e){return}
+  try{src('tz',g.tz);src('lab',g.lab);src('cl',g.cl);src('fv',g.fv);src('ov',g.ov);src('wx',g.wx);src('cm',g.cm);src('cwk',g.cwk);src('night',g.night)}catch(e){return}
   const font=['Noto Sans Bold'],dk=BM().dark||false;
   const lay=(def,before)=>{if(!map.getLayer(def.id))map.addLayer(def,before)};
   // working-hours colours fade out as you zoom in, like on the globe
@@ -972,6 +980,7 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
     (map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
   map.setPaintProperty(M3D_OWN+'tz','fill-opacity',['interpolate',['linear'],['zoom'],zA,op,zB,0]);
   try{map.setLayerZoomRange(M3D_OWN+'tz',0,Math.min(24,zB+0.3))}catch(e){}
+  lay({id:M3D_OWN+'night',type:'fill',source:M3D_OWN+'night',paint:{'fill-color':dk?'#02061a':'#080e28','fill-opacity':['get','a']}});
   lay({id:M3D_OWN+'ovf',type:'fill',source:M3D_OWN+'ov',filter:['==',['geometry-type'],'Polygon'],paint:{'fill-color':['get','c'],'fill-opacity':0.2}});
   lay({id:M3D_OWN+'ovl',type:'line',source:M3D_OWN+'ov',filter:['in',['geometry-type'],['literal',['LineString','Polygon']]],paint:{'line-color':['get','c'],'line-width':2.5}});
   lay({id:M3D_OWN+'ovp',type:'circle',source:M3D_OWN+'ov',filter:['==',['geometry-type'],'Point'],paint:{'circle-color':['get','c'],'circle-radius':5,'circle-stroke-color':'#fff','circle-stroke-width':1.5}});
@@ -1609,9 +1618,23 @@ function cwLoad(j){const f=j.fields;CW.list.clear();CW.updated=j.updated;
   cwApply()}
 fetch('data/coworking.json').then(r=>{if(!r.ok)throw 0;return r.json()}).then(cwLoad).catch(()=>{});
 function cwMark(X,Y,r,sel){ctx.beginPath();ctx.roundRect?ctx.roundRect(X-r,Y-r,2*r,2*r,r*0.45):ctx.rect(X-r,Y-r,2*r,2*r);ctx.fillStyle='#2f6fe0';ctx.fill();
-  ctx.lineWidth=sel?3:1.5;ctx.strokeStyle=sel?'#ffd27a':'#fff';ctx.stroke();const s=r/8;ctx.fillStyle='#fff';
+  ctx.lineWidth=sel?3:1.4;ctx.strokeStyle=sel?'#ffd27a':pal.halo;ctx.stroke();const s=r/8;ctx.fillStyle='#fff';
   ctx.fillRect(X-4.5*s,Y-4*s,9*s,5.5*s);ctx.fillStyle='#2f6fe0';ctx.fillRect(X-3.3*s,Y-2.9*s,6.6*s,3.4*s);ctx.fillStyle='#fff';ctx.fillRect(X-6*s,Y+2.2*s,12*s,1.8*s)}
-function cwDraw(){if(!CW.vis.length)return;const r=k<8?6:8,at=[];ctx.save();
+// At globe scale, places that would overlap merge into one count badge; pressing a badge flies to it
+const CW_CLUSTER_K=8;
+function cwCluster(){const cells=new Map();
+  for(const x of CW.vis){const p=camProj(x.v);if(!p||p[0]<-30||p[1]<-30||p[0]>W+30||p[1]>H+30)continue;
+    const key=Math.floor(p[0]/26)+','+Math.floor(p[1]/26);let c=cells.get(key);if(!c){c={x:0,y:0,lon:0,lat:0,n:0,one:null};cells.set(key,c)}
+    c.x+=p[0];c.y+=p[1];c.lon+=x.lon;c.lat+=x.lat;c.n++;c.one=x}
+  const out=[...cells.values()];for(const c of out){c.x/=c.n;c.y/=c.n;c.lon/=c.n;c.lat/=c.n}return out}
+function cwClusterAt(x,y){let best=null,bd=18;for(const c of CW.cl||[]){if(c.n<2)continue;const d=Math.hypot(c.x-x,c.y-y);if(d<bd){bd=d;best=c}}return best}
+function cwDraw(){if(!CW.vis.length)return;const r=k<8?5:6.5,at=[];ctx.save();
+  if(k<CW_CLUSTER_K){CW.cl=cwCluster();for(const c of CW.cl){if(c.n===1){cwMark(c.x,c.y,r,c.one===CW.sel);continue}
+      ctx.beginPath();ctx.arc(c.x,c.y,11,0,Math.PI*2);ctx.fillStyle='#2f6fe0';ctx.fill();ctx.lineWidth=1.4;ctx.strokeStyle=pal.halo;ctx.stroke();
+      ctx.fillStyle='#fff';ctx.font='700 10px "Bricolage Grotesque", "Segoe UI", sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(c.n>999?Math.round(c.n/1000)+'k':String(c.n),c.x,c.y+0.5)}
+    ctx.restore();return}
+  CW.cl=null;
   for(const x of CW.vis){const p=camProj(x.v);if(!p||p[0]<-10||p[1]<-10||p[0]>W+10||p[1]>H+10)continue;
     if(x!==CW.sel&&at.some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<r*2.2))continue;at.push(p);cwMark(p[0],p[1],r,x===CW.sel)}
   ctx.restore()}
