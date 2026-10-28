@@ -413,3 +413,7 @@ body.in3d .lyr{z-index:46}
 /* the favourites list, from the gear in the Layers panel */
 #favlist{position:absolute;left:16px;top:auto;bottom:330px;height:auto;width:260px;max-height:50vh;overflow:auto;padding:12px;border-radius:16px;z-index:44}
 #favlist .favs{max-height:none}
+/* the previous and next arrows sit over the sides of the full-screen photo */
+.phbox .pha{position:absolute;top:50%;bottom:auto;transform:translateY(-50%);width:48px;height:48px;z-index:3}
+.phbox .phprev{left:16px;right:auto}
+.phbox .phnext{right:16px;left:auto}
