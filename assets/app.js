@@ -1622,7 +1622,7 @@ fetch('data/coworking.json').then(r=>{if(!r.ok)throw 0;return r.json()}).then(cw
 function cwMark(X,Y,r,sel){ctx.beginPath();ctx.roundRect?ctx.roundRect(X-r,Y-r,2*r,2*r,r*0.45):ctx.rect(X-r,Y-r,2*r,2*r);ctx.fillStyle='#2f6fe0';ctx.fill();
   ctx.lineWidth=sel?3:1.4;ctx.strokeStyle=sel?'#ffd27a':pal.halo;ctx.stroke();const s=r/8;ctx.fillStyle='#fff';
   ctx.fillRect(X-4.5*s,Y-4*s,9*s,5.5*s);ctx.fillStyle='#2f6fe0';ctx.fillRect(X-3.3*s,Y-2.9*s,6.6*s,3.4*s);ctx.fillStyle='#fff';ctx.fillRect(X-6*s,Y+2.2*s,12*s,1.8*s)}
-// At globe scale, places that would overlap merge into one count badge; pressing a badge flies to it
+// At globe scale, places that would overlap merge into one purple dot; pressing a dot flies to it
 const CW_CLUSTER_K=18;
 function cwCluster(){const cells=new Map();
   for(const x of CW.vis){const p=camProj(x.v);if(!p||p[0]<-30||p[1]<-30||p[0]>W+30||p[1]>H+30)continue;
@@ -1632,9 +1632,7 @@ function cwCluster(){const cells=new Map();
 function cwClusterAt(x,y){let best=null,bd=18;for(const c of CW.cl||[]){if(c.n<2)continue;const d=Math.hypot(c.x-x,c.y-y);if(d<bd){bd=d;best=c}}return best}
 function cwDraw(){if(!CW.vis.length)return;const r=k<CW_CLUSTER_K?4.5:5.5,at=[];ctx.save();
   if(k<CW_CLUSTER_K){CW.cl=cwCluster();for(const c of CW.cl){if(c.n===1){cwMark(c.x,c.y,r,c.one===CW.sel);continue}
-      ctx.beginPath();ctx.arc(c.x,c.y,11,0,Math.PI*2);ctx.fillStyle='#2f6fe0';ctx.fill();ctx.lineWidth=1.4;ctx.strokeStyle=pal.halo;ctx.stroke();
-      ctx.fillStyle='#fff';ctx.font='700 10px "Bricolage Grotesque", "Segoe UI", sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.fillText(c.n>999?Math.round(c.n/1000)+'k':String(c.n),c.x,c.y+0.5)}
+      ctx.beginPath();ctx.arc(c.x,c.y,6,0,Math.PI*2);ctx.fillStyle='#8b5cf6';ctx.fill();ctx.lineWidth=1.4;ctx.strokeStyle=pal.halo;ctx.stroke()}
     ctx.restore();return}
   CW.cl=null;
   for(const x of CW.vis){const p=camProj(x.v);if(!p||p[0]<-10||p[1]<-10||p[0]>W+10||p[1]>H+10)continue;
