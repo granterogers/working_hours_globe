@@ -78,7 +78,7 @@ function computeView(){const s=base*k;const far=Math.max(Math.hypot(cx,cy),Math.
 let VC=[1,0,0],VR=1,CR=0,SR=1;
 const inView=f=>{if(f.cr+VR>=Math.PI)return true;return f.v[0]*VC[0]+f.v[1]*VC[1]+f.v[2]*VC[2]>f.ccr*CR-f.scr*SR};
 
-const F={cn:'600 13.5px Fraunces, Georgia, serif',pn:'500 11.5px "Bricolage Grotesque", "Segoe UI", sans-serif',hr:'700 12.5px "Bricolage Grotesque", "Segoe UI", sans-serif',ov:'600 12px "Bricolage Grotesque", "Segoe UI", sans-serif',cl:'600 11px "Bricolage Grotesque", "Segoe UI", sans-serif'};
+const F={cn:'600 13.5px Fraunces, Georgia, serif',pn:'500 11.5px "Bricolage Grotesque", "Segoe UI", sans-serif',hr:'500 11px "Bricolage Grotesque", "Segoe UI", sans-serif',ov:'600 12px "Bricolage Grotesque", "Segoe UI", sans-serif',cl:'600 11px "Bricolage Grotesque", "Segoe UI", sans-serif'};
 const mcache={};const tw=(t,f)=>{const key=f+'|'+t;let v=mcache[key];if(v==null){ctx.font=f;v=mcache[key]=ctx.measureText(t).width}return v};
 
 // fast orthographic: rotate unit vectors, push hidden points onto the limb for fills, lift the pen for strokes
@@ -836,7 +836,7 @@ function lyrRender(){const m=document.getElementById('lyrb');if(!m)return;
   const tick=(k,on,label,extra)=>`<label class="bmtick"><input type="checkbox" data-show="${k}" ${on?'checked':''}>${ic(k)}<span>${label}</span>${extra||''}</label>`;
   m.innerHTML=tick('hours',showHours,'Working hours')+
     (CL.data.length?tick('cl',CL.on,'Colivings',`<small class="clcnt" id="clcnt"></small><button type="button" class="clfb${clActive(CL.f)?' on':''}" id="clfb" aria-label="Filter colivings" title="Filter and updates">${FUNNEL}</button>`):'')+
-    tick('cw',showCw,'Coworking',`<small class="clcnt" id="cwcnt"></small><button type="button" class="clfb${cwActive()?' on':''}" id="cwfb" aria-label="Filter coworking spaces" title="Filter coworking spaces">${FUNNEL}</button>`)+tick('cams',showCams,'Webcams')+tick('weather',showWeather,'Weather now','<small class="clcnt">°C</small>')+tick('night',showNight,'Day and night')+tick('names',showNames,'Place names');
+    tick('cw',showCw,'Coworking',`<small class="clcnt" id="cwcnt" aria-live="polite"></small><button type="button" class="clfb${cwActive()?' on':''}" id="cwfb" aria-label="Filter coworking spaces" title="Filter coworking spaces">${FUNNEL}</button>`)+tick('cams',showCams,'Webcams')+tick('weather',showWeather,'Weather now','<small class="clcnt">°C</small>')+tick('night',showNight,'Day and night')+tick('names',showNames,'Place names');
   m.querySelectorAll('[data-show]').forEach(c=>c.onchange=()=>setShow(c.dataset.show,c.checked));
   const fb=m.querySelector('#clfb');if(fb)fb.onclick=e=>{e.preventDefault();e.stopPropagation();clToggle()};
   const cb=m.querySelector('#cwfb');if(cb)cb.onclick=e=>{e.preventDefault();e.stopPropagation();cwToggle()};clCounts();cwCounts();lyrFit()}
@@ -1238,7 +1238,7 @@ Promise.all([fetch('data/coliving.json').then(r=>{if(!r.ok)throw new Error(r.sta
 // sorted nearest first. The search widens (500 m → 2 km → 10 km → 50 km) until about ten photos turn up.
 // Any source that fails is skipped. Mapillary is used too if a token is set in this browser
 // (localStorage 'whg.mapillary'); none is built in, since a public page would expose it.
-const PH={cache:new Map(),list:[],tok:0,box:null,grid:null,i:0};
+const PH={cache:new Map(),list:[],tok:0,box:null,grid:null,i:0,ac:null};
 (()=>{const m=/[#&]mapillary=([^&]+)/.exec(location.hash);if(!m)return;try{localStorage.setItem('whg.mapillary',decodeURIComponent(m[1]))}catch(e){}
   history.replaceState(null,'',location.pathname+location.search)})();
 const PH_RADII=[500,2000,10000,50000],PH_WANT=10,PH_SHOW=6;
@@ -1246,43 +1246,53 @@ const phDist=(a,b,c,d)=>{const R=6371000,r=Math.PI/180,x=Math.sin((c-a)*r/2)**2+
 const phFmtD=m=>m<10?'<10 m':m<1000?Math.round(m/10)*10+' m':m<10000?(m/1000).toFixed(1)+' km':Math.round(m/1000)+' km';
 const phStrip=h=>{const d=document.createElement('div');d.innerHTML=String(h||'');return d.textContent.replace(/\s+/g,' ').trim()};
 const phJSON=(u,o)=>fetch(u,o).then(r=>{if(!r.ok)throw new Error(r.status);return r.json()});
+// photo requests carry the signal of the current search, so a search for a place you've left stops downloading
+const phPJ=(u,o)=>phJSON(u,Object.assign({signal:PH.ac&&PH.ac.signal},o));
+// the search results per place and radius are kept in IndexedDB for a week, so a place you've looked at opens at once
+const PH_IDB={name:'whg',store:'photos',ttl:7*864e5};
+const phDbP=()=>PH.dbP||(PH.dbP=new Promise((res,rej)=>{const r=indexedDB.open(PH_IDB.name,1);r.onupgradeneeded=()=>r.result.createObjectStore(PH_IDB.store);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}));
+async function phIdbGet(key){try{const db=await phDbP();return await new Promise((res,rej)=>{const q=db.transaction(PH_IDB.store).objectStore(PH_IDB.store).get(key);q.onsuccess=()=>res(q.result&&Date.now()-q.result.t<PH_IDB.ttl?q.result.v:null);q.onerror=()=>rej(q.error)})}catch(e){return null}}
+async function phIdbSet(key,v){try{const db=await phDbP();db.transaction(PH_IDB.store,'readwrite').objectStore(PH_IDB.store).put({t:Date.now(),v},key)}catch(e){}}
 const phTimeout=(p,ms)=>Promise.race([p,new Promise((_,j)=>setTimeout(()=>j(new Error('timeout')),ms))]);
 const phFile=t=>String(t||'').replace(/^(File|Image):/i,'').replace(/_/g,' ').trim();
 const phFilePath=(f,w)=>`https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(f.replace(/ /g,'_'))}?width=${w}`;
+// Wikimedia Commons thumbnails come at two widths, so a 2x screen gets the sharper one
+const phImg=p=>{const u=esc(p.thumb),big=/FilePath/.test(p.thumb)?esc(p.thumb.replace(/width=400$/,'width=800')):'';
+  return`<img src="${u}"${big?` srcset="${u} 1x, ${big} 2x"`:''} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.closest('.pht').classList.add('bad')">`};
 function phBox(lat,lon,m){const dl=m/111320,dn=m/(111320*Math.max(0.2,Math.cos(lat*Math.PI/180)));return[lon-dn,lat-dl,lon+dn,lat+dl]}
 
 // --- sources: each returns [{key,thumb,full,lat,lon,src,author,lic,date,link,title}] ---
 async function phCommons(lat,lon,r){const rad=Math.min(r,10000);
   const u=`https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=geosearch&ggscoord=${lat}|${lon}&ggsradius=${rad}&ggsnamespace=6&ggslimit=50&prop=imageinfo|coordinates&iiprop=url|extmetadata|size|mime&iiurlwidth=400&iiextmetadatafilter=Artist|LicenseShortName|DateTimeOriginal|ObjectName|Categories|ImageDescription`;
-  const j=await phJSON(u);return Object.values((j.query||{}).pages||{}).map(p=>{const ii=(p.imageinfo||[])[0],c=(p.coordinates||[])[0];if(!ii||!c||!/^image\/(jpeg|png|webp)/.test(ii.mime||''))return null;const m=ii.extmetadata||{};
+  const j=await phPJ(u);return Object.values((j.query||{}).pages||{}).map(p=>{const ii=(p.imageinfo||[])[0],c=(p.coordinates||[])[0];if(!ii||!c||!/^image\/(jpeg|png|webp)/.test(ii.mime||''))return null;const m=ii.extmetadata||{};
     if(ii.width&&ii.width<500)return null;const off=PH_NATURE.test(phFile(p.title))||phOff(phAbout(phFile(p.title),m));
     return{off,key:'c:'+phFile(p.title),thumb:ii.thumburl||ii.url,full:ii.width>1600?(ii.thumburl||'').replace(/\/\d+px-/,'/1600px-'):ii.url,lat:c.lat,lon:c.lon,src:'Wikimedia Commons',
       author:phStrip(m.Artist&&m.Artist.value),lic:phStrip(m.LicenseShortName&&m.LicenseShortName.value),date:phStrip(m.DateTimeOriginal&&m.DateTimeOriginal.value).slice(0,10),link:ii.descriptionurl,title:phStrip(m.ObjectName&&m.ObjectName.value)||phFile(p.title).replace(/\.\w+$/,'')}}).filter(Boolean)}
 async function phWikidata(lat,lon,r){const km=Math.min(r,50000)/1000;
   const q=`SELECT ?item ?itemLabel ?img ?coord WHERE { SERVICE wikibase:around { ?item wdt:P625 ?coord. bd:serviceParam wikibase:center "Point(${lon} ${lat})"^^geo:wktLiteral; wikibase:radius "${km}". } ?item wdt:P18 ?img. SERVICE wikibase:label { bd:serviceParam wikibase:language "en,[AUTO_LANGUAGE]". } } LIMIT 60`;
-  const j=await phJSON('https://query.wikidata.org/sparql?format=json&query='+encodeURIComponent(q),{headers:{Accept:'application/sparql-results+json'}});
+  const j=await phPJ('https://query.wikidata.org/sparql?format=json&query='+encodeURIComponent(q),{headers:{Accept:'application/sparql-results+json'}});
   return(j.results.bindings||[]).map(b=>{const m=/Point\(([-\d.]+) ([-\d.]+)\)/.exec(b.coord.value);if(!m)return null;const f=phFile(decodeURIComponent(b.img.value.split('/').pop()));
     return{key:'c:'+f,file:f,thumb:phFilePath(f,400),full:phFilePath(f,1600),lat:+m[2],lon:+m[1],src:'Wikidata',author:'',lic:'',date:'',link:b.item.value,title:b.itemLabel?b.itemLabel.value:''}}).filter(Boolean)}
-async function phINat(lat,lon,r){const j=await phJSON(`https://api.inaturalist.org/v1/observations?lat=${lat}&lng=${lon}&radius=${Math.max(0.1,r/1000)}&photos=true&per_page=40&order_by=observed_on&quality_grade=research`);
+async function phINat(lat,lon,r){const j=await phPJ(`https://api.inaturalist.org/v1/observations?lat=${lat}&lng=${lon}&radius=${Math.max(0.1,r/1000)}&photos=true&per_page=40&order_by=observed_on&quality_grade=research`);
   const out=[];for(const o of j.results||[]){const loc=String(o.location||'').split(',').map(Number);if(loc.length<2||!isFinite(loc[0]))continue;const p=(o.photos||[])[0];if(!p||!p.url)continue;
     const t=o.taxon||{};out.push({key:'i:'+p.id,thumb:p.url.replace('square','medium'),full:p.url.replace('square','large'),lat:loc[0],lon:loc[1],src:'iNaturalist',
       author:(o.user&&(o.user.name||o.user.login))||'',lic:p.license_code?p.license_code.toUpperCase():'All rights reserved',date:o.observed_on||'',link:o.uri||`https://www.inaturalist.org/observations/${o.id}`,title:t.preferred_common_name||t.name||'Observation'})}
   return out}
 async function phPanoramax(lat,lon,r){const b=phBox(lat,lon,Math.min(r,5000)).map(v=>v.toFixed(5)).join(',');
-  const j=await phJSON(`https://api.panoramax.xyz/api/search?bbox=${b}&limit=20`);
+  const j=await phPJ(`https://api.panoramax.xyz/api/search?bbox=${b}&limit=20`);
   return(j.features||[]).map(f=>{const a=f.assets||{},th=a.thumb||Object.values(a).find(x=>(x.roles||[]).includes('thumbnail')),sd=a.sd||Object.values(a).find(x=>(x.roles||[]).includes('visual'))||a.hd;
     const g=f.geometry&&f.geometry.coordinates;if(!th||!g)return null;const pr=f.properties||{},prov=(f.providers||pr.providers||[]).map(x=>x.name).filter(Boolean)[0];
     return{key:'p:'+f.id,thumb:th.href,full:(sd||th).href,lat:g[1],lon:g[0],src:'Panoramax',author:prov||'',lic:pr.license||'',date:String(pr.datetime||'').slice(0,10),
       link:`https://api.panoramax.xyz/?pic=${encodeURIComponent(f.id)}&focus=pic`,title:'Street-level photo'}}).filter(Boolean)}
 async function phKarta(lat,lon,r){const fd=new URLSearchParams({lat,lng:lon,radius:Math.min(r,5000)});
-  const j=await phJSON('https://api.openstreetcam.org/1.0/list/nearby-photos/',{method:'POST',body:fd});
+  const j=await phPJ('https://api.openstreetcam.org/1.0/list/nearby-photos/',{method:'POST',body:fd});
   const items=j.currentPageItems||j.osv&&j.osv.photos||[];
   return items.map(p=>{const la=+p.lat,lo=+(p.lng||p.lon);if(!isFinite(la)||!isFinite(lo)||!(p.lth_name||p.th_name))return null;const base='https://api.openstreetcam.org/';
     return{key:'k:'+p.id,thumb:base+(p.th_name||p.lth_name),full:base+(p.lth_name||p.name||p.th_name),lat:la,lon:lo,src:'KartaView',author:p.username||'',lic:'CC BY-SA 4.0',
       date:String(p.shot_date||p.date_added||'').slice(0,10),link:p.sequence_id?`https://kartaview.org/details/${p.sequence_id}/${p.sequence_index||0}`:'https://kartaview.org/',title:'Street-level photo'}}).filter(Boolean)}
 async function phOverpass(lat,lon,r){const rad=Math.min(r,2000);
   const q=`[out:json][timeout:5];nwr(around:${rad},${lat},${lon})[~"^(image|wikimedia_commons)$"~"."];out center tags 40;`;
-  const j=await phJSON('https://overpass-api.de/api/interpreter',{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'}});
+  const j=await phPJ('https://overpass-api.de/api/interpreter',{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'}});
   const out=[];for(const e of j.elements||[]){const t=e.tags||{},la=e.lat??(e.center&&e.center.lat),lo=e.lon??(e.center&&e.center.lon);if(la==null)continue;
     const name=t['name:en']||t.name||'';const link=`https://www.openstreetmap.org/${e.type}/${e.id}`;
     const wc=t.wikimedia_commons;if(wc&&/^File:/i.test(wc)){const f=phFile(wc);out.push({key:'c:'+f,file:f,thumb:phFilePath(f,400),full:phFilePath(f,1600),lat:la,lon:lo,src:'OpenStreetMap',author:'',lic:'',date:'',link,title:name});continue}
@@ -1292,7 +1302,7 @@ async function phOverpass(lat,lon,r){const rad=Math.min(r,2000);
 async function phMapillary(lat,lon,r){let tok='';try{tok=localStorage.getItem('whg.mapillary')||''}catch(e){}if(!tok)return[];
   // one small box (the API is slow on big ones); 360° panoramas are skipped since their thumbnails are mostly sky
   const b=phBox(lat,lon,Math.min(r,1000)).map(v=>v.toFixed(5)).join(',');
-  const j=await phJSON(`https://graph.mapillary.com/images?fields=id,is_pano,thumb_256_url,thumb_1024_url,captured_at,geometry,creator&bbox=${b}&limit=50`,{headers:{Authorization:'OAuth '+tok}});
+  const j=await phPJ(`https://graph.mapillary.com/images?fields=id,is_pano,thumb_256_url,thumb_1024_url,captured_at,geometry,creator&bbox=${b}&limit=50`,{headers:{Authorization:'OAuth '+tok}});
   return(j.data||[]).map(p=>{const g=p.geometry&&p.geometry.coordinates;if(!g||p.is_pano)return null;
     return{key:'m:'+p.id,thumb:p.thumb_256_url,full:p.thumb_1024_url||p.thumb_256_url,lat:g[1],lon:g[0],src:'Mapillary',author:(p.creator&&p.creator.username)||'',lic:'CC BY-SA (© Mapillary contributors)',
       date:p.captured_at?new Date(p.captured_at).toISOString().slice(0,10):'',link:`https://www.mapillary.com/app/?pKey=${p.id}`,title:'Street-level photo'}}).filter(Boolean)}
@@ -1314,7 +1324,7 @@ const phOff=t=>PH_OFFTOPIC.test(t)||PH_LATIN.test(t);
 const phAbout=(file,m)=>[file,m&&m.Categories&&m.Categories.value,phStrip(m&&m.ImageDescription&&m.ImageDescription.value).slice(0,300)].join(' | ');
 // author and licence for Commons files found through Wikidata or OpenStreetMap
 async function phFillCommons(list){const need=list.filter(p=>p.file&&!p.lic).slice(0,50);if(!need.length)return;
-  try{const j=await phTimeout(phJSON('https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&prop=imageinfo&iiprop=extmetadata|url&iiextmetadatafilter=Artist|LicenseShortName|DateTimeOriginal|Categories|ImageDescription&titles='+encodeURIComponent(need.map(p=>'File:'+p.file).join('|'))),8000);
+  try{const j=await phTimeout(phPJ('https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&prop=imageinfo&iiprop=extmetadata|url&iiextmetadatafilter=Artist|LicenseShortName|DateTimeOriginal|Categories|ImageDescription&titles='+encodeURIComponent(need.map(p=>'File:'+p.file).join('|'))),8000);
     const by={};for(const p of Object.values((j.query||{}).pages||{})){const ii=(p.imageinfo||[])[0];if(ii)by[phFile(p.title)]=ii}
     for(const p of need){const ii=by[p.file];if(!ii)continue;const m=ii.extmetadata||{};p.author=phStrip(m.Artist&&m.Artist.value);p.lic=phStrip(m.LicenseShortName&&m.LicenseShortName.value);
       p.date=p.date||phStrip(m.DateTimeOriginal&&m.DateTimeOriginal.value).slice(0,10);p.commons=ii.descriptionurl;if(phOff(phAbout(p.file,m)))p.off=true}}catch(e){}}
@@ -1335,10 +1345,11 @@ async function phSearch(lat,lon,onUpdate){const seen=new Map();let radius=0;
   const add=(got,r)=>{for(const p of got){const k=p.key.toLowerCase();const d=phDist(lat,lon,p.lat,p.lon);if(d>r*1.05)continue;
     const prev=seen.get(k);if(!prev||(prev.src==='Wikidata'||prev.src==='OpenStreetMap')&&p.src==='Wikimedia Commons')seen.set(k,Object.assign({},p,{d}))}};
   for(const r of PH_RADII){radius=r;const key=lat.toFixed(4)+','+lon.toFixed(4)+','+r;
-    let got=PH.cache.get(key);
-    if(got){add(got,r)}else{got=[];
+    let got=PH.cache.get(key)||await phIdbGet(key);
+    if(got){PH.cache.set(key,got);add(got,r)}else{got=[];
       await Promise.allSettled(PH_SOURCES.map(f=>phTimeout(f(lat,lon,r),PH_WAIT).then(v=>{got.push(...v);add(v,r);if(onUpdate(phRank(seen),r,false)===false)throw 0})));
-      PH.cache.set(key,got);if(PH.cache.size>60)PH.cache.delete(PH.cache.keys().next().value)}
+      // a search cut short by a newer one keeps nothing, so a partial list is never saved
+      if(!PH.ac.signal.aborted){PH.cache.set(key,got);phIdbSet(key,got);if(PH.cache.size>60)PH.cache.delete(PH.cache.keys().next().value)}}
     if(onUpdate(phRank(seen),r,false)===false)return;
     if(phRank(seen).length>=PH_WANT)break;}
   const list=phRank(seen);onUpdate(list,radius,true);
@@ -1348,7 +1359,7 @@ async function phSearch(lat,lon,onUpdate){const seen=new Map();let radius=0;
 // --- card section ---
 // The search starts as soon as the card opens; the thumbnails only show once the Photos button is pressed.
 const photosBlock=()=>`<div class="phs" id="phs"><button type="button" class="phbtn" id="phbtn" aria-expanded="false" aria-controls="phg"><span>Photos nearby</span><small id="phst">Searching…</small><i class="phchev" aria-hidden="true">›</i></button><div class="phg" id="phg" hidden></div></div>`;
-function photosLoad(ll){if(!ll)return;const tok=++PH.tok;PH.list=[];PH.done=false;PH.radius=0;PH.sig='';
+function photosLoad(ll){if(!ll)return;const tok=++PH.tok;if(PH.ac)PH.ac.abort();PH.ac=new AbortController();PH.list=[];PH.done=false;PH.radius=0;PH.sig='';
   const btn=document.getElementById('phbtn');if(btn)btn.onclick=()=>{const g=document.getElementById('phg');const open=g.hidden;g.hidden=!open;btn.setAttribute('aria-expanded',open);if(open)photosRender(true)};
   phSearch(ll[1],ll[0],(list,r,done)=>{if(tok!==PH.tok||!document.getElementById('phg'))return false;PH.list=list;PH.radius=r;PH.done=done;photosRender()})}
 function photosRender(force){const st=document.getElementById('phst'),g=document.getElementById('phg'),btn=document.getElementById('phbtn');if(!st||!g)return;
@@ -1361,7 +1372,7 @@ function photosRender(force){const st=document.getElementById('phst'),g=document
   if(sig===PH.sig&&!force)return;PH.sig=sig;
   g.innerHTML=shown.map((p,i)=>{const m=i===PH_SHOW-1&&more;
     return`<button type="button" class="pht" data-i="${i}" title="${esc([p.title,phFmtD(p.d)+' away',p.src,p.author&&'© '+p.author,p.lic,p.date].filter(Boolean).join(' · '))}" aria-label="${esc((p.title||'Photo')+', '+phFmtD(p.d)+' away, '+p.src)}">`+
-      `<img src="${esc(p.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.pht').classList.add('bad')">`+
+      phImg(p)+
       (m?`<b class="phmore">+${n-PH_SHOW+1}</b>`:'')+`</button>`}).join('')+(shown.length<PH_SHOW&&!PH.done?'<span class="phsk"></span>'.repeat(PH_SHOW-shown.length):'');
   g.querySelectorAll('.pht').forEach(b=>b.onclick=()=>{const i=+b.dataset.i;if(i===PH_SHOW-1&&PH.list.length>PH_SHOW)phGrid();else phOpen(i)})}
 
@@ -1375,7 +1386,7 @@ function phBlur(on){let bg=document.getElementById('phbg');
   bg.hidden=false;phBgPaint();window.addEventListener('resize',phBgPaint)}
 function phBgPaint(){const bg=document.getElementById('phbg');if(!bg||bg.hidden)return;const w=innerWidth,h=innerHeight;
   const big=document.createElement('canvas');big.width=Math.round(w/2);big.height=Math.round(h/2);const g=big.getContext('2d');
-  const sm=document.createElement('canvas');sm.width=Math.max(1,Math.round(w/14));sm.height=Math.max(1,Math.round(h/14));const s2=sm.getContext('2d');
+  const sm=document.createElement('canvas');sm.width=64;sm.height=Math.max(1,Math.round(h*64/w));const s2=sm.getContext('2d');
   s2.imageSmoothingEnabled=true;s2.imageSmoothingQuality='high';
   try{s2.drawImage(sc,0,0,sm.width,sm.height)}catch(e){}s2.drawImage(cv,0,0,sm.width,sm.height);
   g.fillStyle=getComputedStyle(document.body).backgroundColor||'#0b1020';g.fillRect(0,0,big.width,big.height);
@@ -1387,7 +1398,7 @@ function phGrid(){if(!PH.list.length)return;let el=PH.grid;
     el.innerHTML=`<div class="phgp"><div class="phgh"><b></b><button class="phx" aria-label="Close">×</button></div><div class="phgl"></div></div>`;document.body.appendChild(el);
     el.querySelector('.phx').onclick=phGridClose;el.addEventListener('click',e=>{if(e.target===el)phGridClose()})}
   el.querySelector('.phgh b').textContent=`${PH.list.length} photos nearby`;
-  el.querySelector('.phgl').innerHTML=PH.list.map((p,i)=>`<button type="button" class="pht" data-i="${i}" title="${esc([p.title,phFmtD(p.d)+' away',p.src].filter(Boolean).join(' · '))}" aria-label="${esc((p.title||'Photo')+', '+p.src)}"><img src="${esc(p.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.pht').classList.add('bad')"></button>`).join('');
+  el.querySelector('.phgl').innerHTML=PH.list.map((p,i)=>`<button type="button" class="pht" data-i="${i}" title="${esc([p.title,phFmtD(p.d)+' away',p.src].filter(Boolean).join(' · '))}" aria-label="${esc((p.title||'Photo')+', '+p.src)}">${phImg(p)}</button>`).join('');
   el.querySelectorAll('.pht').forEach(b=>b.onclick=()=>phOpen(+b.dataset.i,true));
   el.hidden=false;phBlur(true);PH.prevFocus=PH.prevFocus&&PH.box&&!PH.box.hidden?PH.prevFocus:document.activeElement;document.addEventListener('keydown',phGridKey,true);el.querySelector('.pht')?.focus({preventScroll:true})}
 function phGridClose(){if(!PH.grid)return;PH.grid.hidden=true;document.removeEventListener('keydown',phGridKey,true);if(!PH.box||PH.box.hidden){phBlur(false);if(PH.prevFocus&&PH.prevFocus.focus)PH.prevFocus.focus({preventScroll:true})}}
@@ -1591,7 +1602,7 @@ function cwApply(){CW.vis=[...CW.list.values()].filter(x=>cwPass(x,CW.f));try{lo
 const cwAdd=x=>{x.v=vec(x.lon,x.lat);x.addr=[x.street,x.city,x.country].filter(Boolean).join(', ');x.chain=!!x.brand||CW_CHAIN.test(x.name);CW.list.set(x.id,x)};
 const cwCountry=c=>{try{return new Intl.DisplayNames(['en'],{type:'region'}).of(c)||c}catch(e){return c}};
 // one row per place, as written by scripts/coworking.py: the fields list names the columns
-function cwLoad(j){const f=j.fields;CW.list.clear();
+function cwLoad(j){const f=j.fields;CW.list.clear();CW.updated=j.updated;
   j.rows.forEach((r,i)=>{const x={id:'cw'+i};f.forEach((k,n)=>x[k]=r[n]);cwAdd(x)});
   const cnt={};for(const x of CW.list.values())if(x.country)cnt[x.country]=(cnt[x.country]||0)+1;
   CW.ccs=Object.entries(cnt).sort((a,b)=>cwCountry(a[0]).localeCompare(cwCountry(b[0])));
@@ -1623,7 +1634,7 @@ function sunNow(t){const n=(t/864e5)+2440587.5-2451545.0,rad=Math.PI/180;
 // The shading is built from many thin rings around the point opposite the sun, each a touch darker, chosen so the
 // total darkness follows a smooth curve: nothing while the sun is 3° up, deepening through twilight to full night
 // once it is 18° below the horizon. That reads as one soft gradient rather than visible steps.
-const NIGHT_BANDS=(()=>{const out=[],maxA=0.52,step=1;let prev=0;
+const NIGHT_BANDS=(()=>{const out=[],maxA=0.4,step=1;let prev=0;
   for(let d=93;d>=72;d-=step){const t=(93-d)/21,T=maxA*t*t*(3-2*t),a=1-(1-T)/(1-prev);prev=T;out.push([d,a])}return out})();
 function drawNight(){const sp=sunNow(Date.now()),anti=[sp[0]+180>180?sp[0]-180:sp[0]+180,-sp[1]],col=dark?'2,6,22':'8,14,40';
   ctx.save();for(const [r,a] of NIGHT_BANDS){ctx.beginPath();path(d3.geoCircle().center(anti).radius(r).precision(1)());ctx.fillStyle=`rgba(${col},${a.toFixed(4)})`;ctx.fill()}
@@ -1645,18 +1656,19 @@ setTimeout(()=>{const go=()=>m3dLoad().catch(()=>{});'requestIdleCallback' in wi
 
 // coworking filter card (opens from the filter button next to Coworking spaces)
 const cwActive=()=>JSON.stringify(CW.f)!==JSON.stringify(CWF_DEF);
-function cwCounts(){const c=document.getElementById('cwcnt');if(c)c.textContent=CW.list.size?(CW.vis.length===CW.list.size?CW.list.size:`${CW.vis.length}/${CW.list.size}`):'';
+function cwCounts(){const u=document.getElementById('cwupd');if(u&&CW.updated)u.textContent='Data built '+new Date(CW.updated).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})+'.';
+  const c=document.getElementById('cwcnt');if(c)c.textContent=CW.list.size?(CW.vis.length===CW.list.size?CW.list.size:`${CW.vis.length}/${CW.list.size}`):'';
   const b=document.getElementById('cwfb');if(b)b.classList.toggle('on',cwActive());const s=document.getElementById('cwshow');if(s)s.textContent=CW.vis.length?`Show ${CW.vis.length}`:'None match'}
 function cwToggle(open){let el=document.getElementById('cwf');
   if(!el){el=document.createElement('aside');el.className='clf glass cwf';el.id='cwf';el.hidden=true;el.setAttribute('aria-label','Coworking filters');
     el.innerHTML=`<div class="clfh"><b>Coworking spaces</b><button class="x" id="cwfx" aria-label="Close filters">×</button></div>
       <input id="cwq" class="flin" type="search" placeholder="Search name or address" autocomplete="off">
-      <div class="clg"><span class="cll">Kind</span><div class="clchips">${[['all','All'],['indep','Independent'],['chain','Chains (Regus, WeWork…)']].map(([v,l])=>`<button type="button" class="clchip" data-cwk="${v}">${l}</button>`).join('')}</div></div>
+      <div class="clg"><span class="cll">Kind</span><div class="clchips" role="group" aria-label="Kind of space">${[['all','All'],['indep','Independent'],['chain','Chains (Regus, WeWork…)']].map(([v,l])=>`<button type="button" class="clchip" data-cwk="${v}">${l}</button>`).join('')}</div></div>
       <div class="clg"><span class="cll">Country</span><select id="cwcc" class="flin" aria-label="Country"></select></div>
       <div class="clg"><label class="clchk"><input type="checkbox" id="cwweb"> Has a website</label><label class="clchk"><input type="checkbox" id="cwhrs"> Opening hours listed</label>
         <label class="clchk"><input type="checkbox" id="cwconf"> Well-established listings only</label></div>
       <div class="clfoot"><button type="button" class="flb2" id="cwreset">Reset</button><button type="button" class="primary" id="cwshow"></button></div>
-      <p class="clsmall">From <a href="https://overturemaps.org/" target="_blank" rel="noopener noreferrer">Overture Maps</a> and <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>, refreshed weekly. Closed places are left out.</p>`;
+      <p class="clsmall">From <a href="https://overturemaps.org/" target="_blank" rel="noopener noreferrer">Overture Maps</a> and <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>, refreshed weekly. Closed places are left out. <span id="cwupd"></span></p>`;
     document.body.appendChild(el);const $=id=>el.querySelector('#'+id),sync=()=>{$('cwq').value=CW.f.q;el.querySelectorAll('[data-cwk]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.cwk===CW.f.kind)));
       $('cwcc').innerHTML='<option value="">All countries</option>'+CW.ccs.map(([c,n])=>`<option value="${c}">${esc(cwCountry(c))} (${n})</option>`).join('');$('cwcc').value=CW.f.cc;
       $('cwweb').checked=CW.f.web;$('cwhrs').checked=CW.f.hours;$('cwconf').checked=CW.f.conf;cwCounts()};el._sync=sync;
