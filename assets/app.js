@@ -58,18 +58,21 @@ matchMedia('(prefers-color-scheme: light)').addEventListener('change',theme);
 // the view is a stereographic projection about that point: angles and shapes keep their true form, and the sky only
 // turns as the sun moves through the year. Shown in the dark theme only.
 let SKYD=null;fetch('data/sky.json').then(r=>{if(!r.ok)throw 0;return r.json()}).then(j=>{SKYD=j;stars()}).catch(()=>{});
-function sunRaDec(t){const n=(t/864e5)+2440587.5-2451545.0,rad=Math.PI/180;
-  const L=(280.460+0.9856474*n)%360,g=(357.528+0.9856003*n)*rad,lam=(L+1.915*Math.sin(g)+0.020*Math.sin(2*g))*rad,eps=(23.439-0.0000004*n)*rad;
-  return[Math.atan2(Math.cos(eps)*Math.sin(lam),Math.cos(lam))/rad,Math.asin(Math.sin(eps)*Math.sin(lam))/rad]}
+let SKYKEY='';
+// redraw the sky when the view has turned by a quarter of a degree or a minute has passed
+function skyFrame(){const key=Math.round(rot[0]*4)+','+Math.round(rot[1]*4)+','+Math.floor(Date.now()/6e4);if(key!==SKYKEY){SKYKEY=key;stars()}}
 function stars(){const r=sc.getBoundingClientRect();sc.width=r.width*dpr;sc.height=r.height*dpr;const s=sc.getContext('2d');s.clearRect(0,0,sc.width,sc.height);
-  if(!dark||!SKYD)return;const rad=Math.PI/180,[sra,sdec]=sunRaDec(Date.now());
-  // forward: the anti-sun point; up: the celestial north pole's direction across the view; right = forward × up
-  const ra0=(sra+180)*rad,de0=-sdec*rad,f=[Math.cos(de0)*Math.cos(ra0),Math.cos(de0)*Math.sin(ra0),Math.sin(de0)];
+  if(!dark||!SKYD)return;const rad=Math.PI/180;
+  // the sky as seen from the place at the centre of the globe, right now: that place's zenith is the centre of the
+  // view, and the local sidereal time (Greenwich sidereal time plus the longitude) turns the sky as the globe turns
+  const olon=-rot[0],olat=clamp(-rot[1],-90,90),jd=Date.now()/864e5+2440587.5,lst=((280.46061837+360.98564736629*(jd-2451545.0)+olon)%360+360)%360;
+  // forward: the zenith; up: the celestial north pole's direction across the view; right = forward × up
+  const ra0=lst*rad,de0=olat*rad,f=[Math.cos(de0)*Math.cos(ra0),Math.cos(de0)*Math.sin(ra0),Math.sin(de0)];
   let u=[-f[2]*f[0],-f[2]*f[1],1-f[2]*f[2]];const un=Math.hypot(...u);u=u.map(x=>x/un);
   const R=[f[1]*u[2]-f[2]*u[1],f[2]*u[0]-f[0]*u[2],f[0]*u[1]-f[1]*u[0]];
   const S=Math.min(sc.width,sc.height)*0.275,cx=sc.width/2,cy=sc.height/2;
   const P=(ra,dec)=>{const a=ra*rad,b=dec*rad,v=[Math.cos(b)*Math.cos(a),Math.cos(b)*Math.sin(a),Math.sin(b)];
-    const c=v[0]*f[0]+v[1]*f[1]+v[2]*f[2];if(c<-0.6)return null;const k2=2*S/(1+c);
+    const c=v[0]*f[0]+v[1]*f[1]+v[2]*f[2];if(c<-0.02)return null;const k2=2*S/(1+c);
     return[cx+k2*(v[0]*R[0]+v[1]*R[1]+v[2]*R[2]),cy-k2*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2])]};
   s.lineCap='round';s.strokeStyle='rgba(150,190,255,0.28)';s.lineWidth=0.8*dpr;
   for(const c of SKYD.constellations)for(const seg of c.segs){let pen=false;s.beginPath();
@@ -79,7 +82,6 @@ function stars(){const r=sc.getBoundingClientRect();sc.width=r.width*dpr;sc.heig
     s.fillStyle=`rgba(226,235,255,${a})`;s.beginPath();s.arc(p[0],p[1],rr,0,7);s.fill()}
   s.font=`${11*dpr}px "Bricolage Grotesque", "Segoe UI", sans-serif`;s.textAlign='center';s.textBaseline='middle';s.fillStyle='rgba(170,200,255,0.45)';
   for(const c of SKYD.constellations){const p=P(c.at[0],c.at[1]);if(p)s.fillText(c.name,p[0],p[1])}}
-setInterval(()=>{if(SKYD&&dark)stars()},300000);
 
 // time helpers
 const off=tz=>(D.zones[tz]||[0,0])[season];
@@ -125,7 +127,7 @@ function strokeFC(fc,style,w){ctx.beginPath();for(const f of fc.features)if(f.ri
 function draw(){
   if(!W)return;
   ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
-  const s=base*k;proj.rotate(rot).scale(s);computeView();setMatrix();
+  const s=base*k;proj.rotate(rot).scale(s);computeView();setMatrix();skyFrame();
   // atmosphere
   if(s<Math.hypot(W,H)){const g=ctx.createRadialGradient(cx,cy,s*0.96,cx,cy,s*1.22);g.addColorStop(0,pal.glow+(dark?'.42)':'.45)'));g.addColorStop(.35,pal.glow+'.12)');g.addColorStop(1,pal.glow+'0)');
     ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,s*1.22,0,7);ctx.fill();}
@@ -851,7 +853,7 @@ function setShow(k,v){if(k==='hours'){showHours=v;try{localStorage.setItem('whg.
 const LYI={
   hours:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
   cl:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="#2fb36a" stroke="#fff" stroke-width="2"/></svg>',
-  cw:'<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5" fill="#2f6fe0" stroke="#fff" stroke-width="1.5"/><rect x="7" y="7.5" width="10" height="6.5" fill="#fff"/><rect x="8.5" y="9" width="7" height="3.6" fill="#2f6fe0"/><rect x="5.5" y="15" width="13" height="2" fill="#fff"/></svg>',
+  cw:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="#8b5cf6" stroke="#fff" stroke-width="1.5"/></svg>',
   names:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12.5V5a2 2 0 0 1 2-2h7.5l8.5 8.5-9.5 9.5z"/><circle cx="8" cy="8" r="1.6" fill="currentColor"/></svg>',
   weather:()=>`<img src="data:image/svg+xml,${encodeURIComponent(WXI.psun)}" alt="">`,
   night:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#ffc83d"/><path d="M12 3a9 9 0 0 1 0 18z" fill="#24305a"/><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
@@ -971,7 +973,7 @@ const M3D_OWN='m3d-';
 // drift a short way from where the zoom last changed, so pulling down from a mountain top stops at its base
 // instead of sliding off across the map. Wider views are free to spin and travel.
 function m3dLimit(map){if(map.getZoom()<6){map.setMaxBounds(null);return}
-  const c=map.getCenter(),s=400/Math.pow(2,map.getZoom());map.setMaxBounds([[c.lng-s*2,c.lat-s],[c.lng+s*2,c.lat+s]])}
+  const c=map.getCenter(),s=120/Math.pow(2,map.getZoom());map.setMaxBounds([[c.lng-s*2,c.lat-s],[c.lng+s*2,c.lat+s]])}
 function m3dGeo(){
   const tz={type:'FeatureCollection',features:[]};
   if(showHours)for(const f of TZHIT.features.concat(D.gaps.features))tz.features.push({type:'Feature',properties:{c:pal['b'+band(off(f.properties.z))]},geometry:f.geometry});
@@ -1038,7 +1040,7 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
       'text-allow-overlap':true,'icon-allow-overlap':true,'icon-optional':true},
     paint:{'text-color':'#ffffff','text-halo-color':'rgba(10,16,30,.85)','text-halo-width':1.8}});
   lay({id:M3D_OWN+'cm',type:'circle',source:M3D_OWN+'cm',paint:{'circle-color':['case',['==',['get','live'],1],'#1f2937','#ffffff'],'circle-radius':7,'circle-stroke-color':['case',['==',['get','live'],1],'#e2453c','#1f2937'],'circle-stroke-width':2}});
-  lay({id:M3D_OWN+'cwk',type:'circle',source:M3D_OWN+'cwk',paint:{'circle-color':'#2f6fe0','circle-radius':4,'circle-stroke-color':'#fff','circle-stroke-width':1.4}});
+  lay({id:M3D_OWN+'cwk',type:'circle',source:M3D_OWN+'cwk',paint:{'circle-color':'#8b5cf6','circle-radius':4,'circle-stroke-color':'#fff','circle-stroke-width':1.4}});
   // coworking fades in from zoom 5 to 7, so the layer stays out of the way of a wide view of the globe
   for(const p of['circle-opacity','circle-stroke-opacity'])map.setPaintProperty(M3D_OWN+'cwk',p,['interpolate',['linear'],['zoom'],5,0,7,1]);
   map.setPaintProperty(M3D_OWN+'cwk','circle-radius',['interpolate',['linear'],['zoom'],2,2.5,8,3.5,14,4.5]);
@@ -1075,8 +1077,7 @@ if(!document.documentElement.requestFullscreen)document.getElementById('fs').sty
 // search
 const index=D.countries.map(c=>({n:c[0],sub:'Country',lon:c[1],lat:c[2],size:c.size,tz:c[3]})).concat(D.prov.map(p=>({n:p[0],sub:p[6]||'',lon:p[1],lat:p[2],size:p[5],tz:p[3]})));
 const sbox=document.getElementById('search'),q=document.getElementById('q'),res=document.getElementById('res');let hl=-1,matches=[];
-document.getElementById('sbtn').onclick=()=>{if(sbox.classList.contains('open')&&!q.value){closeSearch()}else{sbox.classList.add('open');q.focus()}};
-function closeSearch(){sbox.classList.remove('open');res.classList.remove('show');q.value='';q.blur()}
+function closeSearch(){res.classList.remove('show');q.value='';q.blur()}
 function renderRes(){res.innerHTML='';if(!q.value.trim()){res.classList.remove('show');return}
   if(!matches.length){res.innerHTML='<li class="empty">No place by that name. Try a country, state or island.</li>'}
   matches.forEach((m,i)=>{const li=document.createElement('li'),b=document.createElement('button');b.className=i===hl?'hl':'';
@@ -1088,7 +1089,6 @@ q.addEventListener('input',()=>{const v=q.value.trim().toLowerCase();hl=0;
 q.addEventListener('keydown',e=>{if(e.key==='Escape'){closeSearch();cv.focus()}else if(e.key==='ArrowDown'){hl=Math.min(matches.length-1,hl+1);renderRes();e.preventDefault()}
   else if(e.key==='ArrowUp'){hl=Math.max(0,hl-1);renderRes();e.preventDefault()}else if(e.key==='Enter'&&matches[hl]){pick(matches[hl])}});
 document.addEventListener('keydown',e=>{if(e.key==='/'&&document.activeElement!==q&&!/INPUT/.test(document.activeElement.tagName)){e.preventDefault();sbox.classList.add('open');q.focus()}});
-document.addEventListener('pointerdown',e=>{if(!sbox.contains(e.target)&&sbox.classList.contains('open')&&!q.value)closeSearch()});
 
 // overlay layers
 const COLORS=['#2ee6c8','#ff5fae','#4aa3ff','#b07cff','#ffb020'];
@@ -1664,9 +1664,7 @@ function cwLoad(j){const f=j.fields;CW.list.clear();CW.updated=j.updated;
   CW.ccs=Object.entries(cnt).sort((a,b)=>cwCountry(a[0]).localeCompare(cwCountry(b[0])));
   cwApply()}
 fetch('data/coworking.json').then(r=>{if(!r.ok)throw 0;return r.json()}).then(cwLoad).catch(()=>{});
-function cwMark(X,Y,r,sel){ctx.beginPath();ctx.roundRect?ctx.roundRect(X-r,Y-r,2*r,2*r,r*0.45):ctx.rect(X-r,Y-r,2*r,2*r);ctx.fillStyle='#2f6fe0';ctx.fill();
-  ctx.lineWidth=sel?3:1.4;ctx.strokeStyle=sel?'#ffd27a':pal.halo;ctx.stroke();const s=r/8;ctx.fillStyle='#fff';
-  ctx.fillRect(X-4.5*s,Y-4*s,9*s,5.5*s);ctx.fillStyle='#2f6fe0';ctx.fillRect(X-3.3*s,Y-2.9*s,6.6*s,3.4*s);ctx.fillStyle='#fff';ctx.fillRect(X-6*s,Y+2.2*s,12*s,1.8*s)}
+function cwMark(X,Y,r,sel){ctx.beginPath();ctx.arc(X,Y,r,0,Math.PI*2);ctx.fillStyle='#8b5cf6';ctx.fill();ctx.lineWidth=sel?2.4:1.2;ctx.strokeStyle=sel?'#ffd27a':pal.halo;ctx.stroke()}
 // At globe scale, places that would overlap merge into one purple dot; pressing a dot flies to it
 const CW_CLUSTER_K=18,CW_CELL=64,CW_SINGLE_K=9;  // places within a 64 px square merge into one dot
 // Zoomed out, only places that sit in a crowd show, so the globe isn't covered: a few hubs at globe scale, most
@@ -1689,7 +1687,7 @@ function cwDraw(){if(!CW.vis.length)return;const r=k<CW_CLUSTER_K?3.5:4.5,at=[];
 function cwHit(x,y){if(k<CW_SINGLE_K)return null;let best=null,bd=12;for(const c of CW.vis){const p=camProj(c.v);if(!p)continue;const d=Math.hypot(p[0]-x,p[1]-y);if(d<bd){bd=d;best=c}}return best}
 function cwShow(x){activeFav=null;draft=null;selected=null;if(typeof CL!=='undefined')CL.sel=null;CAM.sel=null;clickPin=null;CW.sel=x;infoTok++;
   const rows=[['Address',x.addr],['Opening hours',x.hours],['Phone',x.phone],['Listed in',{v:'Overture Maps',o:'OpenStreetMap',vo:'Overture Maps and OpenStreetMap'}[x.src]||'']].filter(r=>r[1]);
-  document.getElementById('infob').innerHTML=`<p class="cltype"><i style="background:#2f6fe0;border-radius:3px"></i>Coworking space${x.chain?' · chain':''}</p><h2>${esc(x.name)}</h2>`+
+  document.getElementById('infob').innerHTML=`<p class="cltype"><i style="background:#8b5cf6;border-radius:50%"></i>Coworking space${x.chain?' · chain':''}</p><h2>${esc(x.name)}</h2>`+
     (rows.length?`<dl class="meta">${rows.map(([a,b])=>`<dt>${a}</dt><dd>${esc(b)}</dd>`).join('')}</dl>`:'')+
     `<div class="cllinks">${x.web?`<a class="clbtn" href="${esc(/^https?:/.test(x.web)?x.web:'https://'+x.web)}" target="_blank" rel="noopener noreferrer">Website ↗</a>`:''}<a class="clbtn" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(x.name+' '+x.lat.toFixed(5)+','+x.lon.toFixed(5))}" target="_blank" rel="noopener noreferrer">Reviews & photos ↗</a></div>`+
     `<div>${hoursBlock(tzAt([x.lon,x.lat]))}</div>${wxBlock()}${photosBlock()}${flightsBlock()}`;
@@ -1719,7 +1717,7 @@ setInterval(()=>{if(showNight&&!running)draw()},60000);
 const POLE={street:['#ddecec','#aad3df'],satellite:['#eef2f5','#0d2238'],s2:['#eef2f5','#0d2238'],topo:['#f4f7f7','#97d2e3'],ocean:['#e8eef0','#a8c4d4'],night:['#0b0d1a','#05070f']};
 function drawPoleCaps(){const c=POLE[basemap]||POLE.street,a0=ctx.globalAlpha;
   for(const [lat,col] of [[-90,c[0]],[90,c[1]]]){
-    for(const [r,a] of [[5.6,0.35],[5.3,0.6],[5.05,1]]){ctx.beginPath();path(d3.geoCircle().center([0,lat]).radius(r).precision(1)());ctx.globalAlpha=a0*a;ctx.fillStyle=col;ctx.fill()}}
+    ctx.beginPath();path(d3.geoCircle().center([0,lat]).radius(5).precision(1)());ctx.globalAlpha=a0;ctx.fillStyle=col;ctx.fill()}
   ctx.globalAlpha=a0}
 
 // keep tiles, terrain and the 3D library on this device between visits (see sw.js), and fetch the 3D library
