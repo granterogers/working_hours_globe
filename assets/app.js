@@ -280,8 +280,6 @@ cv.addEventListener('wheel',e=>{e.preventDefault();const r=cv.getBoundingClientR
 cv.addEventListener('dblclick',e=>{const r=cv.getBoundingClientRect();zoomTo(kT*2.2,[e.clientX-r.left,e.clientY-r.top])});
 cv.addEventListener('keydown',e=>{const st=40;if(e.key==='ArrowLeft'){vel=[st/4,0]}else if(e.key==='ArrowRight'){vel=[-st/4,0]}else if(e.key==='ArrowUp'){vel=[0,st/4]}else if(e.key==='ArrowDown'){vel=[0,-st/4]}
   else if(e.key==='+'||e.key==='='){zoomTo(kT*1.6,[cx,cy])}else if(e.key==='-'){zoomTo(kT/1.6,[cx,cy])}else return;e.preventDefault();kick()});
-document.getElementById('zi').onclick=()=>zoomTo(kT*1.8,[cx,cy]);
-document.getElementById('zo').onclick=()=>zoomTo(kT/1.8,[cx,cy]);
 
 function flyTo(lon,lat,sizeDeg,dur,minDeg){
   const target=clamp((Math.min(W,H)*0.38)/(Math.max(sizeDeg,minDeg??1.2)*base/DEG),1,MAXK);
@@ -596,7 +594,7 @@ function showFav(f,focus){activeFav=f;selected=null;draft=null;
   document.getElementById('fdel').onclick=()=>{favs=favs.filter(x=>x!==f);saveFavs();renderFavs();activeFav=null;document.getElementById('info').classList.remove('show');draw()};
   document.getElementById('info').classList.add('show');if(focus)setTimeout(()=>nt.focus(),50);}
 function renderFavs(){const ul=document.getElementById('favs');if(!ul)return;
-  if(!favs.length){ul.innerHTML='<li class="empty">Use Add a favourite, then click the map to drop a pin.</li>';return}
+  if(!favs.length){ul.innerHTML='<li class="empty">Click any place on the globe and press the heart to save it.</li>';return}
   ul.innerHTML='';favs.slice().sort((a,b)=>a.name.localeCompare(b.name)).forEach(f=>{const li=document.createElement('li'),b=document.createElement('button');
     const o=f.tz&&D.zones[f.tz]?D.zones[f.tz][season]:null;
     b.innerHTML=`<span class="fh" aria-hidden="true">♥</span><span class="fn">${esc(f.name)}</span>${o!=null?`<span class="fhrs">${hours(o)}</span>`:''}`;
@@ -899,11 +897,10 @@ document.getElementById('lyrh').onclick=()=>lyrFold(document.getElementById('lyr
 // base map menu (top right)
 function bmRender(){const m=document.getElementById('bmmenu');
   m.innerHTML=`<div class="bmh">Map layers</div><button type="button" class="add" id="add">Add a KML, KMZ or GeoJSON file</button><ul class="layers" id="layers"></ul>`+
-    `<div class="bmh">Favourites</div><button type="button" class="add" id="favnew"><span class="fh" aria-hidden="true">♥</span> Add a favourite</button><ul class="favs" id="favs"></ul>`+
+    `<div class="bmh">Favourites</div><ul class="favs" id="favs"></ul>`+
     `<div class="bmh">Base map</div>`+Object.entries(BASEMAPS).map(([id,b])=>`<button type="button" role="menuitemradio" aria-checked="${id===basemap}" data-id="${id}"><i class="bmdot"></i><span><b>${b.name}</b><small>${b.sub}</small></span></button>`).join('');
   m.querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>{setBasemap(b.dataset.id);bmToggle(false)});
   m.querySelector('#add').onclick=()=>document.getElementById('file').click();
-  m.querySelector('#favnew').onclick=()=>{bmToggle(false);startPlacing()};
   renderLayers();renderFavs()}
 function setBasemap(id){if(!BASEMAPS[id]||id===basemap)return;basemap=id;try{localStorage.setItem('whg.basemap',id)}catch(e){}vtUsed.clear();if(m3d.map)m3dStyle();draw()}
 function bmToggle(open){const m=document.getElementById('bmmenu'),b=document.getElementById('bmbtn');const show=open==null?m.hidden:open;if(show)bmRender();m.hidden=!show;b.setAttribute('aria-expanded',String(show));
@@ -962,12 +959,11 @@ async function open3D(){let el=m3d.el;
   // start exactly where the globe was: same centre, same scale, looking straight down
   const lon=-rot[0],lat=clamp(-rot[1],-85,85),zoom=k2z(k,lat);
   if(m3d.map){m3d.map.jumpTo({center:[lon,lat],zoom,pitch:0,bearing:0});m3d.map.resize();m3dSync();return}
-  try{const map=m3d.map=new lib.Map({container:'m3dmap',style:m3dStyleDef(),center:[lon,lat],zoom,pitch:0,bearing:0,maxPitch:85,attributionControl:{compact:true},hash:false,dragRotate:true,pitchWithRotate:true,maxTileCacheSize:3000,refreshExpiredTiles:false});
-    map.addControl(new lib.NavigationControl({showCompass:false}),'bottom-right');
+  try{const map=m3d.map=new lib.Map({container:'m3dmap',style:m3dStyleDef(),center:[lon,lat],zoom,pitch:0,bearing:0,maxPitch:85,attributionControl:{compact:false},hash:false,dragRotate:true,pitchWithRotate:true,maxTileCacheSize:3000,refreshExpiredTiles:false});
     map.on('rotate',northNeedle);map.on('pitch',northNeedle);
     map.on('style.load',()=>{m3d.mode=null;m3dExtras(map);m3dSync()});
     map.on('zoomend',()=>{m3dMode(map);m3dLimit(map)});map.on('moveend',()=>{if(m3d.me&&myLoc)m3dMe()});
-    map.on('click',m3dClick);map.on('moveend',m3dWx);map.on('load',()=>{m3dWx();m3dLimit(map)});
+    map.on('click',m3dClick);map.on('moveend',m3dWx);map.on('load',()=>{m3dWx();m3dLimit(map)});map.on('moveend',()=>m3dAboveGround(map));
     m3dWheelButton(map);
     map.on('error',e=>{if(e&&e.error&&/webgl/i.test(String(e.error.message)))msg.textContent='3D needs WebGL, which this browser has switched off.',msg.hidden=false})}
   catch(e){msg.textContent='3D needs WebGL, which this browser has switched off.';msg.hidden=false}}
@@ -1002,6 +998,12 @@ const M3D_OWN='m3d-';
 // instead of sliding off across the map. Wider views are free to spin and travel.
 function m3dLimit(map){if(map.getZoom()<13){map.setMaxBounds(null);return}
   const c=map.getCenter(),s=200/Math.pow(2,map.getZoom());map.setMaxBounds([[c.lng-s*2,c.lat-s],[c.lng+s*2,c.lat+s]])}
+// Keep the camera above the ground: panning down a slope can bring the terrain up past the camera, so then the
+// camera is lifted to stay 60 m above the ground under it, rather than the view going into the hill
+function m3dAboveGround(map){const ML=window.maplibregl;if(!ML||!map.getTerrain||!map.getTerrain())return;
+  try{const cam=map.getFreeCameraOptions();if(!cam.position)return;const ll=cam.position.toLngLat(),alt=cam.position.toAltitude();
+    const g=map.queryTerrainElevation([ll.lng,ll.lat],{exaggerated:false});if(g==null||alt>=g+60)return;
+    cam.position=ML.MercatorCoordinate.fromLngLat([ll.lng,ll.lat],g+60);map.setFreeCameraOptions(cam)}catch(e){}}
 function m3dGeo(){
   const tz={type:'FeatureCollection',features:[]};
   if(showHours)for(const f of TZHIT.features.concat(D.gaps.features))tz.features.push({type:'Feature',properties:{c:pal['b'+band(off(f.properties.z))]},geometry:f.geometry});
