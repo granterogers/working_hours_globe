@@ -176,7 +176,7 @@ function draw(){
   ctx.fillStyle=sg;ctx.fillRect(0,0,W,H);ctx.restore();
   // each layer is drawn at its own opacity, so switching one on or off fades it rather than blinking
   const withA=(a,fn)=>{if(a<=0)return;ctx.save();ctx.globalAlpha=a;fn();ctx.restore()};
-  withA(LAY.night,drawNight);
+  withA(LAY.night,drawNight);withA(LAY.night,drawLights);
   drawOverlays();withA(LAY.cl,clDraw);withA(LAY.cams,camDraw);withA(LAY.cw,cwDraw);
   const mapNames=LAY.names>0&&shown&&(!raster||BM().labels);withA(LAY.names,drawLabels);MAPLAB.length=0;MAPBOX.length=0;if(mapNames)drawMapLabels(tileA*LAY.names);withA(LAY.weather,()=>wxDraw(mapNames));drawPin();
 }
@@ -1021,13 +1021,15 @@ function m3dGeo(){
   // the two polar caps, which the basemap's tiles stop short of, in the basemap's own colours
   const pc=POLE[basemap]||POLE.street,pole={type:'FeatureCollection',features:[[85,90,pc[1]],[-90,-85,pc[0]]].map(([a,b,c])=>({type:'Feature',properties:{c},geometry:{type:'Polygon',coordinates:[[[-180,a],[180,a],[180,b],[-180,b],[-180,a]]]}}))};
   return{tz,lab,cl,fv,ov,wx,cm,cwk,night:showNight?nightFeaturesGeo():{type:'FeatureCollection',features:[]},pole}}
+// the night tiers: each is the sun below an angle of the horizon, with a small share of the darkness
+const NIGHT_TIERS=(()=>{const t=[];for(let e=0;e<=18;e+=1.5)t.push([e,0.4/13]);return t})();
 // 3D night side: the boundary of the night (sun below the horizon) and of the twilight (sun below 9°), traced one
 // longitude at a time, so each piece is a simple shape that never wraps a pole. (A single polygon around the point
 // opposite the sun drew wedges across the map.) Cached for a minute.
 let NIGHT3D={t:0,f:null};
 function nightFeaturesGeo(){if(NIGHT3D.f&&Date.now()-NIGHT3D.t<60000)return NIGHT3D.f;
   const[sl,sd]=sunNow(Date.now()),sdr=sd*Math.PI/180,D=Math.PI/180,feats=[];
-  for(const[e,alpha]of[[0,0.18],[9,0.18]]){const T=-Math.sin(e*D),cols=[];
+  for(const[e,alpha]of NIGHT_TIERS){const T=-Math.sin(e*D),cols=[];
     for(let L=-180;L<=180;L+=2){let a=null,b=null;
       for(let p=-90;p<=90;p+=0.5){const sinE=Math.sin(p*D)*Math.sin(sdr)+Math.cos(p*D)*Math.cos(sdr)*Math.cos((L-sl)*D);if(sinE<T){if(a===null)a=p;b=p}}
       cols.push([L,a,b])}
@@ -1326,7 +1328,7 @@ Promise.all([fetch('data/coliving.json').then(r=>{if(!r.ok)throw new Error(r.sta
 const PH={cache:new Map(),list:[],tok:0,box:null,grid:null,i:0,ac:null};
 (()=>{const m=/[#&]mapillary=([^&]+)/.exec(location.hash);if(!m)return;try{localStorage.setItem('whg.mapillary',decodeURIComponent(m[1]))}catch(e){}
   history.replaceState(null,'',location.pathname+location.search)})();
-const PH_RADII=[500,2000,10000,50000],PH_WANT=10,PH_SHOW=6;
+const PH_RADII=[10000,50000],PH_WANT=10,PH_SHOW=6;
 const phDist=(a,b,c,d)=>{const R=6371000,r=Math.PI/180,x=Math.sin((c-a)*r/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin((d-b)*r/2)**2;return 2*R*Math.asin(Math.sqrt(x))};
 const phFmtD=m=>m<10?'<10 m':m<1000?Math.round(m/10)*10+' m':m<10000?(m/1000).toFixed(1)+' km':Math.round(m/1000)+' km';
 const phStrip=h=>{const d=document.createElement('div');d.innerHTML=String(h||'');return d.textContent.replace(/\s+/g,' ').trim()};
@@ -1393,7 +1395,7 @@ async function phMapillary(lat,lon,r){let tok='';try{tok=localStorage.getItem('w
       date:p.captured_at?new Date(p.captured_at).toISOString().slice(0,10):'',link:`https://www.mapillary.com/app/?pKey=${p.id}`,title:'Street-level photo'}}).filter(Boolean)}
 // iNaturalist is left out: its photos are close-ups of plants and animals rather than the place itself
 // KartaView is left out: its API no longer answers from browsers
-const PH_SOURCES=[phCommons,phWikidata,phPanoramax,phOverpass,phMapillary],PH_WAIT=5000;
+const PH_SOURCES=[phCommons,phWikidata,phPanoramax,phOverpass,phMapillary],PH_WAIT=3500;
 const PH_NATURE=/\b(bird|insect|butterfl|moth|beetle|bee|wasp|spider|dragonfl|lizard|gecko|snake|frog|caterpillar|larva|fung|lichen|moss|seed|leaf|leaves|flower|petal|specimen|herbarium|ant|fly|snail|crab|mushroom)s?\b|\b[A-Z][a-z]+ [a-z]{4,} \(|\b[A-Z][a-z]+_[a-z]{4,}\b/i;
 const PH_STREET=new Set(['Panoramax','KartaView','Mapillary']);
 // subjects that aren't the place itself: sea life and diving, wildlife and plants, food, people, vehicles being
@@ -1737,14 +1739,35 @@ const NIGHT_BANDS=(()=>{const out=[],maxA=0.4,step=1;let prev=0;
   for(let d=93;d>=72;d-=step){const t=(93-d)/21,T=maxA*t*t*(3-2*t),a=1-(1-T)/(1-prev);prev=T;out.push([d,a])}return out})();
 // Zoomed in to town level the street map takes over (see TILE_K), so the night shading fades out over the same
 // zoom range and leaves the base map's own brightness alone
-function drawNight(){const nf=1-clamp((k-TILE_K)/4.5,0,1);if(nf<=0)return;const sp=sunNow(Date.now()),anti=[sp[0]+180>180?sp[0]-180:sp[0]+180,-sp[1]],col=dark?'2,6,22':'8,14,40';
-  ctx.save();for(const [r,a] of NIGHT_BANDS){ctx.beginPath();path(d3.geoCircle().center(anti).radius(r).precision(1)());ctx.fillStyle=`rgba(${col},${(a*nf).toFixed(4)})`;ctx.fill()}
-  ctx.restore()}
+// the poles: the sun is at the same height all the way round a pole, so a cap is either in night or not, and by how
+// many tiers; the cap is filled with that darkness directly
+const poleNight=sign=>{const sd=Math.sin(sunNow(Date.now())[1]*Math.PI/180);let a=0;for(const[e,al]of NIGHT_TIERS)if(sign*sd<-Math.sin(e*Math.PI/180))a+=al;return a};
+function drawPoleNight(a,alphaScale){if(a<=0)return;for(const sign of[1,-1]){const pa=poleNight(sign)*alphaScale;if(pa<=0)continue;
+  ctx.beginPath();path(d3.geoCircle().center([0,sign*90]).radius(5).precision(2)());ctx.fillStyle=`rgba(${dark?'2,6,22':'8,14,40'},${pa.toFixed(4)})`;ctx.fill()}}
+function drawNight(){const nf=1-clamp((k-TILE_K)/4.5,0,1);if(nf<=0)return;const col=dark?'2,6,22':'8,14,40';
+  // the night side is traced from the sun's position (see nightFeaturesGeo), so its edge stays clean over the poles
+  ctx.save();for(const f of nightFeaturesGeo().features){ctx.beginPath();path(f);ctx.fillStyle=`rgba(${col},${(f.properties.a*nf).toFixed(4)})`;ctx.fill()}
+  drawPoleNight(1,nf);ctx.restore()}
+// City lights: the Black Marble night imagery, shown only over the night side. It is drawn with the same tile
+// pipeline as the basemap, then masked by the night shading, so the lights are brightest where it is darkest.
+const lightsCv=document.createElement('canvas'),maskCv=document.createElement('canvas');
+function drawLights(){const lf=1-clamp((k-TILE_K)/4.5,0,1);if(lf<=0||basemap==='night')return;
+  const keep=basemap;basemap='night';let ok=false;try{ok=drawTiles()}finally{basemap=keep}
+  if(!ok)return;
+  if(lightsCv.width!==cv.width||lightsCv.height!==cv.height){lightsCv.width=maskCv.width=cv.width;lightsCv.height=maskCv.height=cv.height}
+  const lc=lightsCv.getContext('2d'),mc=maskCv.getContext('2d');
+  lc.setTransform(1,0,0,1,0,0);lc.clearRect(0,0,lightsCv.width,lightsCv.height);lc.drawImage(tcv,0,0);
+  mc.setTransform(1,0,0,1,0,0);mc.clearRect(0,0,maskCv.width,maskCv.height);mc.setTransform(dpr,0,0,dpr,0,0);
+  const mp=d3.geoPath(proj).context(mc);
+  for(const f of nightFeaturesGeo().features){mc.beginPath();mp(f);mc.fillStyle=`rgba(255,255,255,${Math.min(1,f.properties.a*2.5).toFixed(4)})`;mc.fill()}
+  for(const sign of[1,-1]){const pa=poleNight(sign);if(pa<=0)continue;mc.beginPath();mp(d3.geoCircle().center([0,sign*90]).radius(5).precision(2)());mc.fillStyle=`rgba(255,255,255,${Math.min(1,pa*2.5).toFixed(4)})`;mc.fill()}
+  lc.setTransform(1,0,0,1,0,0);lc.globalCompositeOperation='destination-in';lc.drawImage(maskCv,0,0);lc.globalCompositeOperation='source-over';
+  ctx.save();ctx.globalAlpha=lf;ctx.drawImage(lightsCv,0,0,W,H);ctx.restore()}
 setInterval(()=>{if(showNight&&!running)draw()},60000);
 
 // Web map tiles stop at 85° north and south, which left a dark disc over each pole. Fill those caps in the base
 // map's own colours: ice for Antarctica, sea for the Arctic, with a soft edge so the join doesn't show.
-const POLE={street:['#ddecec','#aad3df'],satellite:['#eef2f5','#0d2238'],s2:['#eef2f5','#0d2238'],topo:['#f4f7f7','#97d2e3'],ocean:['#e8eef0','#a8c4d4'],night:['#0b0d1a','#05070f']};
+const POLE={street:['#ddecec','#aad3df'],satellite:['#eef2f5','#1f4262'],s2:['#eef2f5','#1f4262'],topo:['#f4f7f7','#97d2e3'],ocean:['#e8eef0','#a8c4d4'],night:['#0b0d1a','#05070f']};
 function drawPoleCaps(){const c=POLE[basemap]||POLE.street,a0=ctx.globalAlpha;
   for(const [lat,col] of [[-90,c[0]],[90,c[1]]]){
     ctx.beginPath();path(d3.geoCircle().center([0,lat]).radius(5).precision(1)());ctx.globalAlpha=a0;ctx.fillStyle=col;ctx.fill()}
