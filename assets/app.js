@@ -1350,7 +1350,7 @@ function phBox(lat,lon,m){const dl=m/111320,dn=m/(111320*Math.max(0.2,Math.cos(l
 
 // --- sources: each returns [{key,thumb,full,lat,lon,src,author,lic,date,link,title}] ---
 async function phCommons(lat,lon,r){const rad=Math.min(r,10000);
-  const u=`https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=geosearch&ggscoord=${lat}|${lon}&ggsradius=${rad}&ggsnamespace=6&ggslimit=50&prop=imageinfo|coordinates&iiprop=url|extmetadata|size|mime&iiurlwidth=400&iiextmetadatafilter=Artist|LicenseShortName|DateTimeOriginal|ObjectName|Categories|ImageDescription`;
+  const u=`https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=geosearch&ggscoord=${lat}|${lon}&ggsradius=${rad}&ggsnamespace=6&ggslimit=24&prop=imageinfo|coordinates&iiprop=url|extmetadata|size|mime&iiurlwidth=400&iiextmetadatafilter=Artist|LicenseShortName|DateTimeOriginal|ObjectName|Categories|ImageDescription`;
   const j=await phPJ(u);return Object.values((j.query||{}).pages||{}).map(p=>{const ii=(p.imageinfo||[])[0],c=(p.coordinates||[])[0];if(!ii||!c||!/^image\/(jpeg|png|webp)/.test(ii.mime||''))return null;const m=ii.extmetadata||{};
     if(ii.width&&ii.width<500)return null;const off=PH_NATURE.test(phFile(p.title))||phOff(phAbout(phFile(p.title),m));
     return{off,key:'c:'+phFile(p.title),thumb:ii.thumburl||ii.url,full:ii.width>1600?(ii.thumburl||'').replace(/\/\d+px-/,'/1600px-'):ii.url,lat:c.lat,lon:c.lon,src:'Wikimedia Commons',
@@ -1395,7 +1395,7 @@ async function phMapillary(lat,lon,r){let tok='';try{tok=localStorage.getItem('w
       date:p.captured_at?new Date(p.captured_at).toISOString().slice(0,10):'',link:`https://www.mapillary.com/app/?pKey=${p.id}`,title:'Street-level photo'}}).filter(Boolean)}
 // iNaturalist is left out: its photos are close-ups of plants and animals rather than the place itself
 // KartaView is left out: its API no longer answers from browsers
-const PH_SOURCES=[phCommons,phWikidata,phPanoramax,phOverpass,phMapillary],PH_WAIT=3500;
+const PH_SOURCES=[phCommons,phWikidata,phPanoramax,phMapillary],PH_WAIT=3500;
 const PH_NATURE=/\b(bird|insect|butterfl|moth|beetle|bee|wasp|spider|dragonfl|lizard|gecko|snake|frog|caterpillar|larva|fung|lichen|moss|seed|leaf|leaves|flower|petal|specimen|herbarium|ant|fly|snail|crab|mushroom)s?\b|\b[A-Z][a-z]+ [a-z]{4,} \(|\b[A-Z][a-z]+_[a-z]{4,}\b/i;
 const PH_STREET=new Set(['Panoramax','KartaView','Mapillary']);
 // subjects that aren't the place itself: sea life and diving, wildlife and plants, food, people, vehicles being
@@ -1435,6 +1435,8 @@ async function phSearch(lat,lon,onUpdate){const seen=new Map();let radius=0;
     let got=PH.cache.get(key)||await phIdbGet(key);
     if(got){PH.cache.set(key,got);add(got,r)}else{got=[];
       await Promise.allSettled(PH_SOURCES.map(f=>phTimeout(f(lat,lon,r),PH_WAIT).then(v=>{got.push(...v);add(v,r);if(onUpdate(phRank(seen),r,false)===false)throw 0})));
+      // OpenStreetMap's photo query is the slowest, so it only runs when the quick sources come up short
+      if(phRank(seen).length<PH_WANT)await phTimeout(phOverpass(lat,lon,r),PH_WAIT).then(v=>{got.push(...v);add(v,r)}).catch(()=>{});
       // a search cut short by a newer one keeps nothing, so a partial list is never saved
       if(!PH.ac.signal.aborted){PH.cache.set(key,got);phIdbSet(key,got);if(PH.cache.size>60)PH.cache.delete(PH.cache.keys().next().value)}}
     if(onUpdate(phRank(seen),r,false)===false)return;
