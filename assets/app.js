@@ -16,6 +16,7 @@ const BANDS=[
 const DEG=180/Math.PI, MINK=0.85, MAXK=9000;
 let S=12,E=20,season=0,W=0,H=0,dpr=1,base=300,cx=0,cy=0;
 let showNight=(()=>{try{return localStorage.getItem('whg.night')!=='off'}catch(e){return true}})();
+let showFavs=(()=>{try{return localStorage.getItem('whg.favs')!=='off'}catch(e){return true}})();
 let showCw=(()=>{try{return localStorage.getItem('whg.cw')==='on'}catch(e){return false}})();
 let showCams=(()=>{try{return localStorage.getItem('whg.cams')==='on'}catch(e){return false}})();
 let showWeather=(()=>{try{return localStorage.getItem('whg.weather')==='on'}catch(e){return false}})();
@@ -194,7 +195,7 @@ function drawLabels(){
   placed=[];const ctr=viewCap[0],ppd=base*k/DEG,cand=[];
   overlays.forEach(L=>{if(!L.on)return;L.fc.features.forEach(f=>{const g=f.geometry;if(!g)return;
     (g.type==='Point'?[g.coordinates]:g.type==='MultiPoint'?g.coordinates:[]).forEach(p=>cand.push({ov:L,f,lon:p[0],lat:p[1],name:(f.properties&&f.properties.name)||'',pri:4e9,a:1}))})});
-  for(const f of favs)cand.push({fav:f,v:f.v,lon:f.lon,lat:f.lat,name:f.name,pri:5e9,a:1});
+  if(showFavs)for(const f of favs)cand.push({fav:f,v:f.v,lon:f.lon,lat:f.lat,name:f.name,pri:5e9,a:1});
   if(typeof clLabels==='function')clLabels(cand);
   // One label per country, then extra labels only where they add something: a region on a different
   // clock, a separate island, or a repeat of the country's hours once the last one is far off screen.
@@ -579,6 +580,10 @@ function heart(x,y,s,fill,stroke){ctx.beginPath();ctx.moveTo(x,y+0.9*s);ctx.bezi
 const FAVC='#ff4f87';let activeFav=null,favTimer=0;
 function hoursBlock(tz){if(!tz||!D.zones[tz])return'';const z=D.zones[tz],o=z[season],b=band(o);
   return`<div class="big"><i style="background:${pal['b'+b]}"></i>${hours(o)}</div><p class="bandname">${BANDS[b].name}, ${season?'summer':'winter'}. ${season?'Winter':'Summer'}: ${hours(z[1-season])}</p>`}
+// a heart on every place card: saving it adds it to your favourites; a saved place opens its favourite
+function favAt(ll){return favs.find(f=>Math.abs(f.lon-ll[0])<2e-4&&Math.abs(f.lat-ll[1])<2e-4)}
+function favBtn(ll){const on=!!favAt(ll);return`<button type="button" class="favbtn${on?' on':''}" id="favadd" aria-pressed="${on}"><span class="fh" aria-hidden="true">♥</span> ${on?'Saved to favourites':'Add to favourites'}</button>`}
+function wireFav(name,ll,where,tz){const b=document.getElementById('favadd');if(!b)return;b.onclick=()=>{const f=favAt(ll);if(f)showFav(f);else addFav(name,ll,tz,where)}}
 function showFav(f,focus){activeFav=f;selected=null;draft=null;
   const when=new Date(f.created);const ds=isNaN(when)?'':when.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
   document.getElementById('infob').innerHTML=`<input class="ftitle" id="fname" value="${esc(f.name)}" aria-label="Favourite name" maxlength="80">
@@ -660,7 +665,6 @@ const ptoast=document.getElementById('ptoast'),infob=document.getElementById('in
 function startPlacing(){placing=true;draft=null;cv.classList.add('placing');ptoast.hidden=false;hideInfo();
   if(innerWidth<=700&&!panel.classList.contains('collapsed')){panel.classList.add('collapsed');ph.setAttribute('aria-expanded','false')}draw();}
 function stopPlacing(){placing=false;cv.classList.remove('placing');ptoast.hidden=true}
-document.getElementById('favnew').onclick=startPlacing;
 document.getElementById('pcancel').onclick=()=>{stopPlacing();draw()};
 // nearest named place: OpenStreetMap's Nominatim, falling back to the nearest region offline
 function geocode(o,cb){clearTimeout(geoTimer);const seq=++geoSeq;
@@ -824,8 +828,8 @@ let infoTok=0;
 function showInfo(title,where,tz,ll){activeFav=null;draft=null;infoTok++;const z=D.zones[tz]||[0,0],o=z[season],b=band(o),other=z[1-season];
   document.getElementById('infob').innerHTML=`<h2>${esc(title)}</h2><p class="where">${esc(where&&where!==title?where:' ')}</p>
   <div class="big"><i style="background:${pal['b'+b]}"></i>${hours(o)}</div><p class="bandname">${BANDS[b].name}, ${season?'summer':'winter'}</p>
-  <dl><dt>${season?'Winter':'Summer'}</dt><dd>${hours(other)}</dd><dt>Difference</dt><dd>${vsUK(o)}</dd><dt>Time zone</dt><dd>${utc(o)}</dd></dl>${ll?wxBlock():''}${ll?photosBlock():''}${ll?flightsBlock():''}`;
-  wireFlights(ll);wxLoad(ll);photosLoad(ll);document.getElementById('info').classList.add('show');}
+  <dl><dt>${season?'Winter':'Summer'}</dt><dd>${hours(other)}</dd><dt>Difference</dt><dd>${vsUK(o)}</dd><dt>Time zone</dt><dd>${utc(o)}</dd></dl>${ll?favBtn(ll):''}${ll?wxBlock():''}${ll?photosBlock():''}${ll?flightsBlock():''}`;
+  wireFlights(ll);wxLoad(ll);photosLoad(ll);if(ll)wireFav(title,ll,where,tz);document.getElementById('info').classList.add('show');}
 function hideInfo(){document.getElementById('info').classList.remove('show');if(typeof CW!=='undefined'&&CW.sel){CW.sel=null;draw()}if(typeof CAM!=='undefined'&&CAM.sel){CAM.sel=null;draw()}PH.tok++;if(clickPin){clickPin=null;draw()}if(typeof CL!=='undefined'&&CL.sel){CL.sel=null;draw()}if(selected||activeFav||draft){selected=null;activeFav=null;draft=null;draw()}}
 document.getElementById('infox').onclick=hideInfo;
 
@@ -840,7 +844,6 @@ function setSeason(v){season=v;bw.setAttribute('aria-pressed',String(v===0));bs.
 bw.onclick=()=>setSeason(0);bs.onclick=()=>setSeason(1);
 function ui(){renderFavs();renderLayers();lyrRender();if(typeof m3dSync==='function')m3dSync();document.getElementById('sum').textContent=`${hhmm(S)}–${hhmm(E)} UK, ${season?'summer':'winter'}`;
   document.getElementById('snote').textContent=season?'Late March to late October, while the UK is on BST.':'Late October to late March, while the UK is on GMT.';
-  document.getElementById('key').innerHTML=BANDS.map((b,i)=>`<li><i style="background:${pal['b'+i]}"></i>${b.name} <small>${b.sub}</small></li>`).join('');
   stripRender();}
 // colour key at the bottom: working-hours bands, then the coliving dot colours when that layer is on
 function stripRender(){const el=document.getElementById('strip');if(!el)return;
@@ -854,14 +857,15 @@ function stripKey(o){const el=document.getElementById('strip');if(!el)return;el.
 // base map menu (top right)
 // layer opacities, eased towards on (1) or off (0) over about a third of a second
 const LAY={};
-function layOn(k){return{hours:showHours,cl:CL.on,cw:showCw,cams:showCams,weather:showWeather,night:showNight,names:showNames}[k]?1:0}
-function layInit(){for(const k of ['hours','cl','cw','cams','weather','night','names'])LAY[k]=layOn(k)}
+function layOn(k){return{hours:showHours,fav:showFavs,cl:CL.on,cw:showCw,cams:showCams,weather:showWeather,night:showNight,names:showNames}[k]?1:0}
+function layInit(){for(const k of ['hours','fav','cl','cw','cams','weather','night','names'])LAY[k]=layOn(k)}
 let layRaf=0,layT=0;
 function layFade(){if(layRaf)return;layT=performance.now();const step=t=>{const dt=Math.min(64,t-layT);layT=t;let moving=false;
     for(const k in LAY){const g=layOn(k),d=g-LAY[k];if(Math.abs(d)<0.005){LAY[k]=g;continue}LAY[k]+=Math.sign(d)*Math.min(Math.abs(d),dt/320);moving=true}
     draw();layRaf=moving?requestAnimationFrame(step):0};layRaf=requestAnimationFrame(step)}
 function setShow(k,v){if(k==='hours'){showHours=v;try{localStorage.setItem('whg.hours',v?'on':'off')}catch(e){}ui()}
   else if(k==='names'){showNames=v;try{localStorage.setItem('whg.names',v?'on':'off')}catch(e){}}
+  else if(k==='fav'){showFavs=v;try{localStorage.setItem('whg.favs',v?'on':'off')}catch(e){}}
   else if(k==='night'){showNight=v;try{localStorage.setItem('whg.night',v?'on':'off')}catch(e){}}
   else if(k==='cw'){showCw=v;try{localStorage.setItem('whg.cw',v?'on':'off')}catch(e){}if(!v&&CW.sel){CW.sel=null;hideInfo()}}
   else if(k==='cams'){showCams=v;try{localStorage.setItem('whg.cams',v?'on':'off')}catch(e){}if(v)camQueue();else if(CAM.sel){CAM.sel=null;hideInfo()}}
@@ -871,6 +875,7 @@ function setShow(k,v){if(k==='hours'){showHours=v;try{localStorage.setItem('whg.
 // Layers panel (bottom left, open unless you fold it): what's drawn on the map
 const LYI={
   hours:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  fav:'<svg viewBox="0 0 24 24"><path d="M12 20.5c-4.6-3.1-8-6.4-8-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 8 2.7c0 3.8-3.4 7.1-8 10.2z" fill="#ff4f87" stroke="#fff" stroke-width="1.5"/></svg>',
   cl:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="#2fb36a" stroke="#fff" stroke-width="2"/></svg>',
   cw:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="#8b5cf6" stroke="#fff" stroke-width="1.5"/></svg>',
   names:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12.5V5a2 2 0 0 1 2-2h7.5l8.5 8.5-9.5 9.5z"/><circle cx="8" cy="8" r="1.6" fill="currentColor"/></svg>',
@@ -880,7 +885,7 @@ const LYI={
 function lyrRender(){const m=document.getElementById('lyrb');if(!m)return;
   const ic=k=>`<i class="lyi" aria-hidden="true">${typeof LYI[k]==='function'?LYI[k]():LYI[k]}</i>`;
   const tick=(k,on,label,extra)=>`<label class="bmtick"><input type="checkbox" data-show="${k}" ${on?'checked':''}>${ic(k)}<span>${label}</span>${extra||''}</label>`;
-  m.innerHTML=tick('hours',showHours,'Working hours')+
+  m.innerHTML=tick('hours',showHours,'Working hours')+tick('fav',showFavs,'Favourites')+
     (CL.data.length?tick('cl',CL.on,'Colivings',`<small class="clcnt" id="clcnt"></small><button type="button" class="clfb${clActive(CL.f)?' on':''}" id="clfb" aria-label="Filter colivings" title="Filter and updates">${FUNNEL}</button>`):'')+
     tick('cw',showCw,'Coworking spaces',`<small class="clcnt" id="cwcnt" aria-live="polite"></small><button type="button" class="clfb${cwActive()?' on':''}" id="cwfb" aria-label="Filter coworking spaces" title="Filter coworking spaces">${FUNNEL}</button>`)+tick('cams',showCams,'Webcams')+tick('weather',showWeather,'Weather now','<small class="clcnt">°C</small>')+tick('night',showNight,'Day and night')+tick('names',showNames,'Place names');
   m.querySelectorAll('[data-show]').forEach(c=>c.onchange=()=>setShow(c.dataset.show,c.checked));
@@ -893,9 +898,13 @@ function lyrFit(){const el=document.getElementById('lyr');if(!el)return;const r=
 document.getElementById('lyrh').onclick=()=>lyrFold(document.getElementById('lyr').classList.contains('folded'));
 // base map menu (top right)
 function bmRender(){const m=document.getElementById('bmmenu');
-  m.innerHTML=`<div class="bmh">Base map</div>`+Object.entries(BASEMAPS).map(([id,b])=>`<button type="button" role="menuitemradio" aria-checked="${id===basemap}" data-id="${id}"><i class="bmdot"></i><span><b>${b.name}</b><small>${b.sub}</small></span></button>`).join('')+
-    `<button type="button" class="bm3d" data-3d="1"><b>3D view</b><small>Fly around in 3D with terrain</small></button>`;
-  m.querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>{setBasemap(b.dataset.id);bmToggle(false)});m.querySelector('[data-3d]').onclick=()=>{bmToggle(false);open3D()}}
+  m.innerHTML=`<div class="bmh">Map layers</div><button type="button" class="add" id="add">Add a KML, KMZ or GeoJSON file</button><ul class="layers" id="layers"></ul>`+
+    `<div class="bmh">Favourites</div><button type="button" class="add" id="favnew"><span class="fh" aria-hidden="true">♥</span> Add a favourite</button><ul class="favs" id="favs"></ul>`+
+    `<div class="bmh">Base map</div>`+Object.entries(BASEMAPS).map(([id,b])=>`<button type="button" role="menuitemradio" aria-checked="${id===basemap}" data-id="${id}"><i class="bmdot"></i><span><b>${b.name}</b><small>${b.sub}</small></span></button>`).join('');
+  m.querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>{setBasemap(b.dataset.id);bmToggle(false)});
+  m.querySelector('#add').onclick=()=>document.getElementById('file').click();
+  m.querySelector('#favnew').onclick=()=>{bmToggle(false);startPlacing()};
+  renderLayers();renderFavs()}
 function setBasemap(id){if(!BASEMAPS[id]||id===basemap)return;basemap=id;try{localStorage.setItem('whg.basemap',id)}catch(e){}vtUsed.clear();if(m3d.map)m3dStyle();draw()}
 function bmToggle(open){const m=document.getElementById('bmmenu'),b=document.getElementById('bmbtn');const show=open==null?m.hidden:open;if(show)bmRender();m.hidden=!show;b.setAttribute('aria-expanded',String(show));
   if(show)setTimeout(()=>{const f=m.querySelector('[aria-checked=true]');if(f)f.focus()})}
@@ -1003,7 +1012,7 @@ function m3dGeo(){
     for(const p of D.prov){const o=off(p[3]),key=p[4]+'|'+o;if(seen.has(key))continue;seen.add(key);
       lab.features.push({type:'Feature',properties:{t:(showNames?p[0]:'')+(showHours?(showNames?'\n':'')+hours(o):''),r:2},geometry:{type:'Point',coordinates:[p[1],p[2]]}})}}
   const cl={type:'FeatureCollection',features:CL.on?CL.vis.map(x=>({type:'Feature',properties:{id:x.id,n:x.n,c:CLT[x.t].col},geometry:{type:'Point',coordinates:[x.lon,x.lat]}})):[]};
-  const fv={type:'FeatureCollection',features:favs.map((f,i)=>({type:'Feature',properties:{i,n:f.name},geometry:{type:'Point',coordinates:[f.lon,f.lat]}}))};
+  const fv={type:'FeatureCollection',features:showFavs?favs.map((f,i)=>({type:'Feature',properties:{i,n:f.name},geometry:{type:'Point',coordinates:[f.lon,f.lat]}})):[]};
   const ov={type:'FeatureCollection',features:[]};
   overlays.forEach((L,li)=>{if(L.on)L.fc.features.forEach((f,fi)=>{if(f.geometry)ov.features.push({type:'Feature',properties:{li,fi,c:L.color,n:(f.properties&&f.properties.name)||''},geometry:f.geometry})})});
   const wx={type:'FeatureCollection',features:showWeather?(WX.shown3d||[]).map(p=>{const q=WX.pts.get(wxKey(p.lat,p.lon));return q&&{type:'Feature',properties:{t:p.name+'  '+Math.round(q.temp)+'°',c:wxTempCol(q.temp),ic:'wx-'+wxKind(q.code,q.day)},geometry:{type:'Point',coordinates:[p.lon,p.lat]}}}).filter(Boolean):[]};
@@ -1114,7 +1123,6 @@ document.addEventListener('keydown',e=>{if(e.key==='/'&&document.activeElement!=
 
 // overlay layers
 const COLORS=['#2ee6c8','#ff5fae','#4aa3ff','#b07cff','#ffb020'];
-document.getElementById('add').onclick=()=>document.getElementById('file').click();
 document.getElementById('file').onchange=async e=>{for(const f of e.target.files){try{await loadFile(f)}catch(err){alert(f.name+' could not be added: '+err.message)}}e.target.value=''};
 async function loadFile(f){let fc;const n=f.name.toLowerCase();
   if(n.endsWith('.kmz')){const zip=await JSZip.loadAsync(f);const kf=Object.keys(zip.files).find(x=>x.toLowerCase().endsWith('.kml'));if(!kf)throw new Error('the KMZ has no KML inside');fc=kml2geo(await zip.file(kf).async('string'))}
@@ -1154,7 +1162,7 @@ function kml2geo(txt){const doc=new DOMParser().parseFromString(txt,'text/xml'),
       T(p,'innerBoundaryIs').forEach(ib=>rings.push(C(T(ib,'coordinates')[0])));
       if(rings[0]&&rings[0].length>3)out.push({type:'Feature',properties:props,geometry:{type:'Polygon',coordinates:rings}})});});
   return{type:'FeatureCollection',features:out}}
-function renderLayers(){const ul=document.getElementById('layers');ul.innerHTML='';
+function renderLayers(){const ul=document.getElementById('layers');if(!ul)return;ul.innerHTML='';
   // the built-in working-hours colours and labels, which can be switched off to see only your own layers
 
   overlays.forEach((L,i)=>{const li=document.createElement('li');
@@ -1228,8 +1236,8 @@ function clShow(x){activeFav=null;draft=null;selected=null;CL.sel=x;clickPin=nul
     <h2>${esc(x.n)}</h2><p class="where">${esc([x.a,x.c].filter(Boolean).join(', '))}</p>
     <dl class="meta">${rows.map(([a,b])=>`<dt>${a}</dt><dd>${esc(b)}</dd>`).join('')}</dl>
     ${x.src==='estimate'&&x.eur!=null?'<p class="clsmall">Price is colivingDB’s estimate; check with the host.</p>':''}
-    <div class="cllinks">${links}</div><div>${hoursBlock(tzAt([x.lon,x.lat]))}</div>${wxBlock()}${photosBlock()}${flightsBlock()}`;
-  wireFlights([x.lon,x.lat]);wxLoad([x.lon,x.lat]);photosLoad([x.lon,x.lat]);document.getElementById('info').classList.add('show');}
+    <div class="cllinks">${links}</div>${favBtn([x.lon,x.lat])}<div>${hoursBlock(tzAt([x.lon,x.lat]))}</div>${wxBlock()}${photosBlock()}${flightsBlock()}`;
+  wireFlights([x.lon,x.lat]);wxLoad([x.lon,x.lat]);photosLoad([x.lon,x.lat]);wireFav(x.n,[x.lon,x.lat],[x.a,x.c].filter(Boolean).join(', '),tzAt([x.lon,x.lat]));document.getElementById('info').classList.add('show');}
 function clGo(x){if(!CL.vis.includes(x)){CL.f=Object.assign({},CL_DEF);clSync();clApply()}flyTo(x.lon,x.lat,0.6);clShow(x);draw()}
 
 // Map layers row and the filter card
@@ -1712,8 +1720,8 @@ function cwShow(x){activeFav=null;draft=null;selected=null;if(typeof CL!=='undef
   document.getElementById('infob').innerHTML=`<p class="cltype"><i style="background:#8b5cf6;border-radius:50%"></i>Coworking space${x.chain?' · chain':''}</p><h2>${esc(x.name)}</h2>`+
     (rows.length?`<dl class="meta">${rows.map(([a,b])=>`<dt>${a}</dt><dd>${esc(b)}</dd>`).join('')}</dl>`:'')+
     `<div class="cllinks">${x.web?`<a class="clbtn" href="${esc(/^https?:/.test(x.web)?x.web:'https://'+x.web)}" target="_blank" rel="noopener noreferrer">Website ↗</a>`:''}<a class="clbtn" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(x.name+' '+x.lat.toFixed(5)+','+x.lon.toFixed(5))}" target="_blank" rel="noopener noreferrer">Reviews & photos ↗</a></div>`+
-    `<div>${hoursBlock(tzAt([x.lon,x.lat]))}</div>${wxBlock()}${photosBlock()}${flightsBlock()}`;
-  wxLoad([x.lon,x.lat]);photosLoad([x.lon,x.lat]);wireFlights([x.lon,x.lat]);document.getElementById('info').classList.add('show')}
+    `${favBtn([x.lon,x.lat])}<div>${hoursBlock(tzAt([x.lon,x.lat]))}</div>${wxBlock()}${photosBlock()}${flightsBlock()}`;
+  wxLoad([x.lon,x.lat]);photosLoad([x.lon,x.lat]);wireFlights([x.lon,x.lat]);wireFav(x.name,[x.lon,x.lat],x.addr,tzAt([x.lon,x.lat]));document.getElementById('info').classList.add('show')}
 
 // Day and night: the night side of the Earth shaded softly, with twilight bands (sun 0°, 6°, 12° and 18° below
 // the horizon) so the line between day and night (the terminator) fades rather than cuts. Moves with the clock.

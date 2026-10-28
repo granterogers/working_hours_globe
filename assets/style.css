@@ -390,3 +390,12 @@ body.in3d .lyr{z-index:46}
 
 /* the layer list shows names only, without counts */
 .clcnt{display:none}
+
+/* the heart on a place card: adds the place to your favourites */
+.favbtn{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:6px;margin:10px 0 4px;padding:7px 13px;border-radius:999px;cursor:pointer;font-size:.88rem;background:var(--field);color:var(--ink);border:1px solid var(--glass-b)}
+.favbtn:focus-visible{outline:2px solid #ff4f87;outline-offset:2px}
+.favbtn .fh{color:#ff4f87}
+.favbtn.on{background:#ff4f87;color:#fff;border-color:#ff4f87}
+.favbtn.on .fh{color:#fff}
+/* the layers menu holds map layers, favourites and the base map, so it scrolls on a short screen */
+.bmmenu{max-height:72vh;overflow:auto}
