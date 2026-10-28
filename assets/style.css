@@ -312,8 +312,6 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .m3dbar .primary,.m3dbar .flb2{padding:7px 14px;white-space:nowrap}
 .m3dmsg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:#fff;background:rgba(0,0,0,.6);padding:12px 16px;border-radius:12px;margin:0}
 body.in3d .tools{z-index:46}
-body.in3d #search,body.in3d #b3d,body.in3d #fs{display:none}
-body.in3d .tools{top:64px}
 @media (max-width:700px){.m3dbar small{display:none}}
 
 .bmtick{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:10px;cursor:pointer;font-size:.86rem;font-weight:600}
@@ -326,7 +324,7 @@ body.in3d .tools{top:64px}
 .bmtick .clfb.on::after{content:"";position:absolute;top:0;right:0;width:6px;height:6px;border-radius:50%;background:var(--accent)}
 .bmh2{border-top:1px solid var(--glass-b);margin-top:4px;padding-top:9px}
 body.in3d .info,body.in3d .clf{z-index:47}
-body.in3d .strip,body.in3d .attrib{display:none}
+body.in3d .strip{display:none}
 
 /* weather in cards */
 .wx{margin:12px 0 4px;border-top:1px solid var(--glass-b);padding-top:10px}
@@ -433,3 +431,5 @@ body.in3d .lyr{z-index:46}
 #favlist .favs li .favx{width:22px;min-width:22px;height:22px;padding:0}
 #favlist .favs li button:first-child{width:auto;min-width:0}
 #favlist .favs li .fn{display:inline-block;width:auto;flex:1 1 0;min-width:0}
+/* in 3D the page keeps its own look: the same bars, panels and buttons as on the globe */
+body.in3d #search,body.in3d .attrib{z-index:47}

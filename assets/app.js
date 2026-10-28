@@ -925,7 +925,11 @@ function bmToggle(open){const m=document.getElementById('bmmenu'),b=document.get
 document.getElementById('bmbtn').onclick=e=>{e.stopPropagation();bmToggle()};
 document.addEventListener('click',e=>{const m=document.getElementById('bmmenu');if(!m.hidden&&!e.target.closest('.bmwrap'))bmToggle(false)});
 document.getElementById('bmmenu').addEventListener('keydown',e=>{if(e.key==='Escape'){bmToggle(false);document.getElementById('bmbtn').focus()}});
-document.getElementById('b3d').onclick=()=>open3D();
+// the 3D button becomes a 2D button in 3D; the credits show in the same place as on the globe
+const M3D_ATTR='© Mapterhorn · © OpenFreeMap · © OpenMapTiles · Data © OpenStreetMap contributors';
+function setModeLabel(on){const b=document.getElementById('b3d');if(b){b.querySelector('b').textContent=on?'2D':'3D';b.setAttribute('aria-label',on?'2D view':'3D view');b.title=on?'Back to the 2D globe':'3D view'}
+  const a=document.getElementById('attrib');if(a&&on){a.textContent=M3D_ATTR;a.classList.add('show')}}
+document.getElementById('b3d').onclick=()=>document.body.classList.contains('in3d')?close3D():open3D();
 try{if(localStorage.getItem('whg.lyr')==='folded')lyrFold(false)}catch(e){}
 addEventListener('resize',lyrFit);
 document.getElementById('loc').onclick=locate;
@@ -969,14 +973,14 @@ function m3dStyle(){const map=m3d.map;if(map)map.setStyle(m3dStyleDef(),{diff:fa
 const k2z=(kk,lat)=>clamp(Math.log2(2*Math.PI*base*kk*Math.cos(lat*RAD)/512),0,20);
 const z2k=(z,lat)=>clamp(512*2**z/(2*Math.PI*base*Math.cos(lat*RAD)),MINK,MAXK);
 async function open3D(){let el=m3d.el;
-  if(!el){el=m3d.el=document.createElement('div');el.className='m3d';el.innerHTML=`<div class="m3dmap" id="m3dmap"></div><div class="m3dbar glass"><b>3D</b><small>Drag to move · wheel to zoom · hold the wheel down and drag to turn and tilt (around the last place you clicked)</small><button type="button" class="primary" id="m3dx">Back to globe</button></div><p class="m3dmsg" id="m3dmsg" hidden></p>`;document.body.appendChild(el);
-    el.querySelector('#m3dx').onclick=close3D}
-  el.hidden=false;document.body.classList.add('in3d');const msg=el.querySelector('#m3dmsg');msg.hidden=true;
+  if(!el){el=m3d.el=document.createElement('div');el.className='m3d';el.innerHTML=`<div class="m3dmap" id="m3dmap"></div><p class="m3dmsg" id="m3dmsg" hidden></p>`;document.body.appendChild(el);
+  }
+  el.hidden=false;document.body.classList.add('in3d');setModeLabel(true);const msg=el.querySelector('#m3dmsg');msg.hidden=true;
   let lib;try{lib=await m3dLoad()}catch(e){msg.textContent='The 3D view couldn’t load. Check your connection and try again.';msg.hidden=false;return}
   // start exactly where the globe was: same centre, same scale, looking straight down
   const lon=-rot[0],lat=clamp(-rot[1],-85,85),zoom=k2z(k,lat);
   if(m3d.map){m3d.map.jumpTo({center:[lon,lat],zoom,pitch:0,bearing:0});m3d.map.resize();m3dSync();return}
-  try{const map=m3d.map=new lib.Map({container:'m3dmap',style:m3dStyleDef(),center:[lon,lat],zoom,pitch:0,bearing:0,maxPitch:85,attributionControl:{compact:false},hash:false,dragRotate:true,pitchWithRotate:true,maxTileCacheSize:3000,refreshExpiredTiles:false});
+  try{const map=m3d.map=new lib.Map({container:'m3dmap',style:m3dStyleDef(),center:[lon,lat],zoom,pitch:0,bearing:0,maxPitch:85,attributionControl:false,hash:false,dragRotate:true,pitchWithRotate:true,maxTileCacheSize:3000,refreshExpiredTiles:false});
     map.on('rotate',northNeedle);map.on('pitch',northNeedle);
     map.on('style.load',()=>{m3d.mode=null;m3dExtras(map);m3dSync()});
     map.on('zoomend',()=>{m3dMode(map);m3dLimit(map)});map.on('moveend',()=>{if(m3d.me&&myLoc)m3dMe()});
@@ -1006,7 +1010,7 @@ function m3dWheelButton(map){const c=map.getCanvasContainer();let st=null;
 function close3D(){if(!m3d.el)return;const map=m3d.map;
   if(map){const c=map.getCenter(),lat=clamp(c.lat,-85,85);rot=[-c.lng,-lat,0];k=kT=z2k(map.getZoom(),lat);fly=null;vel=[0,0]}
   if(m3d.pin){m3d.pin.remove();m3d.pin=null}m3d.pivot=null;
-  m3d.el.hidden=true;document.body.classList.remove('in3d');northNeedle();bmToggle(false);hideInfo();draw()}
+  m3d.el.hidden=true;document.body.classList.remove('in3d');setModeLabel(false);northNeedle();bmToggle(false);hideInfo();draw()}
 
 // everything from the globe drawn into the 3D view as map layers, kept in step with the app
 const M3D_OWN='m3d-';
