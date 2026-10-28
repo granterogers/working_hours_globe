@@ -981,6 +981,7 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
   map.setPaintProperty(M3D_OWN+'tz','fill-opacity',['interpolate',['linear'],['zoom'],zA,op,zB,0]);
   try{map.setLayerZoomRange(M3D_OWN+'tz',0,Math.min(24,zB+0.3))}catch(e){}
   lay({id:M3D_OWN+'night',type:'fill',source:M3D_OWN+'night',paint:{'fill-color':dk?'#02061a':'#080e28','fill-opacity':['get','a']}});
+  map.setPaintProperty(M3D_OWN+'night','fill-opacity',['*',['get','a'],['interpolate',['linear'],['zoom'],zA,1,zB,0]]);
   lay({id:M3D_OWN+'ovf',type:'fill',source:M3D_OWN+'ov',filter:['==',['geometry-type'],'Polygon'],paint:{'fill-color':['get','c'],'fill-opacity':0.2}});
   lay({id:M3D_OWN+'ovl',type:'line',source:M3D_OWN+'ov',filter:['in',['geometry-type'],['literal',['LineString','Polygon']]],paint:{'line-color':['get','c'],'line-width':2.5}});
   lay({id:M3D_OWN+'ovp',type:'circle',source:M3D_OWN+'ov',filter:['==',['geometry-type'],'Point'],paint:{'circle-color':['get','c'],'circle-radius':5,'circle-stroke-color':'#fff','circle-stroke-width':1.5}});
@@ -1660,8 +1661,10 @@ function sunNow(t){const n=(t/864e5)+2440587.5-2451545.0,rad=Math.PI/180;
 // once it is 18° below the horizon. That reads as one soft gradient rather than visible steps.
 const NIGHT_BANDS=(()=>{const out=[],maxA=0.4,step=1;let prev=0;
   for(let d=93;d>=72;d-=step){const t=(93-d)/21,T=maxA*t*t*(3-2*t),a=1-(1-T)/(1-prev);prev=T;out.push([d,a])}return out})();
-function drawNight(){const sp=sunNow(Date.now()),anti=[sp[0]+180>180?sp[0]-180:sp[0]+180,-sp[1]],col=dark?'2,6,22':'8,14,40';
-  ctx.save();for(const [r,a] of NIGHT_BANDS){ctx.beginPath();path(d3.geoCircle().center(anti).radius(r).precision(1)());ctx.fillStyle=`rgba(${col},${a.toFixed(4)})`;ctx.fill()}
+// Zoomed in to town level the street map takes over (see TILE_K), so the night shading fades out over the same
+// zoom range and leaves the base map's own brightness alone
+function drawNight(){const nf=1-clamp((k-TILE_K)/4.5,0,1);if(nf<=0)return;const sp=sunNow(Date.now()),anti=[sp[0]+180>180?sp[0]-180:sp[0]+180,-sp[1]],col=dark?'2,6,22':'8,14,40';
+  ctx.save();for(const [r,a] of NIGHT_BANDS){ctx.beginPath();path(d3.geoCircle().center(anti).radius(r).precision(1)());ctx.fillStyle=`rgba(${col},${(a*nf).toFixed(4)})`;ctx.fill()}
   ctx.restore()}
 setInterval(()=>{if(showNight&&!running)draw()},60000);
 
