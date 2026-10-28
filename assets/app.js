@@ -990,13 +990,23 @@ function m3dGeo(){
   const cwk={type:'FeatureCollection',features:showCw?CW.vis.map(c=>({type:'Feature',properties:{id:c.id},geometry:{type:'Point',coordinates:[c.lon,c.lat]}})):[]};
   // the two polar caps, which the basemap's tiles stop short of, in the basemap's own colours
   const pc=POLE[basemap]||POLE.street,pole={type:'FeatureCollection',features:[[85,90,pc[1]],[-90,-85,pc[0]]].map(([a,b,c])=>({type:'Feature',properties:{c},geometry:{type:'Polygon',coordinates:[[[-180,a],[180,a],[180,b],[-180,b],[-180,a]]]}}))};
-  return{tz,lab,cl,fv,ov,wx,cm,cwk,night:{type:'FeatureCollection',features:[]},pole}}  // 3D night side is off for now: the polygon wraps a pole and draws wedges (2D unaffected)
-// 3D night side: two soft bands (night, then twilight) as polygons around the point opposite the sun. Longitudes are
-// unwrapped first, so a polygon that crosses the 180° line is drawn as one piece rather than torn across the map.
-function nightFeatures(){const sp=sunNow(Date.now()),anti=[sp[0]+180>180?sp[0]-180:sp[0]+180,-sp[1]];
-  return[[90,0.4],[99,0.18]].map(([r,a])=>{const ring=d3.geoCircle().center(anti).radius(r).precision(2)().coordinates[0];
-    let prev=ring[0][0];const c=ring.map(([x,y],i)=>{if(i)x=prev+((x-prev+540)%360-180);prev=x;return[x,y]});
-    return{type:'Feature',properties:{a},geometry:{type:'Polygon',coordinates:[c]}}})}
+  return{tz,lab,cl,fv,ov,wx,cm,cwk,night:showNight?nightFeaturesGeo():{type:'FeatureCollection',features:[]},pole}}
+// 3D night side: the boundary of the night (sun below the horizon) and of the twilight (sun below 9°), traced one
+// longitude at a time, so each piece is a simple shape that never wraps a pole. (A single polygon around the point
+// opposite the sun drew wedges across the map.) Cached for a minute.
+let NIGHT3D={t:0,f:null};
+function nightFeaturesGeo(){if(NIGHT3D.f&&Date.now()-NIGHT3D.t<60000)return NIGHT3D.f;
+  const[sl,sd]=sunNow(Date.now()),sdr=sd*Math.PI/180,D=Math.PI/180,feats=[];
+  for(const[e,alpha]of[[0,0.18],[9,0.18]]){const T=-Math.sin(e*D),cols=[];
+    for(let L=-180;L<=180;L+=2){let a=null,b=null;
+      for(let p=-90;p<=90;p+=0.5){const sinE=Math.sin(p*D)*Math.sin(sdr)+Math.cos(p*D)*Math.cos(sdr)*Math.cos((L-sl)*D);if(sinE<T){if(a===null)a=p;b=p}}
+      cols.push([L,a,b])}
+    let run=[];const runs=[];
+    for(const q of cols){if(q[1]!==null)run.push(q);else{if(run.length>1)runs.push(run);run=[]}}
+    if(run.length>1)runs.push(run);
+    for(const r of runs){const ring=[...r.map(q=>[q[0],q[2]]),...r.slice().reverse().map(q=>[q[0],q[1]])];ring.push(ring[0]);
+      feats.push({type:'Feature',properties:{a:alpha},geometry:{type:'Polygon',coordinates:[ring]}})}}
+  NIGHT3D={t:Date.now(),f:{type:'FeatureCollection',features:feats}};return NIGHT3D.f}
 setInterval(()=>{if(showNight&&m3d&&m3d.map&&!m3d.el.hidden)m3dSync()},60000);
 function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.getStyle())return}catch(e){return}
   try{g=m3dGeo()}catch(e){return}

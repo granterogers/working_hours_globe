@@ -33,7 +33,7 @@ Built for planning where to live and work as a remote worker on UK hours.
 - Rename any added layer (pencil button, or double-click its name) and switch layers on or off, including the built-in working-hours colours and times, for a plain globe with just your own layers.
 - A built-in **Colivings** layer with every listing from [colivingDB](https://colivingdb.com): shown as green dots (the card says whether it's permanent, a pop-up or a festival). Click a dot for prices, rating, rooms, minimum stay, dates, links and your hours there. The filter button next to the layer opens search, type, price per month, rooms, minimum stay, rating, region, the month a pop-up runs, interests and vibe; your filters are remembered. Finished editions are hidden automatically.
 - **Check for new colivings** (in the coliving filters) reports listings added since you last looked and lets you jump to each. A GitHub Action scans colivingDB every Monday, or whenever you run it from the Actions tab.
-- A small version number sits at the bottom of the page (`v1.7` in `index.html`). Its minor number goes up with every change.
+- A small version number sits at the bottom of the page (`v1.8` in `index.html`). Its minor number goes up with every change.
 - - **Night sky** (dark theme): real stars and constellation figures from `data/sky.json` (Yale Bright Star Catalogue and d3-celestial), placed as seen from the sun's side of the Earth for today's date, so they turn only as the sun does through the year.
 - Dark and light themes, full-screen mode, keyboard controls (arrow keys to spin, `+` and `-` to zoom), and a layout that works on mobile.
 
