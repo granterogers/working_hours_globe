@@ -584,9 +584,12 @@ function hoursBlock(tz){if(!tz||!D.zones[tz])return'';const z=D.zones[tz],o=z[se
 function favAt(ll){return favs.find(f=>Math.abs(f.lon-ll[0])<2e-4&&Math.abs(f.lat-ll[1])<2e-4)}
 function favBtn(ll){const on=!!favAt(ll);return`<button type="button" class="favbtn${on?' on':''}" id="favadd" aria-pressed="${on}"><span class="fh" aria-hidden="true">♥</span> ${on?'Saved to favourites':'Add to favourites'}</button>`}
 function wireFav(name,ll,where,tz){const b=document.getElementById('favadd');if(!b)return;
-  // a place still being looked up is saved by its coordinates, which are already known
-  const nm=name&&!/Looking up this spot/.test(name)?name:`${ll[1].toFixed(4)}, ${ll[0].toFixed(4)}`;
-  b.onclick=()=>{const f=favAt(ll);if(f)showFav(f);else addFav(nm,ll,tz,where)}}
+  const named=name&&!/Looking up this spot/.test(name);
+  b.onclick=()=>{const f=favAt(ll);if(f){showFav(f);return}
+    if(named){addFav(name,ll,tz,where);return}
+    // not named yet: take the nearest place name for the pin, and only use the coordinates if there is none
+    geocode({lon:ll[0],lat:ll[1]},res=>{const got=res&&res.name&&!/^Dropped pin$/.test(res.name)?res.name:`${ll[1].toFixed(4)}, ${ll[0].toFixed(4)}`;
+      if(!favAt(ll))addFav(got,ll,tz,res&&res.where||where)})}}
 function showFav(f,focus){activeFav=f;selected=null;draft=null;
   const when=new Date(f.created);const ds=isNaN(when)?'':when.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
   document.getElementById('infob').innerHTML=`<input class="ftitle" id="fname" value="${esc(f.name)}" aria-label="Favourite name" maxlength="80">
