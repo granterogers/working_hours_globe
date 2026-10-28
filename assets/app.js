@@ -912,8 +912,8 @@ async function open3D(){let el=m3d.el;
     map.addControl(new lib.NavigationControl({showCompass:false}),'bottom-right');
     map.on('rotate',northNeedle);map.on('pitch',northNeedle);
     map.on('style.load',()=>{m3d.mode=null;m3dExtras(map);m3dSync()});
-    map.on('zoomend',()=>m3dMode(map));map.on('moveend',()=>{if(m3d.me&&myLoc)m3dMe()});
-    map.on('click',m3dClick);map.on('moveend',m3dWx);map.on('load',m3dWx);
+    map.on('zoomend',()=>{m3dMode(map);m3dLimit(map)});map.on('moveend',()=>{if(m3d.me&&myLoc)m3dMe()});
+    map.on('click',m3dClick);map.on('moveend',m3dWx);map.on('load',()=>{m3dWx();m3dLimit(map)});
     m3dWheelButton(map);
     map.on('error',e=>{if(e&&e.error&&/webgl/i.test(String(e.error.message)))msg.textContent='3D needs WebGL, which this browser has switched off.',msg.hidden=false})}
   catch(e){msg.textContent='3D needs WebGL, which this browser has switched off.';msg.hidden=false}}
@@ -943,6 +943,11 @@ function close3D(){if(!m3d.el)return;const map=m3d.map;
 
 // everything from the globe drawn into the 3D view as map layers, kept in step with the app
 const M3D_OWN='m3d-';
+// Panning in 3D stops close to the spot you're looking at: once zoomed in to about town level, the view can only
+// drift a short way from where the zoom last changed, so pulling down from a mountain top stops at its base
+// instead of sliding off across the map. Wider views are free to spin and travel.
+function m3dLimit(map){if(map.getZoom()<6){map.setMaxBounds(null);return}
+  const c=map.getCenter(),s=400/Math.pow(2,map.getZoom());map.setMaxBounds([[c.lng-s*2,c.lat-s],[c.lng+s*2,c.lat+s]])}
 function m3dGeo(){
   const tz={type:'FeatureCollection',features:[]};
   if(showHours)for(const f of TZHIT.features.concat(D.gaps.features))tz.features.push({type:'Feature',properties:{c:pal['b'+band(off(f.properties.z))]},geometry:f.geometry});
@@ -959,7 +964,9 @@ function m3dGeo(){
   const wx={type:'FeatureCollection',features:showWeather?(WX.shown3d||[]).map(p=>{const q=WX.pts.get(wxKey(p.lat,p.lon));return q&&{type:'Feature',properties:{t:p.name+'  '+Math.round(q.temp)+'°',c:wxTempCol(q.temp),ic:'wx-'+wxKind(q.code,q.day)},geometry:{type:'Point',coordinates:[p.lon,p.lat]}}}).filter(Boolean):[]};
   const cm={type:'FeatureCollection',features:showCams?[...CAM.list.values()].map(c=>({type:'Feature',properties:{id:c.id,live:c.src==='windy'?1:0},geometry:{type:'Point',coordinates:[c.lon,c.lat]}})):[]};
   const cwk={type:'FeatureCollection',features:showCw?CW.vis.map(c=>({type:'Feature',properties:{id:c.id},geometry:{type:'Point',coordinates:[c.lon,c.lat]}})):[]};
-  return{tz,lab,cl,fv,ov,wx,cm,cwk,night:{type:'FeatureCollection',features:showNight?nightFeatures():[]}}}
+  // the two polar caps, which the basemap's tiles stop short of, in the basemap's own colours
+  const pc=POLE[basemap]||POLE.street,pole={type:'FeatureCollection',features:[[85,90,pc[1]],[-90,-85,pc[0]]].map(([a,b,c])=>({type:'Feature',properties:{c},geometry:{type:'Polygon',coordinates:[[[-180,a],[180,a],[180,b],[-180,b],[-180,a]]]}}))};
+  return{tz,lab,cl,fv,ov,wx,cm,cwk,night:{type:'FeatureCollection',features:[]},pole}}  // 3D night side is off for now: the polygon wraps a pole and draws wedges (2D unaffected)
 // 3D night side: two soft bands (night, then twilight) as polygons around the point opposite the sun. Longitudes are
 // unwrapped first, so a polygon that crosses the 180° line is drawn as one piece rather than torn across the map.
 function nightFeatures(){const sp=sunNow(Date.now()),anti=[sp[0]+180>180?sp[0]-180:sp[0]+180,-sp[1]];
@@ -970,12 +977,13 @@ setInterval(()=>{if(showNight&&m3d&&m3d.map&&!m3d.el.hidden)m3dSync()},60000);
 function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.getStyle())return}catch(e){return}
   try{g=m3dGeo()}catch(e){return}
   const src=(id,data)=>{const s=map.getSource(M3D_OWN+id);if(s)s.setData(data);else map.addSource(M3D_OWN+id,{type:'geojson',data})};
-  try{src('tz',g.tz);src('lab',g.lab);src('cl',g.cl);src('fv',g.fv);src('ov',g.ov);src('wx',g.wx);src('cm',g.cm);src('cwk',g.cwk);src('night',g.night)}catch(e){return}
+  try{src('tz',g.tz);src('lab',g.lab);src('cl',g.cl);src('fv',g.fv);src('ov',g.ov);src('wx',g.wx);src('cm',g.cm);src('cwk',g.cwk);src('night',g.night);src('pole',g.pole)}catch(e){return}
   const font=['Noto Sans Bold'],dk=BM().dark||false;
   const lay=(def,before)=>{if(!map.getLayer(def.id))map.addLayer(def,before)};
   // working-hours colours fade out as you zoom in, like on the globe
   // same fade as on the globe: full colour until the street-map zoom, gone 4.5 zoom steps later
   const la=map.getCenter().lat,zA=k2z(TILE_K,la),zB=Math.max(zA+0.5,k2z(TILE_K+4.5,la)),op=1;
+  lay({id:M3D_OWN+'pole',type:'fill',source:M3D_OWN+'pole',paint:{'fill-color':['get','c']}},(map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
   lay({id:M3D_OWN+'tz',type:'fill',source:M3D_OWN+'tz',paint:{'fill-color':['get','c'],'fill-opacity':op}},
     (map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
   map.setPaintProperty(M3D_OWN+'tz','fill-opacity',['interpolate',['linear'],['zoom'],zA,op,zB,0]);
