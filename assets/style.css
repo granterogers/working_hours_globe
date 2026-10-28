@@ -443,3 +443,5 @@ body.in3d #search,body.in3d .attrib{z-index:47}
 .bandkey li span{font-weight:600}
 .bandkey li small{color:var(--ink2);font-size:.76rem;margin-left:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 body.in3d #bandkey{z-index:47}
+/* the 2D globe is not drawn while the 3D view is showing; the star field behind still is */
+body.in3d #c{display:none}
