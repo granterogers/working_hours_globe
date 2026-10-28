@@ -53,9 +53,33 @@ function theme(){dark=!matchMedia('(prefers-color-scheme: light)').matches;
   BANDS.forEach((b,i)=>pal['b'+i]=dark?b.dark:b.light);stars();ui();draw();}
 matchMedia('(prefers-color-scheme: light)').addEventListener('change',theme);
 
+// The sky behind the globe: real stars and constellation figures from data/sky.json (Yale Bright Star Catalogue,
+// d3-celestial). Seen from the sun's side of the Earth, the sky directly behind the globe is the anti-sun point, so
+// the view is a stereographic projection about that point: angles and shapes keep their true form, and the sky only
+// turns as the sun moves through the year. Shown in the dark theme only.
+let SKYD=null;fetch('data/sky.json').then(r=>{if(!r.ok)throw 0;return r.json()}).then(j=>{SKYD=j;stars()}).catch(()=>{});
+function sunRaDec(t){const n=(t/864e5)+2440587.5-2451545.0,rad=Math.PI/180;
+  const L=(280.460+0.9856474*n)%360,g=(357.528+0.9856003*n)*rad,lam=(L+1.915*Math.sin(g)+0.020*Math.sin(2*g))*rad,eps=(23.439-0.0000004*n)*rad;
+  return[Math.atan2(Math.cos(eps)*Math.sin(lam),Math.cos(lam))/rad,Math.asin(Math.sin(eps)*Math.sin(lam))/rad]}
 function stars(){const r=sc.getBoundingClientRect();sc.width=r.width*dpr;sc.height=r.height*dpr;const s=sc.getContext('2d');s.clearRect(0,0,sc.width,sc.height);
-  if(!dark)return;let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
-  for(let i=0;i<Math.round(r.width*r.height/2600);i++){const a=rnd()*0.7+0.1,rad=(rnd()<0.08?1.3:0.6)*dpr;s.fillStyle=`rgba(220,230,255,${a})`;s.beginPath();s.arc(rnd()*sc.width,rnd()*sc.height,rad,0,7);s.fill();}}
+  if(!dark||!SKYD)return;const rad=Math.PI/180,[sra,sdec]=sunRaDec(Date.now());
+  // forward: the anti-sun point; up: the celestial north pole's direction across the view; right = forward × up
+  const ra0=(sra+180)*rad,de0=-sdec*rad,f=[Math.cos(de0)*Math.cos(ra0),Math.cos(de0)*Math.sin(ra0),Math.sin(de0)];
+  let u=[-f[2]*f[0],-f[2]*f[1],1-f[2]*f[2]];const un=Math.hypot(...u);u=u.map(x=>x/un);
+  const R=[f[1]*u[2]-f[2]*u[1],f[2]*u[0]-f[0]*u[2],f[0]*u[1]-f[1]*u[0]];
+  const S=Math.min(sc.width,sc.height)*0.275,cx=sc.width/2,cy=sc.height/2;
+  const P=(ra,dec)=>{const a=ra*rad,b=dec*rad,v=[Math.cos(b)*Math.cos(a),Math.cos(b)*Math.sin(a),Math.sin(b)];
+    const c=v[0]*f[0]+v[1]*f[1]+v[2]*f[2];if(c<-0.6)return null;const k2=2*S/(1+c);
+    return[cx+k2*(v[0]*R[0]+v[1]*R[1]+v[2]*R[2]),cy-k2*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2])]};
+  s.lineCap='round';s.strokeStyle='rgba(150,190,255,0.28)';s.lineWidth=0.8*dpr;
+  for(const c of SKYD.constellations)for(const seg of c.segs){let pen=false;s.beginPath();
+    for(const [ra,dec] of seg){const p=P(ra,dec);if(!p){pen=false;continue}if(!pen){s.moveTo(p[0],p[1]);pen=true}else s.lineTo(p[0],p[1])}s.stroke()}
+  for(const [ra,dec,mag] of SKYD.stars){const p=P(ra,dec);if(!p)continue;
+    const rr=Math.max(0.35,(6.2-mag)*0.3)*dpr,a=Math.min(1,Math.max(0.3,1.05-mag*0.13));
+    s.fillStyle=`rgba(226,235,255,${a})`;s.beginPath();s.arc(p[0],p[1],rr,0,7);s.fill()}
+  s.font=`${11*dpr}px "Bricolage Grotesque", "Segoe UI", sans-serif`;s.textAlign='center';s.textBaseline='middle';s.fillStyle='rgba(170,200,255,0.45)';
+  for(const c of SKYD.constellations){const p=P(c.at[0],c.at[1]);if(p)s.fillText(c.name,p[0],p[1])}}
+setInterval(()=>{if(SKYD&&dark)stars()},300000);
 
 // time helpers
 const off=tz=>(D.zones[tz]||[0,0])[season];
