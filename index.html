@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://api.openstreetcam.org" crossorigin>
 <link rel="preconnect" href="https://api.inaturalist.org" crossorigin>
 <link rel="preconnect" href="https://query.wikidata.org" crossorigin>
-<link rel="stylesheet" href="assets/style.css?v=202610282206">
+<link rel="stylesheet" href="assets/style.css?v=202610282209">
 
 </head>
 <body>
@@ -64,11 +64,21 @@
 <div class="ptoast glass" id="ptoast" hidden>Click the map to drop a pin <button id="pcancel">Cancel</button></div>
 <aside class="info glass" id="info" aria-live="polite"><button class="x" id="infox" aria-label="Close details">×</button><div id="infob"></div></aside>
 <div class="toast glass" id="toast">Drag to spin, scroll or pinch to zoom, click a place for details</div>
-<div class="ver" id="ver" aria-label="Version 1.27">v1.27</div>
+<div class="ver" id="ver" aria-label="Version 1.28">v1.28</div>
 
 <div class="loading" id="loading" role="status">Loading the map…</div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="assets/app.js?v=202610282206"></script>
+<script src="assets/app.js?v=202610282209"></script>
+<script>
+// keep the page current: if the site has a newer version than this copy, load that one (checked on each visit to
+// the page and when you come back to its tab), so an ordinary refresh is enough
+(function(){var mine=/app\.js\?v=(\d+)/.exec(document.querySelector('script[src*="app.js"]').src);if(!mine)return;
+  function check(){fetch('index.html?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(t){
+    var m=/app\.js\?v=(\d+)/.exec(t);if(!m||m[1]===mine[1])return;
+    var key='whg-reloaded-'+m[1];try{if(sessionStorage.getItem(key))return;sessionStorage.setItem(key,'1')}catch(e){}
+    location.replace(location.pathname+'?v='+m[1])}).catch(function(){})}
+  check();document.addEventListener('visibilitychange',function(){if(!document.hidden)check()});setInterval(check,5*60*1000)})();
+</script>
 </body>
 </html>
