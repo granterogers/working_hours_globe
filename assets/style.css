@@ -445,3 +445,23 @@ body.in3d #search,body.in3d .attrib{z-index:47}
 body.in3d #bandkey{z-index:47}
 /* the 2D globe is not drawn while the 3D view is showing; the star field behind still is */
 body.in3d #c{display:none}
+
+/* guided tour (assets/tour.js): the veil blurs the page with a hole over the step's target, the ring outlines it */
+.tveil{position:fixed;inset:0;z-index:80;background:color-mix(in srgb,var(--space1) 45%,transparent);backdrop-filter:blur(3px) saturate(90%);-webkit-backdrop-filter:blur(3px) saturate(90%);opacity:0;pointer-events:none;transition:opacity .5s,clip-path .6s cubic-bezier(.2,.7,.2,1)}
+body.touring .tveil{opacity:1;pointer-events:auto}
+.tring{position:fixed;z-index:81;border-radius:18px;border:2px solid var(--accent);pointer-events:none;opacity:0;box-shadow:0 0 0 6px color-mix(in srgb,var(--accent) 16%,transparent),0 0 34px 6px color-mix(in srgb,var(--accent) 45%,transparent);transition:left .6s cubic-bezier(.2,.7,.2,1),top .6s cubic-bezier(.2,.7,.2,1),width .6s cubic-bezier(.2,.7,.2,1),height .6s cubic-bezier(.2,.7,.2,1),opacity .4s;animation:tpulse 2.6s ease-in-out infinite}
+.tring.on{opacity:1}
+@keyframes tpulse{50%{box-shadow:0 0 0 10px color-mix(in srgb,var(--accent) 10%,transparent),0 0 46px 10px color-mix(in srgb,var(--accent) 55%,transparent)}}
+.tcard{position:fixed;z-index:82;width:min(340px,calc(100vw - 24px));padding:16px 18px 14px;border-radius:18px;opacity:0;pointer-events:auto;transition:left .6s cubic-bezier(.2,.7,.2,1),top .6s cubic-bezier(.2,.7,.2,1),opacity .3s}
+body.touring .tcard{opacity:1}
+.tcard .tstep{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin:0 0 4px}
+.tcard h3{font-family:var(--serif);font-weight:500;font-size:1.2rem;margin:0 22px 6px 0;line-height:1.2}
+.tcard p{margin:0;color:var(--ink2);font-size:.92rem;line-height:1.5}
+.tbar{height:3px;border-radius:3px;background:var(--glass-b);margin:12px 0 10px;overflow:hidden}
+.tbar i{display:block;height:100%;background:var(--accent);transition:width .5s}
+.tbtns{display:flex;gap:8px;justify-content:flex-end}
+.tbtns button{border-radius:12px;padding:8px 14px;font:600 .88rem var(--sans);cursor:pointer;border:1px solid var(--glass-b);background:var(--field);color:var(--ink)}
+.tbtns .tprimary{background:var(--accent);color:var(--accent-ink);border-color:transparent;box-shadow:0 0 18px color-mix(in srgb,var(--accent) 35%,transparent)}
+.tbtns button:disabled{opacity:.4;cursor:default}
+.tx{position:absolute;top:8px;right:10px;border:0;background:none;cursor:pointer;color:var(--ink2);font-size:1.25rem;line-height:1;padding:4px 6px}
+@media (max-width:700px){.tcard{left:12px!important;right:12px;width:auto}}
