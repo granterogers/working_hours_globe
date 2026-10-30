@@ -1,3 +1,4 @@
+:root{--col:280px;--colr:300px}
 :root{
   --space1:#04060e; --space2:#000002; --ink:#f3f5fb; --ink2:#b9c3da; --glass:rgba(13,20,40,.65); --glass-b:rgba(255,255,255,.10);
   --field:rgba(255,255,255,.06); --accent:#ffd27a; --accent-ink:#1a1206; --shadow:0 18px 50px rgba(0,0,0,.45);
@@ -22,7 +23,7 @@ button{font:inherit;color:inherit}
 button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 /* control panel */
-.panel{position:absolute;left:16px;top:16px;width:320px;max-width:calc(100% - 32px);border-radius:18px;overflow:hidden;transition:width .35s cubic-bezier(.2,.8,.2,1)}
+.panel{position:absolute;left:16px;top:16px;width:var(--col);max-width:calc(100% - 32px);border-radius:18px;overflow:hidden;transition:width .35s cubic-bezier(.2,.8,.2,1)}
 .panel.collapsed{width:270px}
 .panel:not(.collapsed){max-height:calc(100% - 32px - var(--lyrh,0px));overflow-y:auto}
 .ph{all:unset;display:flex;align-items:center;gap:12px;padding:12px 16px 12px 14px;cursor:pointer;width:100%;box-sizing:border-box}
@@ -88,7 +89,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .strip .cldot{box-shadow:0 0 0 1.5px var(--glass)}
 
 /* details card */
-.info{position:absolute;right:16px;bottom:16px;width:340px;max-height:calc(100% - 120px);overflow:auto;max-width:calc(100% - 32px);border-radius:18px;padding:16px 18px;transform:translateY(12px);opacity:0;pointer-events:none;transition:opacity .25s,transform .25s}
+.info{position:absolute;right:16px;bottom:16px;width:var(--colr);max-height:calc(100% - 120px);overflow:auto;max-width:calc(100% - 32px);border-radius:18px;padding:16px 18px;transform:translateY(12px);opacity:0;pointer-events:none;transition:opacity .25s,transform .25s}
 .info.show{opacity:1;transform:none;pointer-events:auto}
 .info h2{font-family:var(--serif);font-weight:600;font-size:1.25rem;margin:0;line-height:1.15;padding-right:22px}
 .info .where{color:var(--ink2);font-size:.86rem;margin:2px 0 12px}
@@ -190,7 +191,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .layers .clfb{opacity:.85;border-radius:7px;padding:4px 5px;position:relative}
 .layers .clfb.on{color:var(--accent);opacity:1}
 .layers .clfb.on::after{content:"";position:absolute;top:1px;right:1px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
-.clf{position:absolute;right:16px;top:66px;width:310px;max-height:calc(100% - 32px);overflow:auto;border-radius:18px;padding:14px 16px 16px;z-index:5;font-size:.88rem}
+.clf{position:absolute;left:calc(var(--col) + 28px);bottom:16px;width:var(--col);max-height:calc(100% - 32px);overflow:auto;border-radius:18px;padding:14px 16px 16px;z-index:5;font-size:.88rem}
 .clf[hidden]{display:none}
 .clfh{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .clfh b{font-family:var(--serif);font-weight:600;font-size:1.1rem}
@@ -360,7 +361,7 @@ body.in3d .northbtn{z-index:46}
 .camimg:focus-visible{outline:2px solid var(--accent)}
 
 /* Layers panel, bottom left */
-.lyr{position:absolute;left:16px;bottom:16px;width:236px;border-radius:16px;padding:4px 6px 6px;z-index:4}
+.lyr{position:absolute;left:16px;bottom:16px;width:var(--col);border-radius:16px;padding:4px 6px 6px;z-index:4}
 .lyrh{all:unset;box-sizing:border-box;width:100%;display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:700;font-size:.9rem;padding:7px 8px}
 .lyrh .phchev{font-style:normal;margin-left:auto;color:var(--ink2);transform:rotate(90deg);transition:transform .2s}
 .lyr.folded .lyrh .phchev{transform:none}
@@ -409,7 +410,7 @@ body.in3d .lyr{z-index:46}
 .phbox figcaption b{font-size:.72rem}
 .phbox figcaption span{color:var(--ink2)}
 /* the favourites list, from the gear in the Layers panel */
-#favlist{position:absolute;left:16px;top:auto;bottom:330px;height:auto;width:260px;max-height:50vh;overflow:auto;padding:12px;border-radius:16px;z-index:44}
+#favlist{position:absolute;left:16px;top:auto;bottom:calc(var(--lyrh,0px) + 4px);height:auto;width:var(--col);max-height:50vh;overflow:auto;padding:12px;border-radius:16px;z-index:44}
 #favlist .favs{max-height:none}
 /* the previous and next arrows sit over the sides of the full-screen photo */
 .phbox .pha{position:absolute;top:50%;bottom:auto;transform:translateY(-50%);width:48px;height:48px;z-index:3}
@@ -434,7 +435,7 @@ body.in3d .lyr{z-index:46}
 /* in 3D the page keeps its own look: the same bars, panels and buttons as on the globe */
 body.in3d #search,body.in3d .attrib{z-index:47}
 /* the working-hours colour key, under the hours card while the Working hours layer is on */
-.bandkey{position:absolute;left:16px;top:100px;z-index:2;width:290px;padding:10px 12px 8px;border-radius:14px;font-size:.84rem;transition:opacity .3s}
+.bandkey{position:absolute;left:16px;top:var(--pnh,100px);z-index:2;width:var(--col);padding:10px 12px 8px;border-radius:14px;font-size:.84rem;transition:opacity .3s}
 .bandkey[hidden]{display:none}
 .bandkey h4{margin:0 0 6px;font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);font-weight:600}
 .bandkey ul{list-style:none;margin:0;padding:0;display:grid;gap:4px}
@@ -448,7 +449,7 @@ body.in3d #c{display:none}
 
 /* guided tour (assets/tour.js): a light veil with a hole over the step's target, a ring around it, a glow on the
    map point being talked about, a cursor that clicks the real controls, and the card */
-.tveil{position:fixed;inset:0;z-index:80;background:color-mix(in srgb,var(--space1) 22%,transparent);backdrop-filter:blur(1px) saturate(105%);-webkit-backdrop-filter:blur(1px) saturate(105%);opacity:0;pointer-events:none;transition:opacity .5s,clip-path .6s cubic-bezier(.2,.7,.2,1)}
+.tveil{position:fixed;inset:0;z-index:80;background:color-mix(in srgb,var(--space1) 22%,transparent);opacity:0;pointer-events:none;transition:opacity .5s,clip-path .6s cubic-bezier(.2,.7,.2,1)}
 body.touring .tveil{opacity:1;pointer-events:auto}
 .tring{position:fixed;z-index:81;border-radius:18px;border:2px solid var(--accent);pointer-events:none;opacity:0;box-shadow:0 0 0 6px color-mix(in srgb,var(--accent) 16%,transparent),0 0 34px 6px color-mix(in srgb,var(--accent) 45%,transparent);transition:left .6s cubic-bezier(.2,.7,.2,1),top .6s cubic-bezier(.2,.7,.2,1),width .6s cubic-bezier(.2,.7,.2,1),height .6s cubic-bezier(.2,.7,.2,1),opacity .4s;animation:tpulse 2.6s ease-in-out infinite}
 .tring.on{opacity:1}
@@ -474,3 +475,8 @@ body.touring .tcard{opacity:1}
 .tbtns button:disabled{opacity:.4;cursor:default}
 .tx{position:absolute;top:8px;right:10px;border:0;background:none;cursor:pointer;color:var(--ink2);font-size:1.25rem;line-height:1;padding:4px 6px}
 @media (max-width:700px){.tcard{left:12px!important;right:12px;width:auto}}
+.tourpill{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:40;display:flex;align-items:center;gap:4px;padding:4px;border-radius:999px}
+.tourpill[hidden],body.touring .tourpill{display:none}
+.tourpill #tour{border:0;cursor:pointer;background:var(--accent);color:var(--accent-ink);font:700 .92rem var(--sans);padding:9px 20px;border-radius:999px}
+.tourpill .tourx{border:0;background:none;cursor:pointer;color:var(--ink2);width:30px;height:30px;border-radius:50%;font-size:1.15rem;line-height:1}
+.tourpill .tourx:hover{color:var(--ink);background:var(--field)}

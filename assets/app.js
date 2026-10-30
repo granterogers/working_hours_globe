@@ -856,6 +856,8 @@ document.getElementById('infox').onclick=hideInfo;
 // panel & controls
 const panel=document.getElementById('panel'),ph=document.getElementById('ph');
 ph.onclick=()=>{const c=panel.classList.toggle('collapsed');ph.setAttribute('aria-expanded',String(!c))};
+// the colour key sits under the working-hours panel, whatever its height
+new ResizeObserver(()=>document.documentElement.style.setProperty('--pnh',(panel.offsetHeight+16)+'px')).observe(panel);
 const tval=v=>{const[a,b]=v.split(':').map(Number);return a+(b||0)/60};
 document.getElementById('s').oninput=e=>{if(e.target.value){S=tval(e.target.value);ui();draw()}};
 document.getElementById('e').oninput=e=>{if(e.target.value){E=tval(e.target.value);ui();draw()}};
@@ -919,11 +921,14 @@ function lyrFold(open){const el=document.getElementById('lyr'),h=document.getEle
 function lyrFit(){const el=document.getElementById('lyr');if(!el)return;const r=document.documentElement.style;r.setProperty('--lyrh',(el.offsetHeight+12)+'px');r.setProperty('--lyrw',(el.offsetWidth+16)+'px')}
 document.getElementById('lyrh').onclick=()=>lyrFold(document.getElementById('lyr').classList.contains('folded'));
 // base map menu (top right)
+// the tour button can be hidden for good from its own × button; this brings it back
+const tourHidden=()=>{try{return localStorage.getItem('whg.tourHidden')==='1'}catch(e){return false}};
 function bmRender(){const m=document.getElementById('bmmenu');
   m.innerHTML=`<div class="bmh">Map layers</div><button type="button" class="add" id="add">Add a KML, KMZ or GeoJSON file</button><ul class="layers" id="layers"></ul>`+
 
-    `<div class="bmh">Base map</div>`+Object.entries(BASEMAPS).map(([id,b])=>`<button type="button" role="menuitemradio" aria-checked="${id===basemap}" data-id="${id}"><i class="bmdot"></i><span><b>${b.name}</b><small>${b.sub}</small></span></button>`).join('');
+    `<div class="bmh">Base map</div>`+Object.entries(BASEMAPS).map(([id,b])=>`<button type="button" role="menuitemradio" aria-checked="${id===basemap}" data-id="${id}"><i class="bmdot"></i><span><b>${b.name}</b><small>${b.sub}</small></span></button>`).join('')+`<button type="button" class="add" id="tourshow" hidden>Show the tour button</button>`;
   m.querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>{setBasemap(b.dataset.id);bmToggle(false)});
+  const ts=m.querySelector('#tourshow');if(ts){ts.hidden=!tourHidden();ts.onclick=()=>{try{localStorage.removeItem('whg.tourHidden')}catch(e){}document.getElementById('tourpill').hidden=false;bmToggle(false)}}
   m.querySelector('#add').onclick=()=>document.getElementById('file').click();
   renderLayers();renderFavs()}
 function setBasemap(id){if(!BASEMAPS[id]||id===basemap)return;basemap=id;try{localStorage.setItem('whg.basemap',id)}catch(e){}vtUsed.clear();if(m3d.map)m3dStyle();draw()}
@@ -954,6 +959,10 @@ var m3d={map:null,el:null,lib:null,pin:null};
 // for the guided tour (assets/tour.js): where a place is on screen now (null when it is behind the globe), and the points it can point at
 window.whg={screen(lon,lat){if(document.body.classList.contains('in3d')&&m3d.map){const p=m3d.map.project([lon,lat]);return{x:p.x,y:p.y}}const p=scr([lon,lat]);return p?{x:p[0],y:p[1]}:null},
   map3d:()=>m3d.map,
+  zoomTo:k=>zoomTo(k),
+  zoomBy:f=>zoomTo(kT*f),
+  rotate:d=>{rot[0]+=d;kick()},
+  basemap:()=>basemap,
   favourites:()=>favs.map(f=>({lon:f.lon,lat:f.lat,name:f.name})),
   coliving:()=>CL.vis.map(x=>({lon:x.lon,lat:x.lat})),
   cowork:()=>CW.vis.map(x=>({lon:x.lon,lat:x.lat})),
@@ -1154,7 +1163,8 @@ function renderRes(){res.innerHTML='';if(!q.value.trim()){res.classList.remove('
   if(!matches.length){res.innerHTML='<li class="empty">No place by that name. Try a country, state or island.</li>'}
   matches.forEach((m,i)=>{const li=document.createElement('li'),b=document.createElement('button');b.className=i===hl?'hl':'';
     b.innerHTML=`${esc(m.n)}<small>${esc(m.sub)}</small>`;b.onclick=()=>pick(m);li.appendChild(b);res.appendChild(li)});res.classList.add('show');}
-function pick(m){flyTo(m.lon,m.lat,m.size);closeSearch();setTimeout(()=>showInfo(m.n,m.sub==='Country'?'':m.sub,m.tz,[m.lon,m.lat]),400)}
+// a chosen place is pinned as well as selected: its card opens and the pin marks it on the map
+function pick(m){flyTo(m.lon,m.lat,m.size);closeSearch();setTimeout(()=>{showInfo(m.n,m.sub==='Country'?'':m.sub,m.tz,[m.lon,m.lat]);clickPin=[m.lon,m.lat];draw()},400)}
 q.addEventListener('input',()=>{const v=q.value.trim().toLowerCase();hl=0;
   matches=v.length<2?[]:index.filter(i=>i.n.toLowerCase().includes(v)).sort((a,b)=>(a.n.toLowerCase().startsWith(v)?0:1)-(b.n.toLowerCase().startsWith(v)?0:1)||b.size-a.size).slice(0,8);
   if(v.length<2){res.classList.remove('show');return}renderRes();});
