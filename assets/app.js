@@ -951,6 +951,13 @@ document.getElementById('north').onclick=()=>{const map=m3d.map;
 // Ctrl+drag) tilts and turns, the wheel zooms. Uses the current base map; satellite gets English place names.
 const M3D_JS='https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js',M3D_CSS='https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css';
 var m3d={map:null,el:null,lib:null,pin:null};
+// for the guided tour (assets/tour.js): where a place is on screen now (null when it is behind the globe), and the points it can point at
+window.whg={screen(lon,lat){if(document.body.classList.contains('in3d')&&m3d.map){const p=m3d.map.project([lon,lat]);return{x:p.x,y:p.y}}const p=scr([lon,lat]);return p?{x:p[0],y:p[1]}:null},
+  map3d:()=>m3d.map,
+  favourites:()=>favs.map(f=>({lon:f.lon,lat:f.lat,name:f.name})),
+  coliving:()=>CL.vis.map(x=>({lon:x.lon,lat:x.lat})),
+  cowork:()=>CW.vis.map(x=>({lon:x.lon,lat:x.lat})),
+  weather:()=>(WX.shown||[]).map(p=>{const q=WX.pts.get(wxKey(p.lat,p.lon));return{lon:p.lon,lat:p.lat,temp:q?q.temp:null}})};
 function m3dLoad(){if(m3d.lib)return m3d.lib;m3d.lib=new Promise((ok,fail)=>{const l=document.createElement('link');l.rel='stylesheet';l.href=M3D_CSS;document.head.appendChild(l);
   const sc=document.createElement('script');sc.src=M3D_JS;sc.onload=()=>{if(!window.maplibregl)return fail(new Error('MapLibre missing'));m3d.libRef=window.maplibregl;ok(window.maplibregl)};sc.onerror=()=>{m3d.lib=null;fail(new Error('load'))};document.head.appendChild(sc)});return m3d.lib}
 const NAME_EN=['coalesce',['get','name:en'],['get','name']];
