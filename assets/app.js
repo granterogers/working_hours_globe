@@ -17,8 +17,6 @@ const DEG=180/Math.PI, MINK=0.85, MAXK=9000;
 let S=12,E=20,season=0,W=0,H=0,dpr=1,base=300,cx=0,cy=0;
 // the layers start in the same state on every launch: working hours, favourites and day and night on, the rest off
 let showNight=true,showFavs=true,showCw=false,showCams=false,showWeather=false,showNames=false,showHours=true;
-// how strongly the working-hours colours cover the base map (0 to 1); set in the working-hours settings, not kept between launches
-let bandStrength=0.55;
 let rot=[-8,-36,0],k=0.7,kT=1,vel=[0,0],anchor=null,dragging=false,running=false,fly=null,overlays=[],placed=[],dark=true,pal={};
 try{if(new Date().toLocaleString('en-GB',{timeZone:'Europe/London',timeZoneName:'short'}).includes('BST'))season=1}catch(e){}
 
@@ -154,16 +152,19 @@ function draw(){
   ctx.beginPath();path(grat);ctx.strokeStyle=pal.grat;ctx.lineWidth=1;ctx.stroke();
   // land
   // pick detail by zoom; drop one level while the globe is moving, then redraw crisp at rest
+  // the timezone shapes at full detail are clipped to land, so the colour stays off the sea at every zoom
   const lv=k<2.5?0:k<5?1:2;
-  const TZ=[D.tzL,D.tzM,D.tz][lv],CB=[D.cbL,D.cbM,D.cb][lv];
-  // the base map is always drawn, at every zoom, so the chosen base map shows; the working-hours colours are laid
-  // over it at the set strength, so the colours can be seen through the map (the timezone shapes also cover the sea)
-  const hA=LAY.hours,raster=basemap!=='street';
+  const TZ=D.tz,CB=[D.cbL,D.cbM,D.cb][lv];
+  // the base map is drawn underneath at every zoom. With working hours on, the land is covered by the colours,
+  // opaque, with the country borders on top; they fade as you zoom in towards a country, and the base map shows
+  // through. The sea has no colour, so the base map shows there.
+  const hA=LAY.hours,bA=hA*(1-clamp((k-TILE_K)/4.5,0,1)),raster=basemap!=='street';
   const shown=drawTiles();if(shown){ctx.globalAlpha=1;ctx.drawImage(tcv,0,0,W,H);drawPoleCaps();ctx.globalAlpha=1}
   if(attrib)attrib.classList.toggle('show',shown);if(shown)attrib.textContent=raster?BM().attr:VT_ATTR;
-  if(hA>0.01){ctx.globalAlpha=hA*bandStrength;fillBands(D.gaps);fillBands(TZ);ctx.globalAlpha=1}
+  if(bA>0.01){ctx.globalAlpha=bA;fillBands(D.gaps);fillBands(TZ);ctx.globalAlpha=1}
   // the working-hours part of the key fades with the colours; the coliving part stays while colivings show
-  const stripEl=document.getElementById('strip');if(stripEl){const o=showHours?hA:0;if(stripEl._o!==o){stripEl._o=o;stripKey(o)}}
+  const stripEl=document.getElementById('strip');if(stripEl){const o=showHours?bA:0;if(stripEl._o!==o){stripEl._o=o;stripKey(o)}}
+  if(bA>0.02){ctx.globalAlpha=bA;strokeFC(CB,pal.border,k>4?1.4:0.9);ctx.globalAlpha=1}
   // sphere shading for depth
   ctx.save();ctx.beginPath();path({type:'Sphere'});ctx.clip();
   const sg=ctx.createRadialGradient(cx-s*.42,cy-s*.48,0,cx,cy,s*1.02);sg.addColorStop(0,pal.shadeLite);sg.addColorStop(.55,'rgba(0,0,0,0)');sg.addColorStop(1,pal.shadeDark);
@@ -900,27 +901,13 @@ const LYI={
 function lyrRender(){const m=document.getElementById('lyrb');if(!m)return;
   const ic=k=>`<i class="lyi" aria-hidden="true">${typeof LYI[k]==='function'?LYI[k]():LYI[k]}</i>`;
   const tick=(k,on,label,extra)=>`<label class="bmtick"><input type="checkbox" data-show="${k}" ${on?'checked':''}>${ic(k)}<span>${label}</span>${extra||''}</label>`;
-  m.innerHTML=tick('hours',showHours,'Working hours',`<button type="button" class="clfb" id="seagear" aria-label="Working hours settings" title="Working hours settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>`)+tick('fav',showFavs,'Favourites',`<button type="button" class="clfb" id="favgear" aria-label="Show favourites list" title="Show favourites list"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>`)+
+  m.innerHTML=tick('hours',showHours,'Working hours')+tick('fav',showFavs,'Favourites',`<button type="button" class="clfb" id="favgear" aria-label="Show favourites list" title="Show favourites list"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>`)+
     (CL.data.length?tick('cl',CL.on,'Colivings',`<small class="clcnt" id="clcnt"></small><button type="button" class="clfb${clActive(CL.f)?' on':''}" id="clfb" aria-label="Filter colivings" title="Filter and updates">${FUNNEL}</button>`):'')+
     tick('cw',showCw,'Coworking spaces',`<small class="clcnt" id="cwcnt" aria-live="polite"></small><button type="button" class="clfb${cwActive()?' on':''}" id="cwfb" aria-label="Filter coworking spaces" title="Filter coworking spaces">${FUNNEL}</button>`)+tick('cams',showCams,'Webcams')+tick('weather',showWeather,'Current weather','<small class="clcnt">°C</small>')+tick('night',showNight,'Day and night')+tick('names',showNames,'Place names');
   m.querySelectorAll('[data-show]').forEach(c=>c.onchange=()=>setShow(c.dataset.show,c.checked));
   const fb=m.querySelector('#clfb');if(fb)fb.onclick=e=>{e.preventDefault();e.stopPropagation();clToggle()};
   const cb=m.querySelector('#cwfb');if(cb)cb.onclick=e=>{e.preventDefault();e.stopPropagation();cwToggle()};
-  const gb=m.querySelector('#favgear');if(gb)gb.onclick=e=>{e.preventDefault();e.stopPropagation();favListToggle()};
-  const sg=m.querySelector('#seagear');if(sg)sg.onclick=e=>{e.preventDefault();e.stopPropagation();seaToggle()};clCounts();cwCounts();lyrFit()}
-// working hours settings: how strong the colours are
-function seaToggle(open){let el=document.getElementById('seaset');
-  if(!el){el=document.createElement('aside');el.className='clf glass';el.id='seaset';el.hidden=true;el.setAttribute('aria-label','Working hours settings');
-    el.innerHTML=`<div class="clfh"><b>Working hours settings</b><button class="x" id="seax" aria-label="Close settings">×</button></div>
-      <label class="clchk" for="seastr">Colour strength <output id="seaout"></output></label><input id="seastr" type="range" min="10" max="100" step="5" aria-label="Working-hours colour strength">
-      <p class="clsmall">How strongly the working-hours colours cover the base map. The map shows through the colours at any strength.</p>`;
-    document.body.appendChild(el);
-    el.querySelector('#seax').onclick=()=>seaToggle(false);
-    const sl=el.querySelector('#seastr'),out=el.querySelector('#seaout');
-    const set=()=>{out.textContent=sl.value+'%';};sl.oninput=()=>{bandStrength=sl.value/100;set();draw()}}
-  const sl=el.querySelector('#seastr');sl.value=Math.round(bandStrength*100);el.querySelector('#seaout').textContent=sl.value+'%';
-  const show=open==null?el.hidden:open;el.hidden=!show;
-  if(show)sl.focus({preventScroll:true})}
+  const gb=m.querySelector('#favgear');if(gb)gb.onclick=e=>{e.preventDefault();e.stopPropagation();favListToggle()};clCounts();cwCounts();lyrFit()}
 function lyrFold(open){const el=document.getElementById('lyr'),h=document.getElementById('lyrh');el.classList.toggle('folded',!open);h.setAttribute('aria-expanded',String(open));
   try{localStorage.setItem('whg.lyr',open?'open':'folded')}catch(e){}lyrFit()}
 // keep the working-hours panel clear of the Layers panel below it

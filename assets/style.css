@@ -293,7 +293,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 /* base map menu and 3D view */
 .bmwrap{position:relative}
 .round b{font-size:.78rem;letter-spacing:.02em;font-family:var(--sans)}
-.bmmenu{position:absolute;right:0;top:50px;width:270px;border-radius:16px;padding:8px;z-index:60;display:flex;flex-direction:column;gap:2px}
+.bmmenu{position:absolute;right:0;top:50px;width:280px;box-sizing:border-box;border-radius:16px;padding:8px;z-index:60;display:flex;flex-direction:column;gap:2px}
 .bmmenu[hidden]{display:none}
 .bmh{font-size:.74rem;color:var(--ink2);padding:4px 8px 6px}
 .bmmenu button{all:unset;box-sizing:border-box;display:flex;gap:10px;align-items:flex-start;padding:7px 8px;border-radius:10px;cursor:pointer}
@@ -390,7 +390,7 @@ body.in3d .lyr{z-index:46}
 .favbtn.on{background:#ff4f87;color:#fff;border-color:#ff4f87}
 .favbtn.on .fh{color:#fff}
 /* the layers menu holds map layers, favourites and the base map, so it scrolls on a short screen */
-.bmmenu{max-height:72vh;overflow:auto}
+.bmmenu{max-height:72vh;overflow-x:hidden;overflow-y:auto}
 
 /* one type scale for the menus, the search list and the layers panel */
 .bmmenu{font-size:.9rem}
@@ -398,7 +398,7 @@ body.in3d .lyr{z-index:46}
 .bmmenu button{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border-radius:10px;cursor:pointer;font-size:.9rem;line-height:1.25}
 .bmmenu button:hover,.bmmenu button:focus-visible{background:var(--field)}
 .bmmenu button small{display:block;font-size:.76rem;color:var(--ink2);margin-top:1px}
-.bmmenu .add{justify-content:center;border:1px dashed var(--glass-b);margin:4px 2px;font-size:.86rem}
+.bmmenu .add{justify-content:center;border:1px dashed var(--glass-b);margin:4px 0;width:100%;box-sizing:border-box;font-size:.86rem}
 .res button{font-size:.9rem;padding:8px 10px}
 .res small{font-size:.78rem}
 
