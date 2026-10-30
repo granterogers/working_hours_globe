@@ -152,9 +152,11 @@ function draw(){
   ctx.beginPath();path(grat);ctx.strokeStyle=pal.grat;ctx.lineWidth=1;ctx.stroke();
   // land
   // pick detail by zoom; drop one level while the globe is moving, then redraw crisp at rest
-  // the timezone shapes at full detail are clipped to land, so the colour stays off the sea at every zoom
-  const lv=k<2.5?0:k<5?1:2;
-  const TZ=D.tz,CB=[D.cbL,D.cbM,D.cb][lv];
+  // the colour shapes are clipped to land at every level of detail. While the globe is moving the coarsest level is
+  // drawn, and the finer one once it comes to rest, which keeps spinning and zooming smooth
+  const moving=viewMoving=dragging||!!fly||vel[0]!==0||vel[1]!==0||Math.abs(Math.log(kT/k))>0.002;
+  const lv=moving?0:k<2.5?0:k<5?1:2;
+  const TZ=[D.tzL,D.tzM,D.tz][lv],CB=[D.cbL,D.cbM,D.cb][lv];
   // the base map is drawn underneath at every zoom. With working hours on, the land is covered by the colours,
   // opaque, with the country borders on top; they fade as you zoom in towards a country, and the base map shows
   // through. The sea has no colour, so the base map shows there.
@@ -1822,14 +1824,19 @@ function drawNight(){const nf=1-clamp((k-TILE_K)/4.5,0,1);if(nf<=0)return;const 
 // pipeline as the basemap, then masked by the night shading, so the lights are brightest where it is darkest.
 const lightsCv=document.createElement('canvas'),maskCv=document.createElement('canvas');
 let lightsKey='';
-function drawLights(){const lf=1-clamp((k-TILE_K)/4.5,0,1);if(lf<=0||basemap==='night')return;
+// the city lights are rebuilt for each view, which is too slow to keep up with while the globe is turning, so they
+// wait until it comes to rest
+let viewMoving=false;
+function drawLights(){const lf=1-clamp((k-TILE_K)/4.5,0,1);if(lf<=0||basemap==='night'||viewMoving)return;
   // the lights are rebuilt only when the view changes; a fade then just changes their opacity, so it stays smooth
   const key=[rot.map(v=>v.toFixed(3)).join(','),k.toFixed(4),W,H,dpr,Math.floor(Date.now()/6e4),basemap].join('|');
   if(key!==lightsKey){lightsKey='';const keep=basemap;basemap='night';let ok=false;try{ok=drawTiles()}finally{basemap=keep}
   if(!ok)return;
   if(lightsCv.width!==cv.width||lightsCv.height!==cv.height){lightsCv.width=maskCv.width=cv.width;lightsCv.height=maskCv.height=cv.height}
   const lc=lightsCv.getContext('2d'),mc=maskCv.getContext('2d');
-  lc.setTransform(1,0,0,1,0,0);lc.clearRect(0,0,lightsCv.width,lightsCv.height);lc.drawImage(tcv,0,0);
+  // only the bright city lights are kept: the dark ground of the night imagery is pushed to black, so adding it
+  // over the colours brightens the lights and nothing else
+  lc.setTransform(1,0,0,1,0,0);lc.clearRect(0,0,lightsCv.width,lightsCv.height);lc.filter='contrast(3) brightness(0.6)';lc.drawImage(tcv,0,0);lc.filter='none';
   mc.setTransform(1,0,0,1,0,0);mc.clearRect(0,0,maskCv.width,maskCv.height);mc.setTransform(dpr,0,0,dpr,0,0);
   const mp=d3.geoPath(proj).context(mc);
   for(const f of nightFeaturesGeo().features){mc.beginPath();mp(f);mc.fillStyle=`rgba(255,255,255,${Math.min(1,f.properties.a*2.5).toFixed(4)})`;mc.fill()}
