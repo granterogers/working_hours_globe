@@ -15,13 +15,8 @@ const BANDS=[
   {lo:21,hi:29,name:"Overnight",sub:"starts 21:00–05:00",dark:"#5a6bdc",light:"#4656c8"}];
 const DEG=180/Math.PI, MINK=0.85, MAXK=9000;
 let S=12,E=20,season=0,W=0,H=0,dpr=1,base=300,cx=0,cy=0;
-let showNight=(()=>{try{return localStorage.getItem('whg.night')!=='off'}catch(e){return true}})();
-let showFavs=(()=>{try{return localStorage.getItem('whg.favs')!=='off'}catch(e){return true}})();
-let showCw=(()=>{try{return localStorage.getItem('whg.cw')==='on'}catch(e){return false}})();
-let showCams=(()=>{try{return localStorage.getItem('whg.cams')==='on'}catch(e){return false}})();
-let showWeather=(()=>{try{return localStorage.getItem('whg.weather')==='on'}catch(e){return false}})();
-let showNames=(()=>{try{return localStorage.getItem('whg.names')!=='off'}catch(e){return true}})();
-let showHours=(()=>{try{return localStorage.getItem('whg.hours')!=='off'}catch(e){return true}})();
+// the layers start in the same state on every launch: working hours, favourites and day and night on, the rest off
+let showNight=true,showFavs=true,showCw=false,showCams=false,showWeather=false,showNames=false,showHours=true;
 let rot=[-8,-36,0],k=0.7,kT=1,vel=[0,0],anchor=null,dragging=false,running=false,fly=null,overlays=[],placed=[],dark=true,pal={};
 try{if(new Date().toLocaleString('en-GB',{timeZone:'Europe/London',timeZoneName:'short'}).includes('BST'))season=1}catch(e){}
 
@@ -857,7 +852,7 @@ document.getElementById('infox').onclick=hideInfo;
 const panel=document.getElementById('panel'),ph=document.getElementById('ph');
 ph.onclick=()=>{const c=panel.classList.toggle('collapsed');ph.setAttribute('aria-expanded',String(!c))};
 // the colour key sits under the working-hours panel, whatever its height
-new ResizeObserver(()=>document.documentElement.style.setProperty('--pnh',(panel.offsetHeight+16)+'px')).observe(panel);
+new ResizeObserver(()=>document.documentElement.style.setProperty('--pnh',(panel.offsetHeight+26)+'px')).observe(panel);
 const tval=v=>{const[a,b]=v.split(':').map(Number);return a+(b||0)/60};
 document.getElementById('s').oninput=e=>{if(e.target.value){S=tval(e.target.value);ui();draw()}};
 document.getElementById('e').oninput=e=>{if(e.target.value){E=tval(e.target.value);ui();draw()}};
@@ -865,7 +860,7 @@ const bw=document.getElementById('w'),bs=document.getElementById('su');
 function setSeason(v){season=v;bw.setAttribute('aria-pressed',String(v===0));bs.setAttribute('aria-pressed',String(v===1));ui();draw();hideInfo()}
 bw.onclick=()=>setSeason(0);bs.onclick=()=>setSeason(1);
 function ui(){renderFavs();renderLayers();lyrRender();if(typeof m3dSync==='function')m3dSync();document.getElementById('sum').textContent=`${hhmm(S)}–${hhmm(E)} UK, ${season?'summer':'winter'}`;
-  const bl=document.getElementById('bandlist');if(bl)bl.innerHTML=BANDS.map((b,i)=>`<li><i style="background:${pal['b'+i]}"></i><span>${b.name}</span><small>${b.sub}</small></li>`).join('');
+  const bl=document.getElementById('bandlist');if(bl)bl.innerHTML=BANDS.map((b,i)=>`<li><i style="background:${pal['b'+i]}"></i><span>${b.name}</span><small>${b.sub.replace('starts ','')}</small></li>`).join('');
   document.getElementById('snote').textContent=season?'Late March to late October, while the UK is on BST.':'Late October to late March, while the UK is on GMT.';
   stripRender();}
 // colour key at the bottom: working-hours bands, then the coliving dot colours when that layer is on
@@ -1238,7 +1233,7 @@ const CL_TAGS=['community','coworking','wellness','city','beach','rural','surf',
 const CL_VIBES=['social','quiet','focused','creative','adventure','entrepreneur','luxury','budget','family-friendly','fitness','party','spiritual'];
 const CL_NOT=new Set(['beach','surf','island','mountain','community','coworking','wellness','city','rural','eco','startup','ski','family','index','all','pop-ups','festivals']);
 const clStore={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
-CL.f=Object.assign({},CL_DEF,clStore.get('whg.clF',{}));CL.on=clStore.get('whg.clOn',true);
+CL.f=Object.assign({},CL_DEF,clStore.get('whg.clF',{}));CL.on=false;
 const clToday=()=>new Date().toISOString().slice(0,10);
 const clEur=v=>'€'+Math.round(v).toLocaleString('en-GB');
 const clActive=f=>JSON.stringify(Object.assign({},f,{q:f.q.trim()}))!==JSON.stringify(CL_DEF);
