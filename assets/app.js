@@ -136,7 +136,7 @@ function ring(a,fill){const n=a.length/3;let pen=false;
   if(fill)ctx.closePath();}
 function fillBands(fc){const g=[[],[],[],[],[],[]];
   for(const f of fc.features){if(f.rings&&inView(f))g[band(off(f.properties.z))].push(f)}
-  g.forEach((arr,i)=>{if(!arr.length)return;ctx.beginPath();for(const f of arr)for(const r of f.rings)ring(r,true);ctx.fillStyle=pal['b'+i];ctx.fill('evenodd')});}
+  g.forEach((arr,i)=>{if(!arr.length)return;ctx.beginPath();for(const f of arr)for(const r of f.rings)ring(r,true);ctx.fillStyle=pal['b'+i];ctx.fill('nonzero')});}
 function strokeFC(fc,style,w){ctx.beginPath();for(const f of fc.features)if(f.rings&&inView(f))for(const r of f.rings)ring(r,false);ctx.strokeStyle=style;ctx.lineWidth=w;ctx.stroke();}
 
 function draw(){
@@ -164,7 +164,8 @@ function draw(){
   if(bA>0.01){ctx.globalAlpha=bA;fillBands(D.gaps);fillBands(TZ);ctx.globalAlpha=1}
   // the working-hours part of the key fades with the colours; the coliving part stays while colivings show
   const stripEl=document.getElementById('strip');if(stripEl){const o=showHours?bA:0;if(stripEl._o!==o){stripEl._o=o;stripKey(o)}}
-  if(bA>0.02){ctx.globalAlpha=bA;strokeFC(CB,pal.border,k>4?1.4:0.9);ctx.globalAlpha=1}
+  // the country borders are fine and soft, so the colours sit under them rather than being cut up by them
+  if(bA>0.02){ctx.globalAlpha=bA*0.5;strokeFC(CB,pal.border,k>4?0.9:0.6);ctx.globalAlpha=1}
   // sphere shading for depth
   ctx.save();ctx.beginPath();path({type:'Sphere'});ctx.clip();
   const sg=ctx.createRadialGradient(cx-s*.42,cy-s*.48,0,cx,cy,s*1.02);sg.addColorStop(0,pal.shadeLite);sg.addColorStop(.55,'rgba(0,0,0,0)');sg.addColorStop(1,pal.shadeDark);
@@ -1836,7 +1837,8 @@ function drawLights(){const lf=1-clamp((k-TILE_K)/4.5,0,1);if(lf<=0||basemap==='
   lc.setTransform(1,0,0,1,0,0);lc.globalCompositeOperation='destination-in';lc.drawImage(maskCv,0,0);lc.globalCompositeOperation='source-over';
   lightsKey=key}
   if(!lightsKey)return;
-  ctx.save();ctx.globalAlpha=lf;ctx.drawImage(lightsCv,0,0,W,H);ctx.restore()}
+  // the lights are added to what is beneath, so the working-hours colours stay solid on the night side
+  ctx.save();ctx.globalAlpha=lf;ctx.globalCompositeOperation='lighter';ctx.drawImage(lightsCv,0,0,W,H);ctx.restore()}
 setInterval(()=>{if(showNight&&!running)draw()},60000);
 
 // Web map tiles stop at 85° north and south, which left a dark disc over each pole. Fill those caps in the base

@@ -69,7 +69,7 @@ tzs=[];feats=[];zoneinfo={}
 for f in tzj['features']:
     t=f['properties']['tzid']; g=shape(f['geometry']); tzs.append((t,g))
     zoneinfo[t]=[off(t,WIN),off(t,SUM)]
-    s=clean(g,0.03,0.0004)
+    s=clean(g,0.01,0.0002)
     if s is not None and not pland.contains(s):
         s=s.buffer(0).intersection(land)
         s=clean(s,0.01,0.0004) if not s.is_empty and s.geom_type in ('Polygon','MultiPolygon') else (s if s.is_empty else None)
