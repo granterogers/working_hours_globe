@@ -150,7 +150,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .saved{font-size:.8rem;color:var(--ink2)}
 .ghost{border:0;background:transparent;color:var(--ink2);font-size:.82rem;cursor:pointer;padding:4px 0;text-decoration:underline;text-underline-offset:3px}
 .ghost:hover{color:var(--ink)}
-.attrib{position:absolute;right:72px;bottom:16px;font-size:.7rem;color:var(--ink2);background:var(--glass);padding:3px 8px;border-radius:6px;opacity:0;transition:opacity .3s;pointer-events:none}
+.attrib{position:absolute;right:196px;bottom:16px;font-size:.7rem;color:var(--ink2);background:var(--glass);padding:3px 8px;border-radius:6px;opacity:0;transition:opacity .3s;pointer-events:none}
 .attrib.show{opacity:1}
 @media (max-width:700px){.attrib{bottom:118px;right:64px}}
 #c.placing{cursor:crosshair}
@@ -476,8 +476,7 @@ body.touring .tcard{opacity:1}
 .tbtns button:disabled{opacity:.4;cursor:default}
 .tx{position:absolute;top:8px;right:10px;border:0;background:none;cursor:pointer;color:var(--ink2);font-size:1.25rem;line-height:1;padding:4px 6px}
 @media (max-width:700px){.tcard{left:12px!important;right:12px;width:auto}}
-.tourpill{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:40;display:flex;align-items:center;gap:4px;padding:4px;border-radius:999px}
+.tourpill{position:fixed;right:16px;bottom:16px;z-index:40;display:flex;align-items:center;padding:4px;border-radius:999px}
+body:has(#info.show) .tourpill{display:none}
 .tourpill[hidden],body.touring .tourpill{display:none}
 .tourpill #tour{border:0;cursor:pointer;background:var(--accent);color:var(--accent-ink);font:700 .92rem var(--sans);padding:9px 20px;border-radius:999px}
-.tourpill .tourx{border:0;background:none;cursor:pointer;color:var(--ink2);width:30px;height:30px;border-radius:50%;font-size:1.15rem;line-height:1}
-.tourpill .tourx:hover{color:var(--ink);background:var(--field)}

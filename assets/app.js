@@ -17,8 +17,8 @@ const DEG=180/Math.PI, MINK=0.85, MAXK=9000;
 let S=12,E=20,season=0,W=0,H=0,dpr=1,base=300,cx=0,cy=0;
 // the layers start in the same state on every launch: working hours, favourites and day and night on, the rest off
 let showNight=true,showFavs=true,showCw=false,showCams=false,showWeather=false,showNames=false,showHours=true;
-// with working hours on, the sea is transparent unless this is switched on in the working-hours settings
-let showSea=false;
+// how strongly the working-hours colours cover the base map (0 to 1); set in the working-hours settings, not kept between launches
+let bandStrength=0.55;
 let rot=[-8,-36,0],k=0.7,kT=1,vel=[0,0],anchor=null,dragging=false,running=false,fly=null,overlays=[],placed=[],dark=true,pal={};
 try{if(new Date().toLocaleString('en-GB',{timeZone:'Europe/London',timeZoneName:'short'}).includes('BST'))season=1}catch(e){}
 
@@ -138,9 +138,7 @@ function ring(a,fill){const n=a.length/3;let pen=false;
   if(fill)ctx.closePath();}
 function fillBands(fc){const g=[[],[],[],[],[],[]];
   for(const f of fc.features){if(f.rings&&inView(f))g[band(off(f.properties.z))].push(f)}
-  const a=typeof LAY==='undefined'?(showHours?1:0):LAY.hours;
-  g.forEach((arr,i)=>{if(!arr.length)return;ctx.beginPath();for(const f of arr)for(const r of f.rings)ring(r,true);
-    if(a<1){ctx.fillStyle=pal.land;ctx.fill('evenodd')}if(a>0){const o=ctx.globalAlpha;ctx.globalAlpha=o*a;ctx.fillStyle=pal['b'+i];ctx.fill('evenodd');ctx.globalAlpha=o}});}
+  g.forEach((arr,i)=>{if(!arr.length)return;ctx.beginPath();for(const f of arr)for(const r of f.rings)ring(r,true);ctx.fillStyle=pal['b'+i];ctx.fill('evenodd')});}
 function strokeFC(fc,style,w){ctx.beginPath();for(const f of fc.features)if(f.rings&&inView(f))for(const r of f.rings)ring(r,false);ctx.strokeStyle=style;ctx.lineWidth=w;ctx.stroke();}
 
 function draw(){
@@ -152,24 +150,20 @@ function draw(){
     ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,s*1.22,0,7);ctx.fill();}
   // ocean
   const og=ctx.createRadialGradient(cx-s*.35,cy-s*.4,s*.05,cx,cy,s*1.05);og.addColorStop(0,pal.oceanIn);og.addColorStop(1,pal.oceanOut);
-  const seaA=showSea?1:1-LAY.hours;if(seaA>0){ctx.globalAlpha=seaA;ctx.beginPath();path({type:'Sphere'});ctx.fillStyle=og;ctx.fill();ctx.globalAlpha=1}
+  ctx.beginPath();path({type:'Sphere'});ctx.fillStyle=og;ctx.fill();
   ctx.beginPath();path(grat);ctx.strokeStyle=pal.grat;ctx.lineWidth=1;ctx.stroke();
   // land
   // pick detail by zoom; drop one level while the globe is moving, then redraw crisp at rest
   const lv=k<2.5?0:k<5?1:2;
   const TZ=[D.tzL,D.tzM,D.tz][lv],CB=[D.cbL,D.cbM,D.cb][lv];
-  // with working hours on, the base map fades in as you zoom towards a country, replacing the time-zone colours;
-  // with them off, the base map shows in full at every zoom
-  const hA=LAY.hours,tileA=hA*clamp((k-TILE_K)/4.5,0,1)+(1-hA),bA=1-tileA,raster=basemap!=='street';
-  if(bA>0.02){ctx.globalAlpha=bA;ctx.lineJoin='round';strokeFC(CB,pal.coast1,k>4?9:6);strokeFC(CB,pal.coast2,k>4?3.5:2.5);ctx.globalAlpha=1}
-  // the working-hours colours are only painted while they can be seen; once the base map covers them they are skipped
-  const shown=tileA>0&&drawTiles();if(!(shown&&tileA>=0.99)){fillBands(D.gaps);fillBands(TZ)}
-  if(shown){ctx.globalAlpha=tileA;ctx.drawImage(tcv,0,0,W,H);drawPoleCaps();ctx.globalAlpha=1}
-  if(shown)attrib.textContent=raster?BM().attr:VT_ATTR;attrib.classList.toggle('show',shown);
-  // the colour key fades with the working-hours colours
+  // the base map is always drawn, at every zoom, so the chosen base map shows; the working-hours colours are laid
+  // over it at the set strength, so the colours can be seen through the map (the timezone shapes also cover the sea)
+  const hA=LAY.hours,raster=basemap!=='street';
+  const shown=drawTiles();if(shown){ctx.globalAlpha=1;ctx.drawImage(tcv,0,0,W,H);drawPoleCaps();ctx.globalAlpha=1}
+  if(attrib)attrib.classList.toggle('show',shown);if(shown)attrib.textContent=raster?BM().attr:VT_ATTR;
+  if(hA>0.01){ctx.globalAlpha=hA*bandStrength;fillBands(D.gaps);fillBands(TZ);ctx.globalAlpha=1}
   // the working-hours part of the key fades with the colours; the coliving part stays while colivings show
-  const stripEl=document.getElementById('strip');if(stripEl){const o=showHours?(bA<0.03?0:bA):0;if(stripEl._o!==o){stripEl._o=o;stripKey(o)}}
-  if(bA>0.02){ctx.globalAlpha=bA;strokeFC(CB,pal.border,k>4?1.4:0.9);ctx.globalAlpha=1}
+  const stripEl=document.getElementById('strip');if(stripEl){const o=showHours?hA:0;if(stripEl._o!==o){stripEl._o=o;stripKey(o)}}
   // sphere shading for depth
   ctx.save();ctx.beginPath();path({type:'Sphere'});ctx.clip();
   const sg=ctx.createRadialGradient(cx-s*.42,cy-s*.48,0,cx,cy,s*1.02);sg.addColorStop(0,pal.shadeLite);sg.addColorStop(.55,'rgba(0,0,0,0)');sg.addColorStop(1,pal.shadeDark);
@@ -179,7 +173,7 @@ function draw(){
   withA(LAY.night,drawNight);withA(LAY.night,drawLights);
   const bk=document.getElementById('bandkey');if(bk){bk.hidden=LAY.hours<0.01;bk.style.opacity=LAY.hours}
   drawOverlays();withA(LAY.cl,clDraw);withA(LAY.cams,camDraw);withA(LAY.cw,cwDraw);
-  const mapNames=LAY.names>0&&shown&&(!raster||BM().labels);drawLabels();MAPLAB.length=0;MAPBOX.length=0;if(mapNames)drawMapLabels(tileA*LAY.names);withA(LAY.weather,()=>wxDraw(mapNames));withA(LAY.fav,drawFavs);drawPin();
+  const mapNames=LAY.names>0&&shown&&(!raster||BM().labels);drawLabels();MAPLAB.length=0;MAPBOX.length=0;if(mapNames)drawMapLabels(LAY.names);withA(LAY.weather,()=>wxDraw(mapNames));withA(LAY.fav,drawFavs);drawPin();
 }
 
 function drawOverlays(){overlays.forEach(L=>{if(!L.on)return;L.fc.features.forEach(f=>{const g=f.geometry;if(!g||/Point/.test(g.type))return;
@@ -914,30 +908,30 @@ function lyrRender(){const m=document.getElementById('lyrb');if(!m)return;
   const cb=m.querySelector('#cwfb');if(cb)cb.onclick=e=>{e.preventDefault();e.stopPropagation();cwToggle()};
   const gb=m.querySelector('#favgear');if(gb)gb.onclick=e=>{e.preventDefault();e.stopPropagation();favListToggle()};
   const sg=m.querySelector('#seagear');if(sg)sg.onclick=e=>{e.preventDefault();e.stopPropagation();seaToggle()};clCounts();cwCounts();lyrFit()}
-// working hours settings: colour the sea, off by default
+// working hours settings: how strong the colours are
 function seaToggle(open){let el=document.getElementById('seaset');
   if(!el){el=document.createElement('aside');el.className='clf glass';el.id='seaset';el.hidden=true;el.setAttribute('aria-label','Working hours settings');
     el.innerHTML=`<div class="clfh"><b>Working hours settings</b><button class="x" id="seax" aria-label="Close settings">×</button></div>
-      <label class="clchk"><input type="checkbox" id="seaon"> Colour the sea</label><p class="clsmall">Off, the sea is transparent so the working-hours colours sit over the stars and the page. On, the sea is drawn in its own colour.</p>`;
+      <label class="clchk" for="seastr">Colour strength <output id="seaout"></output></label><input id="seastr" type="range" min="10" max="100" step="5" aria-label="Working-hours colour strength">
+      <p class="clsmall">How strongly the working-hours colours cover the base map. The map shows through the colours at any strength.</p>`;
     document.body.appendChild(el);
     el.querySelector('#seax').onclick=()=>seaToggle(false);
-    el.querySelector('#seaon').onchange=e=>{showSea=e.target.checked;draw()}}
-  const show=open==null?el.hidden:open;el.hidden=!show;el.querySelector('#seaon').checked=showSea;
-  if(show)el.querySelector('#seaon').focus({preventScroll:true})}
+    const sl=el.querySelector('#seastr'),out=el.querySelector('#seaout');
+    const set=()=>{out.textContent=sl.value+'%';};sl.oninput=()=>{bandStrength=sl.value/100;set();draw()}}
+  const sl=el.querySelector('#seastr');sl.value=Math.round(bandStrength*100);el.querySelector('#seaout').textContent=sl.value+'%';
+  const show=open==null?el.hidden:open;el.hidden=!show;
+  if(show)sl.focus({preventScroll:true})}
 function lyrFold(open){const el=document.getElementById('lyr'),h=document.getElementById('lyrh');el.classList.toggle('folded',!open);h.setAttribute('aria-expanded',String(open));
   try{localStorage.setItem('whg.lyr',open?'open':'folded')}catch(e){}lyrFit()}
 // keep the working-hours panel clear of the Layers panel below it
 function lyrFit(){const el=document.getElementById('lyr');if(!el)return;const r=document.documentElement.style;r.setProperty('--lyrh',(el.offsetHeight+12)+'px');r.setProperty('--lyrw',(el.offsetWidth+16)+'px')}
 document.getElementById('lyrh').onclick=()=>lyrFold(document.getElementById('lyr').classList.contains('folded'));
 // base map menu (top right)
-// the tour button can be hidden for good from its own × button; this brings it back
-const tourHidden=()=>{try{return localStorage.getItem('whg.tourHidden')==='1'}catch(e){return false}};
 function bmRender(){const m=document.getElementById('bmmenu');
   m.innerHTML=`<div class="bmh">Map layers</div><button type="button" class="add" id="add">Add a KML, KMZ or GeoJSON file</button><ul class="layers" id="layers"></ul>`+
 
-    `<div class="bmh">Base map</div>`+Object.entries(BASEMAPS).map(([id,b])=>`<button type="button" role="menuitemradio" aria-checked="${id===basemap}" data-id="${id}"><i class="bmdot"></i><span><b>${b.name}</b><small>${b.sub}</small></span></button>`).join('')+`<button type="button" class="add" id="tourshow" hidden>Show the tour button</button>`;
+    `<div class="bmh">Base map</div>`+Object.entries(BASEMAPS).map(([id,b])=>`<button type="button" role="menuitemradio" aria-checked="${id===basemap}" data-id="${id}"><i class="bmdot"></i><span><b>${b.name}</b><small>${b.sub}</small></span></button>`).join('');
   m.querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>{setBasemap(b.dataset.id);bmToggle(false)});
-  const ts=m.querySelector('#tourshow');if(ts){ts.hidden=!tourHidden();ts.onclick=()=>{try{localStorage.removeItem('whg.tourHidden')}catch(e){}document.getElementById('tourpill').hidden=false;bmToggle(false)}}
   m.querySelector('#add').onclick=()=>document.getElementById('file').click();
   renderLayers();renderFavs()}
 function setBasemap(id){if(!BASEMAPS[id]||id===basemap)return;basemap=id;try{localStorage.setItem('whg.basemap',id)}catch(e){}vtUsed.clear();if(m3d.map)m3dStyle();draw()}
@@ -1164,8 +1158,6 @@ function m3dClick(e){const map=m3d.map,hits=map.queryRenderedFeatures(e.point,{l
   geocode({lon:ll[0],lat:ll[1]},res=>{if(tok!==infoTok)return;hEl.classList.remove('pending');hEl.textContent=res.name;w.textContent=res.where||' '})}
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&m3d.el&&!m3d.el.hidden&&document.getElementById('bmmenu').hidden&&!(PH.box&&!PH.box.hidden)&&!(PH.grid&&!PH.grid.hidden))close3D()});
 
-document.getElementById('fs').onclick=()=>{try{if(document.fullscreenElement)document.exitFullscreen();else document.documentElement.requestFullscreen()}catch(e){}};
-if(!document.documentElement.requestFullscreen)document.getElementById('fs').style.display='none';
 
 // search
 const index=D.countries.map(c=>({n:c[0],sub:'Country',lon:c[1],lat:c[2],size:c.size,tz:c[3]})).concat(D.prov.map(p=>({n:p[0],sub:p[6]||'',lon:p[1],lat:p[2],size:p[5],tz:p[3]})));
@@ -1748,12 +1740,32 @@ function camShow(x){activeFav=null;draft=null;selected=null;if(typeof CL!=='unde
 // (category "coworking") with OpenStreetMap (amenity=coworking_space, office=coworking) into data/coworking.json,
 // which loads with the page like the colivings, so panning never waits on a download.
 const CW={list:new Map(),sel:null,vis:[],ccs:[]};
-const CWF_DEF={q:'',kind:'all',web:false,hours:false,conf:false,cc:''};
+const CWF_DEF={q:'',type:'all',kind:'all',brand:'',open:false,hours:false,web:false,phone:false,conf:false,cc:''};
 CW.f=Object.assign({},CWF_DEF,(()=>{try{return JSON.parse(localStorage.getItem('whg.cwF')||'{}')}catch(e){return{}}})());
 const CW_CHAIN=/\b(regus|spaces|wework|industrious|iwg|servcorp|impact hub|mindspace|knotel|convene|ucommune|the office group|signature by regus|hq global|premier business|venture x|serendipity labs|workspace|clockwise|launchpad|bizspace|uptown|mindspace)\b/i;
+// opening hours as OpenStreetMap writes them ("Mo-Fr 09:00-18:00; Sa 10:00-14:00", "24/7"), read for the place's local
+// time. The local time is approximated from its longitude, so a place's hours are checked against that clock.
+const CW_DAYS=['Mo','Tu','We','Th','Fr','Sa','Su'];
+function cwDays(s){const out=new Set();for(const part of s.split(',')){const m=/^(Mo|Tu|We|Th|Fr|Sa|Su)(?:-(Mo|Tu|We|Th|Fr|Sa|Su))?$/.exec(part.trim());if(!m)return null;
+  const a=CW_DAYS.indexOf(m[1]),b=m[2]?CW_DAYS.indexOf(m[2]):a;for(let d=a;;d=(d+1)%7){out.add(d);if(d===b)break}}return out}
+function cwOpen(h,lon,now){if(!h)return false;if(/24\/7/.test(h))return true;
+  const t=new Date(now.getTime()+Math.round(lon/15)*3600e3),day=(t.getUTCDay()+6)%7,m=t.getUTCHours()*60+t.getUTCMinutes();
+  let res=null;
+  for(const rule of h.split(';')){const r=rule.trim();if(!r)continue;const first=r.split(/\s+/)[0];let days=null,times=r;
+    if(/^[A-Za-z]/.test(first)){days=cwDays(first);if(!days)continue;times=r.slice(first.length)}
+    if(days&&!days.has(day))continue;
+    const ivs=[...times.matchAll(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/g)].map(x=>[+x[1]*60+ +x[2],+x[3]*60+ +x[4]]);
+    if(!ivs.length){if(/off|closed/i.test(times))res=false;continue}
+    res=ivs.some(([a,b])=>b>a?(m>=a&&m<b):(m>=a||m<b))}
+  return res===true}
+const CW_CATS={coworking:/^coworking/,office:/^professional_service$/};
 function cwPass(x,f){if(f.q.trim()){const s=(x.name+' '+x.addr).toLowerCase();if(!f.q.trim().toLowerCase().split(/\s+/).every(w=>s.includes(w)))return false}
-  if(f.kind==='chain'&&!x.chain)return false;if(f.kind==='indep'&&x.chain)return false;if(f.cc&&x.country!==f.cc)return false;
-  if(f.web&&!x.web)return false;if(f.hours&&!x.hours)return false;if(f.conf&&!(x.conf>=70||x.src.includes('o')))return false;return true}
+  if(f.type!=='all'&&!CW_CATS[f.type].test(x.category||''))return false;
+  if(f.kind==='chain'&&!x.chain)return false;if(f.kind==='indep'&&x.chain)return false;if(f.brand&&x.brand!==f.brand)return false;
+  if(f.cc&&x.country!==f.cc)return false;
+  if(f.open&&cwOpen(x.hours,x.lon,new Date())!==true)return false;
+  if(f.hours&&!x.hours)return false;if(f.web&&!x.web)return false;if(f.phone&&!x.phone)return false;
+  if(f.conf&&!(x.conf>=70||x.src.includes('o')))return false;return true}
 function cwApply(){CW.vis=[...CW.list.values()].filter(x=>cwPass(x,CW.f));try{localStorage.setItem('whg.cwF',JSON.stringify(CW.f))}catch(e){}cwCounts();draw();m3dSync()}
 const cwAdd=x=>{x.v=vec(x.lon,x.lat);x.addr=[x.street,x.city,x.country].filter(Boolean).join(', ');x.chain=!!x.brand||CW_CHAIN.test(x.name);CW.list.set(x.id,x)};
 const cwCountry=c=>{try{return new Intl.DisplayNames(['en'],{type:'region'}).of(c)||c}catch(e){return c}};
@@ -1860,20 +1872,30 @@ function cwCounts(){const u=document.getElementById('cwupd');if(u&&CW.updated)u.
   const b=document.getElementById('cwfb');if(b)b.classList.toggle('on',cwActive());const s=document.getElementById('cwshow');if(s)s.textContent=CW.vis.length?`Show ${CW.vis.length}`:'None match'}
 function cwToggle(open){let el=document.getElementById('cwf');
   if(!el){el=document.createElement('aside');el.className='clf glass cwf';el.id='cwf';el.hidden=true;el.setAttribute('aria-label','Coworking filters');
+    const ck=(id,label)=>`<label class="clchk"><input type="checkbox" id="${id}"> ${label}</label>`;
     el.innerHTML=`<div class="clfh"><b>Filter coworking results</b><button class="x" id="cwfx" aria-label="Close filters">×</button></div>
       <input id="cwq" class="flin" type="search" placeholder="Search name or address" autocomplete="off">
-      <div class="clg"><span class="cll">Kind</span><div class="clchips" role="group" aria-label="Kind of space">${[['all','All'],['indep','Independent'],['chain','Chains (Regus, WeWork…)']].map(([v,l])=>`<button type="button" class="clchip" data-cwk="${v}">${l}</button>`).join('')}</div></div>
+      <div class="clg"><span class="cll">Type</span><div class="clchips" role="group" aria-label="Type of place">${[['all','All'],['coworking','Coworking'],['office','Office services']].map(([v,l])=>`<button type="button" class="clchip" data-cwt="${v}">${l}</button>`).join('')}</div></div>
+      <div class="clg"><span class="cll">Operator</span><div class="clchips" role="group" aria-label="Kind of operator">${[['all','All'],['indep','Independent'],['chain','Chains']].map(([v,l])=>`<button type="button" class="clchip" data-cwk="${v}">${l}</button>`).join('')}</div>
+        <select id="cwbrand" class="flin" aria-label="Network or brand"></select></div>
+      <div class="clg"><span class="cll">Opening</span>${ck('cwopen','Open now (local time)')}${ck('cwhrs','Opening hours listed')}</div>
+      <div class="clg"><span class="cll">Contact</span>${ck('cwweb','Has a website')}${ck('cwphone','Has a phone number')}</div>
+      <div class="clg"><span class="cll">Listing</span>${ck('cwconf','Well-established listings only')}</div>
       <div class="clg"><span class="cll">Country</span><select id="cwcc" class="flin" aria-label="Country"></select></div>
-      <div class="clg"><label class="clchk"><input type="checkbox" id="cwweb"> Has a website</label><label class="clchk"><input type="checkbox" id="cwhrs"> Opening hours listed</label>
-        <label class="clchk"><input type="checkbox" id="cwconf"> Well-established listings only</label></div>
       <div class="clfoot"><button type="button" class="flb2" id="cwreset">Reset</button><button type="button" class="primary" id="cwshow"></button></div>
-      <p class="clsmall">From <a href="https://overturemaps.org/" target="_blank" rel="noopener noreferrer">Overture Maps</a> and <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>, refreshed weekly. Closed places are left out. <span id="cwupd"></span></p>`;
-    document.body.appendChild(el);const $=id=>el.querySelector('#'+id),sync=()=>{$('cwq').value=CW.f.q;el.querySelectorAll('[data-cwk]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.cwk===CW.f.kind)));
+      <p class="clsmall">Price and facilities are not in the data yet. From <a href="https://overturemaps.org/" target="_blank" rel="noopener noreferrer">Overture Maps</a> and <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>, refreshed weekly. Closed places are left out. <span id="cwupd"></span></p>`;
+    document.body.appendChild(el);const $=id=>el.querySelector('#'+id);
+    const box={cwopen:'open',cwhrs:'hours',cwweb:'web',cwphone:'phone',cwconf:'conf'};
+    const sync=()=>{$('cwq').value=CW.f.q;el.querySelectorAll('[data-cwt]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.cwt===CW.f.type)));
+      el.querySelectorAll('[data-cwk]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.cwk===CW.f.kind)));
+      const brands={};for(const x of CW.list.values())if(x.brand)brands[x.brand]=(brands[x.brand]||0)+1;
+      $('cwbrand').innerHTML='<option value="">Any network</option>'+Object.entries(brands).sort((a,b)=>b[1]-a[1]).slice(0,30).map(([n,c])=>`<option value="${esc(n)}">${esc(n)} (${c})</option>`).join('');$('cwbrand').value=CW.f.brand;
       $('cwcc').innerHTML='<option value="">All countries</option>'+CW.ccs.map(([c,n])=>`<option value="${c}">${esc(cwCountry(c))} (${n})</option>`).join('');$('cwcc').value=CW.f.cc;
-      $('cwweb').checked=CW.f.web;$('cwhrs').checked=CW.f.hours;$('cwconf').checked=CW.f.conf;cwCounts()};el._sync=sync;
+      for(const id in box)$(id).checked=!!CW.f[box[id]];cwCounts()};el._sync=sync;
     $('cwfx').onclick=()=>cwToggle(false);$('cwshow').onclick=()=>cwToggle(false);$('cwreset').onclick=()=>{CW.f=Object.assign({},CWF_DEF);cwApply();sync()};
-    $('cwq').oninput=e=>{CW.f.q=e.target.value;cwApply()};$('cwcc').onchange=e=>{CW.f.cc=e.target.value;cwApply()};$('cwweb').onchange=e=>{CW.f.web=e.target.checked;cwApply()};$('cwhrs').onchange=e=>{CW.f.hours=e.target.checked;cwApply()};$('cwconf').onchange=e=>{CW.f.conf=e.target.checked;cwApply()};
-    el.addEventListener('click',e=>{const b=e.target.closest('[data-cwk]');if(b){CW.f.kind=b.dataset.cwk;cwApply();sync()}});
+    $('cwq').oninput=e=>{CW.f.q=e.target.value;cwApply()};$('cwcc').onchange=e=>{CW.f.cc=e.target.value;cwApply()};$('cwbrand').onchange=e=>{CW.f.brand=e.target.value;cwApply()};
+    for(const id in box)$(id).onchange=e=>{CW.f[box[id]]=e.target.checked;cwApply()};
+    el.addEventListener('click',e=>{const t=e.target.closest('[data-cwt]'),k=e.target.closest('[data-cwk]');if(t){CW.f.type=t.dataset.cwt;cwApply();sync()}if(k){CW.f.kind=k.dataset.cwk;cwApply();sync()}});
     el.addEventListener('keydown',e=>{if(e.key==='Escape')cwToggle(false)})}
   const show=open==null?el.hidden:open;el.hidden=!show;if(show){const c=document.getElementById('clf');if(c)c.hidden=true;el._sync();el.querySelector('#cwq').focus({preventScroll:true})}}
 

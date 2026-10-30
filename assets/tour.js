@@ -196,7 +196,6 @@ function restore(){if(!saved)return;
   if($('#info').classList.contains('show'))$('#infox').click();
   if(document.body.classList.contains('in3d'))$('#b3d').click()}
 
-function hidePill(){pill.hidden=true;try{localStorage.setItem('whg.tourHidden','1')}catch(e){}}
 function start(){if(active)return;active=true;saved=snapshot();
   document.body.classList.add('touring');veil.hidden=false;ring.hidden=false;card.hidden=false;glowEl.hidden=false;cursor.hidden=false;
   timer=setInterval(place,300);go(0)}
@@ -208,9 +207,7 @@ document.body.insertAdjacentHTML('beforeend','<div class="tveil" id="tveil" hidd
   '<svg class="tcursor" id="tcursor" viewBox="0 0 24 24" hidden aria-hidden="true"><path d="M4 2.5v17.2l4.6-4.4 3 6.7 3.2-1.4-3-6.6H19z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg>'+
   '<section class="tcard glass" id="tcard" role="dialog" aria-label="Guided tour" hidden></section>');
 veil=$('#tveil');ring=$('#tring');card=$('#tcard');glowEl=$('#tglow');cursor=$('#tcursor');pill=$('#tourpill');
-if(pill&&(()=>{try{return localStorage.getItem('whg.tourHidden')==='1'}catch(e){return false}})())pill.hidden=true;
 $('#tour').onclick=start;
-$('#tourx').onclick=hidePill;
 addEventListener('resize',place);
 // true while the current step is still acting things out
 window.whgTour={busy:()=>busy};
