@@ -8,9 +8,11 @@ const $=s=>document.querySelector(s);
 const shown=sel=>[...document.querySelectorAll(sel)].find(e=>{const r=e.getBoundingClientRect();return r.width>1&&r.height>1})||null;
 const CANCEL={};
 const PAD=10,GAP=18,EDGE=12;
+// sample photos for the tour, from Wikimedia Commons (CC BY-SA 4.0), used only when the live services have none nearby
+const SAMPLES=[['photo-1.jpg','Forte da Esquerda','FortSimplicio1.jpg',1900],['photo-2.jpg','Fort of Carvalha','FortofCarvalha1.jpg',2400],
+  ['photo-3.jpg','Forte da Retaguarda','ForteNovo1.jpg',2000],['photo-4.jpg','Fort of Alqueidão','FortAlqueid%C3%A3o4.jpg',2000]]
+  .map(([img,title,file,d],i)=>({key:'tour'+i,thumb:'assets/tour/'+img,full:'assets/tour/'+img,lat:38.72,lon:-9.14,d,src:'Wikimedia Commons',author:'',lic:'CC BY-SA 4.0',date:'',link:'https://commons.wikimedia.org/wiki/File:'+file,title}));
 const BARCELONA=[2.17,41.385],BERLIN=[13.405,52.52],MADRID=[-3.70,40.42];
-// the windows the card must not cover
-const WINDOWS=['#panel','#bandkey','#lyr','#favlist','#clf','#cwf','#info','#search','.tools','#tourpill','#bmmenu','.phbox','.phgp'];
 
 // the item of a list nearest to a point
 const nearest=(list,[lon,lat])=>list.reduce((best,p)=>{const d=(p.lon-lon)**2+(p.lat-lat)**2;return!best||d<best.d?{p,d}:best},null)?.p||null;
@@ -40,10 +42,13 @@ const STEPS=[
     text:'Click the heart to save a place. It appears on the map as a heart, and in your list.',
     enter:async c=>{await setLayer(c,'fav',true);await tap(c,'#favadd');c.glow=window.whg.favourites().at(-1);await c.sleep(1200)}},
   {title:'Photos nearby',target:'#phbtn',
-    text:'Click Photos nearby to see pictures taken close by. Click one to open the gallery, then use the arrows to move through them.',
+    text:'Click Photos nearby to see pictures taken close by. Click a picture to open the gallery, then use the arrows to move through them.',
     enter:async c=>{const f=window.whg.favourites().at(-1);if(f)await pointAt(c,f.lon,f.lat);await tap(c,'#phbtn');
-      await waitFor(c,()=>!!shown('#phg .pht'),25000);await c.sleep(600);
-      if(shown('#phg .pht')){await tap(c,'#phg .pht');await c.sleep(2800);await tap(c,'.phbox .phx, .phgp .phx, .phbox [aria-label="Close"]');await c.sleep(400)}}},
+      await waitFor(c,()=>!!shown('#phg .pht'),12000);
+      // the live services sometimes have nothing near a place, so the tour then shows its own credited sample photos
+      if(!shown('#phg .pht')){window.whg.setPhotos(SAMPLES);await waitFor(c,()=>!!shown('#phg .pht'),4000)}
+      await c.sleep(900);
+      if(shown('#phg .pht')){await tap(c,'#phg .pht');await c.sleep(2600);await tap(c,'.phbox .phnext');await c.sleep(2600);await tap(c,'.phbox .phx');await c.sleep(400)}}},
   {title:'Flights from here',target:'#fltog',
     text:'Choose a nearby airport and a date, and the route opens in Google Flights.',
     enter:async c=>{await tap(c,'#fltog');await c.sleep(2400);await tap(c,'#fltog');await c.sleep(300)}},
@@ -79,7 +84,7 @@ const STEPS=[
     enter:async c=>{await tap(c,'#wxbtn');await waitFor(c,()=>!!shown('#wxb .wxdays'),9000);await c.sleep(2600);await tap(c,'#wxbtn');await c.sleep(300)}},
   {title:'Day and night',target:'label:has([data-show="night"])',
     text:'Shades the night side of the Earth, with the city lights shining through. Zoomed out to the globe, the night moves round as the Earth turns.',
-    enter:async c=>{await setLayer(c,'night',true);await zoomOut(c);await spin(c,180,7000)}},
+    enter:async c=>{for(const k of['cams','cw','cl','weather'])await setLayer(c,k,false);await setLayer(c,'night',true);await zoomOut(c);await spin(c,180,7000)}},
   {title:'Base maps',target:'#bmbtn',
     text:'Switch between base maps. Here: satellite, then topographic, then back to the street map.',
     enter:async c=>{for(const id of['satellite','topo','street']){await switchBase(c,id)}}},
@@ -139,14 +144,11 @@ async function orbitCity(c,[lon,lat],halfway){const map=window.whg.map3d();if(!m
   try{map.easeTo({bearing:b0+300,duration:10000,easing:t=>t});await c.sleep(5000);if(halfway)await halfway();await c.sleep(5000)}
   catch(e){map.stop();throw e}}
 
-// The card goes beside its target, where it covers none of the other windows. If no spot is free it takes the one
-// that covers the least.
-function obstacles(){const out=[];for(const sel of WINDOWS){for(const e of document.querySelectorAll(sel)){
-    if(e.id==='info'&&!e.classList.contains('show'))continue;if(e.hidden)continue;const r=e.getBoundingClientRect();
-    if(r.width>1&&r.height>1)out.push(r)}}return out}
-const overlap=(a,b)=>Math.max(0,Math.min(a.right,b.right)-Math.max(a.left,b.left))*Math.max(0,Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top));
-function place(){if(!active)return;const W=innerWidth,H=innerHeight,tEl=STEPS[idx].target&&shown(STEPS[idx].target),r=tEl?tEl.getBoundingClientRect():null;
-  const hole=r?[Math.max(0,r.left-PAD),Math.max(0,r.top-PAD),Math.min(W,r.right+PAD),Math.min(H,r.bottom+PAD)]:[W/2,H/2,W/2,H/2];
+// The card stays in one place for the whole tour: the open space between the left-hand column and the right-hand
+// card, at the bottom. On a narrow screen it is centred at the bottom.
+function place(){if(!active)return;const W=innerWidth,H=innerHeight,root=getComputedStyle(document.documentElement),px=v=>parseFloat(root.getPropertyValue(v))||0;
+  const col=px('--col')||280,colr=px('--colr')||300,cw=card.offsetWidth,ch=card.offsetHeight;
+  const r=shown(STEPS[idx].target)?.getBoundingClientRect(),hole=r?[Math.max(0,r.left-PAD),Math.max(0,r.top-PAD),Math.min(W,r.right+PAD),Math.min(H,r.bottom+PAD)]:[W/2,H/2,W/2,H/2];
   const[x1,y1,x2,y2]=hole;
   veil.style.clipPath=`polygon(evenodd,0px 0px,${W}px 0px,${W}px ${H}px,0px ${H}px,0px 0px,${x1}px ${y1}px,${x2}px ${y1}px,${x2}px ${y2}px,${x1}px ${y2}px,${x1}px ${y1}px)`;
   if(r){Object.assign(ring.style,{left:x1+'px',top:y1+'px',width:(x2-x1)+'px',height:(y2-y1)+'px'});ring.classList.add('on')}
@@ -155,18 +157,10 @@ function place(){if(!active)return;const W=innerWidth,H=innerHeight,tEl=STEPS[id
   const g=cur&&cur.glow,p=g&&window.whg.screen(g.lon,g.lat);
   if(p&&p.x>0&&p.y>0&&p.x<W&&p.y<H){glowEl.style.transform=`translate(${p.x-17}px,${p.y-17}px)`;glowEl.classList.add('on');glowEl.firstChild.textContent=g.label||'';glowEl.classList.toggle('lab',!!g.label)}
   else glowEl.classList.remove('on');
-  // the card
-  const cw=card.offsetWidth,ch=card.offsetHeight,obs=obstacles();
-  let cands;
-  if(W<640)cands=[[(W-cw)/2,H-ch-80]];
-  else{const cx=(W-cw)/2,cy=(H-ch)/2;
-    cands=r?[[r.right+GAP,r.top+r.height/2-ch/2],[r.left-GAP-cw,r.top+r.height/2-ch/2],[r.left+r.width/2-cw/2,r.bottom+GAP],[r.left+r.width/2-cw/2,r.top-GAP-ch]]:[];
-    cands.push([cx,H-ch-24],[cx,90],[cx,cy],[W-cw-EDGE,H-ch-24],[EDGE,90],[W-cw-EDGE,90])}
-  const inside=([l,t])=>[Math.min(Math.max(l,EDGE),W-cw-EDGE),Math.min(Math.max(t,EDGE),H-ch-EDGE)];
-  let best=null;
-  for(const cand of cands){const[l,t]=inside(cand);const box={left:l,top:t,right:l+cw,bottom:t+ch};
-    const cost=obs.reduce((s,o)=>s+overlap(box,o),0);if(!best||cost<best.cost)best={cost,l,t};if(cost===0)break}
-  card.style.left=best.l+'px';card.style.top=best.t+'px'}
+  let x,y;
+  if(W<1000){x=(W-cw)/2;y=H-ch-24}
+  else{const left=EDGE+col+28+col+GAP,right=W-EDGE-colr-GAP;x=(left+right)/2-cw/2;y=H-ch-24}
+  card.style.left=Math.max(EDGE,x)+'px';card.style.top=Math.max(EDGE,y)+'px'}
 
 function render(i){const s=STEPS[i],last=STEPS.length-1;
   card.innerHTML=`<p class="tstep">${i+1} of ${STEPS.length}</p><h3>${s.title}</h3><p>${s.text}</p>

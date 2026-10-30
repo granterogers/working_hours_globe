@@ -278,7 +278,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .phlinks a{color:var(--accent)}.phlinks em{font-style:normal}
 .pha,.phx,.phall{all:unset;cursor:pointer;color:var(--ink);display:grid;place-items:center;background:var(--glass);border:1px solid var(--glass-b);box-shadow:var(--shadow)}
 .pha{width:48px;height:48px;border-radius:50%;font-size:2rem;line-height:1;flex:none}
-.phx{position:absolute;top:16px;right:18px;width:40px;height:40px;border-radius:50%;font-size:1.5rem}
+.phx{position:absolute;top:16px;right:18px;width:40px;height:40px;border-radius:50%;font-size:1.5rem;z-index:5}
 .phall{position:absolute;top:16px;left:18px;height:38px;padding:0 14px;border-radius:999px;font-size:.84rem}
 .pha:hover,.phx:hover,.phall:hover{border-color:var(--accent)}
 .pha:focus-visible,.phx:focus-visible,.phall:focus-visible{outline:2px solid var(--accent)}
@@ -410,7 +410,7 @@ body.in3d .lyr{z-index:46}
 .phbox figcaption b{font-size:.72rem}
 .phbox figcaption span{color:var(--ink2)}
 /* the favourites list, from the gear in the Layers panel */
-#favlist{position:absolute;left:16px;top:auto;bottom:calc(var(--lyrh,0px) + 4px);height:auto;width:var(--col);max-height:50vh;overflow:auto;padding:12px;border-radius:16px;z-index:44}
+#favlist{position:absolute;left:16px;top:auto;bottom:calc(var(--lyrh,0px) + 14px);height:auto;width:var(--col);max-height:50vh;overflow:auto;padding:12px;border-radius:16px;z-index:44}
 #favlist .favs{max-height:none}
 /* the previous and next arrows sit over the sides of the full-screen photo */
 .phbox .pha{position:absolute;top:50%;bottom:auto;transform:translateY(-50%);width:48px;height:48px;z-index:3}

@@ -160,8 +160,9 @@ function draw(){
   // with them off, the base map shows in full at every zoom
   const hA=LAY.hours,tileA=hA*clamp((k-TILE_K)/4.5,0,1)+(1-hA),bA=1-tileA,raster=basemap!=='street';
   if(bA>0.02){ctx.globalAlpha=bA;ctx.lineJoin='round';strokeFC(CB,pal.coast1,k>4?9:6);strokeFC(CB,pal.coast2,k>4?3.5:2.5);ctx.globalAlpha=1}
-  fillBands(D.gaps);fillBands(TZ);
-  const shown=tileA>0&&drawTiles();if(shown){ctx.globalAlpha=tileA;ctx.drawImage(tcv,0,0,W,H);drawPoleCaps();ctx.globalAlpha=1}
+  // the working-hours colours are only painted while they can be seen; once the base map covers them they are skipped
+  const shown=tileA>0&&drawTiles();if(!(shown&&tileA>=0.99)){fillBands(D.gaps);fillBands(TZ)}
+  if(shown){ctx.globalAlpha=tileA;ctx.drawImage(tcv,0,0,W,H);drawPoleCaps();ctx.globalAlpha=1}
   if(shown)attrib.textContent=raster?BM().attr:VT_ATTR;attrib.classList.toggle('show',shown);
   // the colour key fades with the working-hours colours
   // the working-hours part of the key fades with the colours; the coliving part stays while colivings show
@@ -590,7 +591,7 @@ function showFav(f,focus){activeFav=f;selected=null;draft=null;
   document.getElementById('infob').innerHTML=`<input class="ftitle" id="fname" value="${esc(f.name)}" aria-label="Favourite name" maxlength="80">
     <p class="where"><span class="fh" aria-hidden="true">♥</span> ${esc(f.where?f.where+', ':'')}saved ${ds}</p><p class="coords">${coordStr(f)}</p>${hoursBlock(f.tz)}
     <label class="nl" for="fnote">Note</label><textarea id="fnote" rows="4" placeholder="Where to stay, who to contact, what to check…">${esc(f.note||'')}</textarea>
-    ${wxBlock()}${flightsBlock()}<p class="hint2">Drag the heart to move it.</p><div class="frow"><span class="saved" id="fsaved"></span><button class="ghost" id="fdel">Remove favourite</button></div>`;wireFlights([f.lon,f.lat]);wxLoad([f.lon,f.lat]);
+    ${wxBlock()}${photosBlock()}${flightsBlock()}<p class="hint2">Drag the heart to move it.</p><div class="frow"><span class="saved" id="fsaved"></span><button class="ghost" id="fdel">Remove favourite</button></div>`;wireFlights([f.lon,f.lat]);wxLoad([f.lon,f.lat]);photosLoad([f.lon,f.lat]);
   const nm=document.getElementById('fname'),nt=document.getElementById('fnote'),sv=document.getElementById('fsaved');
   const commit=()=>{clearTimeout(favTimer);favTimer=setTimeout(()=>{f.name=nm.value.trim()||'Saved place';f.note=nt.value;saveFavs();renderFavs();draw();sv.textContent='Saved';setTimeout(()=>sv.textContent='',1500)},400)};
   nm.oninput=commit;nt.oninput=commit;
@@ -958,6 +959,8 @@ window.whg={screen(lon,lat){if(document.body.classList.contains('in3d')&&m3d.map
   zoomBy:f=>zoomTo(kT*f),
   rotate:d=>{rot[0]+=d;kick()},
   basemap:()=>basemap,
+  // shows a list of photos in the nearby-photos panel, as if the search had found them (the tour uses this for its samples)
+  setPhotos:list=>{PH.tok++;PH.list=list.slice();PH.done=true;PH.failed=false;PH.radius=10000;PH.sig='';photosRender(true)},
   favourites:()=>favs.map(f=>({lon:f.lon,lat:f.lat,name:f.name})),
   coliving:()=>CL.vis.map(x=>({lon:x.lon,lat:x.lat})),
   cowork:()=>CW.vis.map(x=>({lon:x.lon,lat:x.lat})),
@@ -1303,7 +1306,7 @@ function clBuild(){const el=document.createElement('aside');el.className='clf gl
   const months=[...Array(12)].map((_,i)=>{const d=new Date();d.setDate(1);d.setMonth(d.getMonth()+i);return[d.toISOString().slice(0,7),d.toLocaleDateString('en-GB',{month:'long',year:'numeric'})]});
   const regions=[...new Set(CL.data.map(x=>x.rg).filter(Boolean))].sort();
   const pv=v=>`<option value="${v[0]}">${v[1]}</option>`;
-  el.innerHTML=`<div class="clfh"><b>Colivings</b><button class="x" id="clfx" aria-label="Close filters">×</button></div>
+  el.innerHTML=`<div class="clfh"><b>Filter co-living results</b><button class="x" id="clfx" aria-label="Close filters">×</button></div>
     <input id="clq" class="flin" type="search" placeholder="Search name, town or country" autocomplete="off">
     <div class="clg"><span class="cll">Type</span><div class="clchips">${['p','u','f'].map(t=>chip('types',t,CLT[t].short,CLT[t].col)).join('')}</div></div>
     <div class="clg"><span class="cll">Price per month <output id="clpv"></output></span>
@@ -1395,7 +1398,8 @@ function phBox(lat,lon,m){const dl=m/111320,dn=m/(111320*Math.max(0.2,Math.cos(l
 // --- sources: each returns [{key,thumb,full,lat,lon,src,author,lic,date,link,title}] ---
 async function phCommons(lat,lon,r){const rad=Math.min(r,10000);
   const u=`https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=geosearch&ggscoord=${lat}|${lon}&ggsradius=${rad}&ggsnamespace=6&ggslimit=24&prop=imageinfo|coordinates&iiprop=url|extmetadata|size|mime&iiurlwidth=400&iiextmetadatafilter=Artist|LicenseShortName|DateTimeOriginal|ObjectName|Categories|ImageDescription`;
-  const j=await phPJ(u);return Object.values((j.query||{}).pages||{}).map(p=>{const ii=(p.imageinfo||[])[0],c=(p.coordinates||[])[0];if(!ii||!c||!/^image\/(jpeg|png|webp)/.test(ii.mime||''))return null;const m=ii.extmetadata||{};
+  // Commons limits how often one visitor can ask, so a 429 is retried once after a pause
+  const j=await phPJ(u).catch(e=>{if(!/429/.test(e.message))throw e;return new Promise(res=>setTimeout(res,2000)).then(()=>phPJ(u))});return Object.values((j.query||{}).pages||{}).map(p=>{const ii=(p.imageinfo||[])[0],c=(p.coordinates||[])[0];if(!ii||!c||!/^image\/(jpeg|png|webp)/.test(ii.mime||''))return null;const m=ii.extmetadata||{};
     if(ii.width&&ii.width<500)return null;const off=PH_NATURE.test(phFile(p.title))||phOff(phAbout(phFile(p.title),m));
     return{off,key:'c:'+phFile(p.title),thumb:ii.thumburl||ii.url,full:ii.width>1600?(ii.thumburl||'').replace(/\/\d+px-/,'/1600px-'):ii.url,lat:c.lat,lon:c.lon,src:'Wikimedia Commons',
       author:phStrip(m.Artist&&m.Artist.value),lic:phStrip(m.LicenseShortName&&m.LicenseShortName.value),date:phStrip(m.DateTimeOriginal&&m.DateTimeOriginal.value).slice(0,10),link:ii.descriptionurl,title:phStrip(m.ObjectName&&m.ObjectName.value)||phFile(p.title).replace(/\.\w+$/,'')}}).filter(Boolean)}
@@ -1430,7 +1434,7 @@ async function phOverpass(lat,lon,r){const rad=Math.min(r,2000);
     const im=t.image;if(im&&/^https:\/\/.+\.(jpe?g|png|webp)(\?.*)?$/i.test(im))out.push({key:'u:'+im,thumb:im,full:im,lat:la,lon:lo,src:'OpenStreetMap',author:'',lic:'See source',date:'',link,title:name});
     else if(im&&/^File:/i.test(im)){const f=phFile(im);out.push({key:'c:'+f,file:f,thumb:phFilePath(f,400),full:phFilePath(f,1600),lat:la,lon:lo,src:'OpenStreetMap',author:'',lic:'',date:'',link,title:name})}}
   return out}
-async function phMapillary(lat,lon,r){let tok='';try{tok=localStorage.getItem('whg.mapillary')||''}catch(e){}if(!tok)return[];
+async function phMapillary(lat,lon,r){let tok='';try{tok=localStorage.getItem('whg.mapillary')||''}catch(e){}if(!tok)throw new Error('no Mapillary token');
   // one small box (the API is slow on big ones); 360° panoramas are skipped since their thumbnails are mostly sky
   const b=phBox(lat,lon,Math.min(r,1000)).map(v=>v.toFixed(5)).join(',');
   const j=await phPJ(`https://graph.mapillary.com/images?fields=id,is_pano,thumb_256_url,thumb_1024_url,captured_at,geometry,creator&bbox=${b}&limit=50`,{headers:{Authorization:'OAuth '+tok}});
@@ -1472,19 +1476,22 @@ function phRank(seen){
   const all=[...seen.values()].filter(p=>!p.off&&!(own(p)&&at[spot(p)]>=3)).sort((a,b)=>a.d-b.d),kept=[],street=[];
   for(const p of all){if(PH_STREET.has(p.src)){if(street.some(q=>phDist(p.lat,p.lon,q.lat,q.lon)<60))continue;street.push(p)}kept.push(p)}
   return kept.sort((a,b)=>a.d*(PH_STREET.has(a.src)?2:1)-b.d*(PH_STREET.has(b.src)?2:1))}
-async function phSearch(lat,lon,onUpdate){const seen=new Map();let radius=0;
+async function phSearch(lat,lon,onUpdate){const seen=new Map();let radius=0,answered=0;
   const add=(got,r)=>{for(const p of got){const k=p.key.toLowerCase();const d=phDist(lat,lon,p.lat,p.lon);if(d>r*1.05)continue;
     const prev=seen.get(k);if(!prev||(prev.src==='Wikidata'||prev.src==='OpenStreetMap')&&p.src==='Wikimedia Commons')seen.set(k,Object.assign({},p,{d}))}};
-  for(const r of PH_RADII){radius=r;const key=lat.toFixed(4)+','+lon.toFixed(4)+','+r;
+  for(const r of PH_RADII){radius=r;const key='v2 '+lat.toFixed(4)+','+lon.toFixed(4)+','+r;
     let got=PH.cache.get(key)||await phIdbGet(key);
-    if(got){PH.cache.set(key,got);add(got,r)}else{got=[];
-      await Promise.allSettled(PH_SOURCES.map(f=>phTimeout(f(lat,lon,r),PH_WAIT).then(v=>{got.push(...v);add(v,r);if(onUpdate(phRank(seen),r,false)===false)throw 0})));
+    if(got){answered++;PH.cache.set(key,got);add(got,r)}else{got=[];let ok=0;
+      await Promise.allSettled(PH_SOURCES.map(f=>phTimeout(f(lat,lon,r),PH_WAIT).then(v=>{ok++;got.push(...v);add(v,r);if(onUpdate(phRank(seen),r,false)===false)throw 0})));
       // OpenStreetMap's photo query is the slowest, so it only runs when the quick sources come up short
-      if(phRank(seen).length<PH_WANT)await phTimeout(phOverpass(lat,lon,r),PH_WAIT).then(v=>{got.push(...v);add(v,r)}).catch(()=>{});
-      // a search cut short by a newer one keeps nothing, so a partial list is never saved
-      if(!PH.ac.signal.aborted){PH.cache.set(key,got);phIdbSet(key,got);if(PH.cache.size>60)PH.cache.delete(PH.cache.keys().next().value)}}
+      if(phRank(seen).length<PH_WANT)await phTimeout(phOverpass(lat,lon,r),PH_WAIT).then(v=>{ok++;got.push(...v);add(v,r)}).catch(()=>{});
+      answered+=ok;
+      // a search cut short by a newer one keeps nothing, and a search where no source answered is not saved at all,
+      // so a rate limit or a dropped connection never becomes "no photos" for a week
+      if(!PH.ac.signal.aborted&&ok){PH.cache.set(key,got);phIdbSet(key,got);if(PH.cache.size>60)PH.cache.delete(PH.cache.keys().next().value)}}
     if(onUpdate(phRank(seen),r,false)===false)return;
     if(phRank(seen).length>=PH_WANT)break;}
+  PH.failed=!answered&&!seen.size;
   const list=phRank(seen);onUpdate(list,radius,true);
   // files found through Wikidata or OpenStreetMap get their categories checked too, then the list is re-ranked
   await phFillCommons(list);if(list.some(p=>p.off))onUpdate(phRank(seen),radius,true)}
@@ -1492,15 +1499,16 @@ async function phSearch(lat,lon,onUpdate){const seen=new Map();let radius=0;
 // --- card section ---
 // The search starts as soon as the card opens; the thumbnails only show once the Photos button is pressed.
 const photosBlock=()=>`<div class="phs" id="phs"><button type="button" class="phbtn" id="phbtn" aria-expanded="false" aria-controls="phg"><span>Photos nearby</span><small id="phst">Searching…</small><i class="phchev" aria-hidden="true">›</i></button><div class="phg" id="phg" hidden></div></div>`;
-function photosLoad(ll){if(!ll)return;const tok=++PH.tok;if(PH.ac)PH.ac.abort();PH.ac=new AbortController();PH.list=[];PH.done=false;PH.radius=0;PH.sig='';
+function photosLoad(ll){if(!ll)return;const tok=++PH.tok;if(PH.ac)PH.ac.abort();PH.ac=new AbortController();PH.list=[];PH.done=false;PH.failed=false;PH.radius=0;PH.sig='';PH.ll=ll;
   const btn=document.getElementById('phbtn');if(btn)btn.onclick=()=>{const g=document.getElementById('phg');const open=g.hidden;g.hidden=!open;btn.setAttribute('aria-expanded',open);if(open)photosRender(true)};
   phSearch(ll[1],ll[0],(list,r,done)=>{if(tok!==PH.tok||!document.getElementById('phg'))return false;PH.list=list;PH.radius=r;PH.done=done;photosRender()})}
 function photosRender(force){const st=document.getElementById('phst'),g=document.getElementById('phg'),btn=document.getElementById('phbtn');if(!st||!g)return;
   const n=PH.list.length;
-  st.textContent=PH.done?(n?`${n} within ${phFmtD(PH.radius)}`:`none within ${phFmtD(PH.radius)}`):n?`${n} so far…`:'Searching…';
+  st.textContent=PH.done?(n?`${n} within ${phFmtD(PH.radius)}`:PH.failed?'not reached':`none within ${phFmtD(PH.radius)}`):n?`${n} so far…`:'Searching…';
   btn.classList.toggle('empty',PH.done&&!n);
   if(g.hidden)return;
-  if(!n){PH.sig='';g.innerHTML=PH.done?`<p class="clsmall">No photos found within ${phFmtD(PH.radius)}.</p>`:Array(6).fill('<span class="phsk"></span>').join('');return}
+  if(!n){PH.sig='';g.innerHTML=PH.done?(PH.failed?'<p class="clsmall">The photo services didn’t answer. Try again in a moment.</p><button type="button" class="add" id="phretry">Try again</button>':`<p class="clsmall">No photos found within ${phFmtD(PH.radius)}.</p>`):Array(6).fill('<span class="phsk"></span>').join('');
+    const rt=g.querySelector('#phretry');if(rt)rt.onclick=()=>photosLoad(PH.ll);return}
   const shown=PH.list.slice(0,PH_SHOW),more=n>PH_SHOW,sig=shown.map(p=>p.key).join('|')+'#'+(more?n:0);
   if(sig===PH.sig&&!force)return;PH.sig=sig;
   g.innerHTML=shown.map((p,i)=>{const m=i===PH_SHOW-1&&more;
@@ -1838,7 +1846,7 @@ function cwCounts(){const u=document.getElementById('cwupd');if(u&&CW.updated)u.
   const b=document.getElementById('cwfb');if(b)b.classList.toggle('on',cwActive());const s=document.getElementById('cwshow');if(s)s.textContent=CW.vis.length?`Show ${CW.vis.length}`:'None match'}
 function cwToggle(open){let el=document.getElementById('cwf');
   if(!el){el=document.createElement('aside');el.className='clf glass cwf';el.id='cwf';el.hidden=true;el.setAttribute('aria-label','Coworking filters');
-    el.innerHTML=`<div class="clfh"><b>Coworking spaces</b><button class="x" id="cwfx" aria-label="Close filters">×</button></div>
+    el.innerHTML=`<div class="clfh"><b>Filter coworking results</b><button class="x" id="cwfx" aria-label="Close filters">×</button></div>
       <input id="cwq" class="flin" type="search" placeholder="Search name or address" autocomplete="off">
       <div class="clg"><span class="cll">Kind</span><div class="clchips" role="group" aria-label="Kind of space">${[['all','All'],['indep','Independent'],['chain','Chains (Regus, WeWork…)']].map(([v,l])=>`<button type="button" class="clchip" data-cwk="${v}">${l}</button>`).join('')}</div></div>
       <div class="clg"><span class="cll">Country</span><select id="cwcc" class="flin" aria-label="Country"></select></div>
