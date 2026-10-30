@@ -1067,7 +1067,8 @@ function m3dGeo(){
   const pc=POLE[basemap]||POLE.street,pole={type:'FeatureCollection',features:[[85,90,pc[1]],[-90,-85,pc[0]]].map(([a,b,c])=>({type:'Feature',properties:{c},geometry:{type:'Polygon',coordinates:[[[-180,a],[180,a],[180,b],[-180,b],[-180,a]]]}}))};
   return{tz,lab,cl,fv,ov,wx,cm,cwk,night:nightFeaturesGeo(),pole}}
 // the night tiers: each is the sun below an angle of the horizon, with a small share of the darkness
-const NIGHT_TIERS=(()=>{const t=[];for(let e=0;e<=18;e+=1.5)t.push([e,0.4/13]);return t})();
+// the twilight is 37 thin bands half a degree apart rather than a few wide ones, so the day-night edge fades rather than steps
+const NIGHT_TIERS=(()=>{const t=[];for(let i=0;i<=36;i++)t.push([i*0.5,0.4/37]);return t})();
 // 3D night side: the boundary of the night (sun below the horizon) and of the twilight (sun below 9°), traced one
 // longitude at a time, so each piece is a simple shape that never wraps a pole. (A single polygon around the point
 // opposite the sun drew wedges across the map.) Cached for a minute.
