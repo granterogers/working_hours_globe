@@ -959,6 +959,8 @@ window.whg={screen(lon,lat){if(document.body.classList.contains('in3d')&&m3d.map
   rotate:d=>{rot[0]+=d;kick()},
   basemap:()=>basemap,
   // shows a list of photos in the nearby-photos panel, as if the search had found them (the tour uses this for its samples)
+  // selects a place as a search result does, flying to the given centre (the tour uses it to reach cities)
+  select:m=>pick(m),
   setPhotos:list=>{PH.tok++;PH.list=list.slice();PH.done=true;PH.failed=false;PH.radius=10000;PH.sig='';photosRender(true)},
   favourites:()=>favs.map(f=>({lon:f.lon,lat:f.lat,name:f.name})),
   coliving:()=>CL.vis.map(x=>({lon:x.lon,lat:x.lat})),
@@ -988,7 +990,8 @@ function m3dExtras(map){
   try{map.setSky({'sky-color':'#6aa6f0','horizon-color':'#bcd6f5','fog-color':'#bcd6f5','sky-horizon-blend':0.6,'horizon-fog-blend':0.15,'fog-ground-blend':1,'atmosphere-blend':['interpolate',['linear'],['zoom'],0,1,8,0.6,11,0]})}catch(e){}
   // street style: every name label in English where OpenStreetMap has one (road numbers and house numbers left alone)
   if(basemap==='street')for(const l of map.getStyle().layers)if(l.type==='symbol'&&l.layout&&/"name|\{name/.test(JSON.stringify(l.layout['text-field']||'')))try{map.setLayoutProperty(l.id,'text-field',NAME_EN)}catch(e){}}
-function m3dStyle(){const map=m3d.map;if(map)map.setStyle(m3dStyleDef(),{diff:false})}
+// a new base map replaces the style, which MapLibre can't do while the camera is still moving: the camera stops first
+function m3dStyle(){const map=m3d.map;if(map){map.stop();map.setStyle(m3dStyleDef(),{diff:false})}}
 // 2D zoom k <-> MapLibre zoom: same on-screen scale at the centre of the view
 const k2z=(kk,lat)=>clamp(Math.log2(2*Math.PI*base*kk*Math.cos(lat*RAD)/512),0,20);
 const z2k=(z,lat)=>clamp(512*2**z/(2*Math.PI*base*Math.cos(lat*RAD)),MINK,MAXK);
@@ -1174,7 +1177,7 @@ function renderRes(){res.innerHTML='';if(!q.value.trim()){res.classList.remove('
   matches.forEach((m,i)=>{const li=document.createElement('li'),b=document.createElement('button');b.className=i===hl?'hl':'';
     b.innerHTML=`${esc(m.n)}<small>${esc(m.sub)}</small>`;b.onclick=()=>pick(m);li.appendChild(b);res.appendChild(li)});res.classList.add('show');}
 // a chosen place is pinned as well as selected: its card opens and the pin marks it on the map
-function pick(m){flyTo(m.lon,m.lat,m.size);closeSearch();setTimeout(()=>{showInfo(m.n,m.sub==='Country'?'':m.sub,m.tz,[m.lon,m.lat]);clickPin=[m.lon,m.lat];draw()},400)}
+function pick(m){flyTo(m.lon,m.lat,m.size,undefined,m.minDeg);closeSearch();setTimeout(()=>{showInfo(m.n,m.sub==='Country'?'':m.sub,m.tz,[m.lon,m.lat]);clickPin=[m.lon,m.lat];draw()},400)}
 q.addEventListener('input',()=>{const v=q.value.trim().toLowerCase();hl=0;
   matches=v.length<2?[]:index.filter(i=>i.n.toLowerCase().includes(v)).sort((a,b)=>(a.n.toLowerCase().startsWith(v)?0:1)-(b.n.toLowerCase().startsWith(v)?0:1)||b.size-a.size).slice(0,8);
   if(v.length<2){res.classList.remove('show');return}renderRes();});

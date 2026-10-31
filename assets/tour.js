@@ -13,6 +13,12 @@ const SAMPLES=[['photo-1.jpg','Forte da Esquerda','FortSimplicio1.jpg',1900],['p
   ['photo-3.jpg','Forte da Retaguarda','ForteNovo1.jpg',2000],['photo-4.jpg','Fort of Alqueidão','FortAlqueid%C3%A3o4.jpg',2000]]
   .map(([img,title,file,d],i)=>({key:'tour'+i,thumb:'assets/tour/'+img,full:'assets/tour/'+img,lat:38.72,lon:-9.14,d,src:'Wikimedia Commons',author:'',lic:'CC BY-SA 4.0',date:'',link:'https://commons.wikimedia.org/wiki/File:'+file,title}));
 const BARCELONA=[2.17,41.385],BERLIN=[13.405,52.52],MADRID=[-3.70,40.42];
+// city centres for the cities the tour visits. The search finds regions, so after the region is chosen the tour flies
+// to the city. The time zone is one with the same UK offset (the data only has the zones of its countries).
+const CITIES={Lisbon:{n:'Lisbon',sub:'Portugal',lon:-9.1393,lat:38.7223,size:0.12,minDeg:0.05,tz:'Europe/London'},
+  Barcelona:{n:'Barcelona',sub:'Spain',lon:2.1686,lat:41.3874,size:0.12,minDeg:0.05,tz:'Europe/Paris'},
+  Berlin:{n:'Berlin',sub:'Germany',lon:13.405,lat:52.52,size:0.12,minDeg:0.05,tz:'Europe/Paris'},
+  Madrid:{n:'Madrid',sub:'Spain',lon:-3.7038,lat:40.4168,size:0.12,minDeg:0.05,tz:'Europe/Paris'}};
 
 // the item of a list nearest to a point
 const nearest=(list,[lon,lat])=>list.reduce((best,p)=>{const d=(p.lon-lon)**2+(p.lat-lat)**2;return!best||d<best.d?{p,d}:best},null)?.p||null;
@@ -113,7 +119,7 @@ function ctx(my){const c={my,glow:null};c.sleep=ms=>sleep(c,ms);return c}
 async function moveTo(c,x,y){cursor.classList.add('on');cursor.style.transform=`translate(${x-4}px,${y-3}px)`;await c.sleep(850)}
 function ripple(){cursor.classList.remove('tap');void cursor.offsetWidth;cursor.classList.add('tap')}
 // the element is found again at the moment of the click, because the Layers rows are redrawn as the map changes
-async function tap(c,sel){const el=shown(sel);if(!el)return false;const r=el.getBoundingClientRect();
+async function tap(c,sel){const el=shown(sel);if(!el){console.warn('Tour could not find:',sel);return false}const r=el.getBoundingClientRect();
   await moveTo(c,r.left+r.width/2,r.top+r.height/2);ripple();await c.sleep(260);(shown(sel)||el).click();await c.sleep(160);return true}
 // the cursor points at a place on the map (the map itself is not clicked)
 async function pointAt(c,lon,lat){const p=window.whg.screen(lon,lat);if(!p)return;await moveTo(c,p.x,p.y);ripple();await c.sleep(500)}
@@ -124,7 +130,7 @@ async function ensure2D(c){if(document.body.classList.contains('in3d')){await ta
 async function set3D(c,on){if(document.body.classList.contains('in3d')!==on){await tap(c,'#b3d');await waitFor(c,()=>document.body.classList.contains('in3d')===on,9000);
   if(on)await waitFor(c,()=>{const m=window.whg.map3d();return!!m&&m.isStyleLoaded()},30000);await c.sleep(1200)}}
 async function setHours(c,open){const h=$('#hoursset');if(!h||h.hidden===!open)return;await tap(c,'#hoursgear');await c.sleep(400)}
-async function setLayer(c,key,on){const cb=$(`[data-show="${key}"]`);if(!cb)return;if(cb.checked!==on)await tap(c,`label:has([data-show="${key}"])`);await c.sleep(900)}
+async function setLayer(c,key,on){const cb=$(`[data-show="${key}"]`);if(!cb){console.warn('Tour: no layer',key);return}if(cb.checked!==on)await tap(c,`label:has([data-show="${key}"])`);await c.sleep(900)}
 async function bmOpen(c,open){const m=$('#bmmenu');if(!m||m.hidden===!open)return;await tap(c,'#bmbtn');await c.sleep(500)}
 async function switchBase(c,id){await bmOpen(c,true);await tap(c,`#bmmenu [data-id="${id}"]`);await c.sleep(2400)}
 // the shift start time is changed through its input, one hour at a time, so the bands visibly move
@@ -133,7 +139,9 @@ async function setShift(c,times){const s=$('#s');if(!s)return;for(const t of tim
 async function searchPlace(c,text){await tap(c,'#q');const q=$('#q');q.value='';q.dispatchEvent(new Event('input'));
   for(const ch of text){q.value+=ch;q.dispatchEvent(new Event('input',{bubbles:true}));await c.sleep(110+Math.random()*80)}
   await c.sleep(800);await tap(c,'#res li button');await waitFor(c,()=>{const i=$('#info');return i&&i.classList.contains('show')},5000);
-  await c.sleep(1800);window.whg.zoomBy(1.7);await c.sleep(1100);window.whg.zoomBy(1.5);await c.sleep(1400)}
+  await c.sleep(1200);
+  // then to the city itself, which the region search doesn't reach
+  if(CITIES[text]){window.whg.select(CITIES[text]);await waitFor(c,()=>{const i=$('#info');return i&&i.classList.contains('show')},5000);await c.sleep(2400)}}
 // zoom out to the whole globe, gently
 async function zoomOut(c){window.whg.zoomTo(1);await c.sleep(1400)}
 // turn the globe a number of degrees over a number of milliseconds
@@ -144,7 +152,9 @@ async function spin(c,deg,ms){const t0=performance.now();let last=t0;
 async function orbitCity(c,[lon,lat],halfway){const map=window.whg.map3d();if(!map)return;
   map.easeTo({center:[lon,lat],zoom:14.6,pitch:62,bearing:0,duration:2000});await c.sleep(2100);
   const b0=map.getBearing();
-  try{map.easeTo({bearing:b0+300,duration:10000,easing:t=>t});await c.sleep(5000);if(halfway)await halfway();await c.sleep(5000)}
+  try{map.easeTo({bearing:b0+300,duration:10000,easing:t=>t});await c.sleep(5000);if(halfway)await halfway();
+    // a new base map stops the turn, so the second half carries on from where it stopped
+    await c.sleep(1500);map.easeTo({bearing:map.getBearing()+150,duration:5000,easing:t=>t});await c.sleep(5000)}
   catch(e){map.stop();throw e}}
 
 // The card stays in one place for the whole tour: the open space between the left-hand column and the right-hand
