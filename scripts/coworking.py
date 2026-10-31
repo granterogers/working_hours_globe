@@ -164,7 +164,7 @@ def merge(a, b):
         else:
             o = out[hit]
             for k in ('street', 'city', 'country', 'web', 'phone', 'brand', 'category', 'fee', 'wifi', 'wheel', 'aircon', 'capacity'):
-                o[k] = o[k] or r[k]
+                o[k] = o.get(k) or r.get(k, '')
             o['hours'] = r['hours'] or o['hours']
             o['src'] = 'vo'
     return out
@@ -173,7 +173,7 @@ def merge(a, b):
 def write(rows):
     rows.sort(key=lambda r: (r['country'], r['city'], r['name']))
     data = {'updated': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'fields': FIELDS,
-            'rows': [[r[k] for k in FIELDS] for r in rows]}
+            'rows': [[r.get(k, '') for k in FIELDS] for r in rows]}
     with open(OUT, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, separators=(',', ':'))
     print(len(rows), 'coworking places written to', os.path.relpath(OUT, ROOT))
