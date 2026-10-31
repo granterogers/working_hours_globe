@@ -38,7 +38,7 @@ Built for planning where to live and work as a remote worker on UK hours.
 - Rename any added layer (pencil button, or double-click its name) and switch layers on or off, including the built-in working-hours colours and times, for a plain globe with just your own layers.
 - A built-in **Colivings** layer with every listing from [colivingDB](https://colivingdb.com): shown as green dots (the card says whether it's permanent, a pop-up or a festival). Click a dot for prices, rating, rooms, minimum stay, dates, links and your hours there. The filter button next to the layer opens search, type, price per month, rooms, minimum stay, rating, region, the month a pop-up runs, interests and vibe; your filters are remembered. Finished editions are hidden automatically.
 - **Check for new colivings** (in the coliving filters) reports listings added since you last looked and lets you jump to each. A GitHub Action scans colivingDB every Monday, or whenever you run it from the Actions tab.
-- A small version number sits at the bottom of the page (`v1.39` in `index.html`). Its minor number goes up with every change.
+- A small version number sits at the bottom of the page (`v1.40` in `index.html`). Its minor number goes up with every change.
 - - **Night sky** (dark theme): the whole background is the sky above the centre of the globe, for the time now, from `data/sky.json`: about 5,000 stars (Yale Bright Star Catalogue via d3-celestial), with the planets marked as dots from low-precision orbits. It turns as you turn the globe.
 - Dark and light themes, full-screen mode, keyboard controls (arrow keys to spin, `+` and `-` to zoom), and a layout that works on mobile.
 
@@ -100,6 +100,7 @@ data/LICENSE-DATA.md    Data sources and licence
 scripts/build_data.py   Rebuilds globe-data.json from the source data
 scripts/requirements.txt
 tests/smoke.js         Browser smoke test (Playwright): coworking count, filter, 3D view
+tests/features.js      Feature checks (Playwright): opening hours, layout, tour button, coworking filters, photos and the gallery; run with BASE=… node tests/features.js
 ```
 
 ## How it works
