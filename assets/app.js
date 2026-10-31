@@ -1062,7 +1062,9 @@ function m3dGeo(){
   const cwk={type:'FeatureCollection',features:showCw?CW.vis.map(c=>({type:'Feature',properties:{id:c.id},geometry:{type:'Point',coordinates:[c.lon,c.lat]}})):[]};
   // the two polar caps, which the basemap's tiles stop short of, in the basemap's own colours
   const pc=POLE[basemap]||POLE.street,pole={type:'FeatureCollection',features:[[85,90,pc[1]],[-90,-85,pc[0]]].map(([a,b,c])=>({type:'Feature',properties:{c},geometry:{type:'Polygon',coordinates:[[[-180,a],[180,a],[180,b],[-180,b],[-180,a]]]}}))};
-  return{tz,lab,cl,fv,ov,wx,cm,cwk,night:nightFeaturesGeo(),pole}}
+  // the country borders, over the working-hours colours as on the 2D globe
+  const cb={type:'FeatureCollection',features:showHours?D.cbM.features:[]};
+  return{tz,cb,lab,cl,fv,ov,wx,cm,cwk,night:nightFeaturesGeo(),pole}}
 // the night tiers: each is the sun below an angle of the horizon, with a small share of the darkness
 // the twilight is 37 thin bands half a degree apart rather than a few wide ones, so the day-night edge fades rather than steps
 const NIGHT_TIERS=(()=>{const t=[];for(let i=0;i<=36;i++)t.push([i*0.5,0.4/37]);return t})();
@@ -1086,7 +1088,7 @@ setInterval(()=>{if(showNight&&m3d&&m3d.map&&!m3d.el.hidden)m3dSync()},60000);
 function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.getStyle())return}catch(e){return}
   try{g=m3dGeo()}catch(e){return}
   const src=(id,data)=>{const s=map.getSource(M3D_OWN+id);if(s)s.setData(data);else map.addSource(M3D_OWN+id,{type:'geojson',data})};
-  try{src('tz',g.tz);src('lab',g.lab);src('cl',g.cl);src('fv',g.fv);src('ov',g.ov);src('wx',g.wx);src('cm',g.cm);src('cwk',g.cwk);src('night',g.night);src('pole',g.pole)}catch(e){return}
+  try{src('tz',g.tz);src('cb',g.cb);src('lab',g.lab);src('cl',g.cl);src('fv',g.fv);src('ov',g.ov);src('wx',g.wx);src('cm',g.cm);src('cwk',g.cwk);src('night',g.night);src('pole',g.pole)}catch(e){return}
   const font=['Noto Sans Bold'],dk=BM().dark||false;
   const lay=(def,before)=>{if(!map.getLayer(def.id))map.addLayer(def,before)};
   // working-hours colours fade out as you zoom in, like on the globe
@@ -1097,6 +1099,9 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
     (map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
   map.setPaintProperty(M3D_OWN+'tz','fill-opacity',['interpolate',['linear'],['zoom'],zA,op,zB,0]);
   try{map.setLayerZoomRange(M3D_OWN+'tz',0,Math.min(24,zB+0.3))}catch(e){}
+  lay({id:M3D_OWN+'cb',type:'line',source:M3D_OWN+'cb',paint:{'line-color':pal.border,'line-width':0.7}},
+    (map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
+  map.setPaintProperty(M3D_OWN+'cb','line-opacity',['interpolate',['linear'],['zoom'],zA,1,zB,0]);
   lay({id:M3D_OWN+'night',type:'fill',source:M3D_OWN+'night',paint:{'fill-color':dk?'#02061a':'#080e28','fill-opacity':0}});
   // on and off is a change of opacity, which the map animates, rather than the shading appearing all at once
   map.setPaintProperty(M3D_OWN+'night','fill-opacity',['*',['get','a'],showNight?1:0,['interpolate',['linear'],['zoom'],zA,1,zB,0]]);
