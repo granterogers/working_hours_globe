@@ -57,26 +57,25 @@ const STEPS=[
       if(shown('#phg .pht')){await tap(c,'#phg .pht');await c.sleep(2600);await tap(c,'.phbox .phnext');await c.sleep(2600);await tap(c,'.phbox .phx');await c.sleep(400)}}},
   {title:'Flights from here',target:'#fltog',
     text:'Choose a nearby airport and a date, and the route opens in Google Flights.',
-    enter:async c=>{await tap(c,'#fltog');await c.sleep(2400);await tap(c,'#fltog');await c.sleep(300)}},
+    enter:async c=>{await tap(c,'#fltog');await c.sleep(3000)}},
   {title:'Your favourites list',target:'#favgear',
     text:'The gear icon opens your list. The × removes a favourite, so tidy up after yourself.',
     enter:async c=>{await tap(c,'#favgear');await waitFor(c,()=>!!shown('#favlist .favs .favx'),3000);await c.sleep(2200);
-      if(shown('#favlist .favs .favx')){await tap(c,'#favlist .favs li:last-child .favx');await c.sleep(1400)}
-      await tap(c,'#favlistx');await c.sleep(300)}},
+      if(shown('#favlist .favs .favx')){await tap(c,'#favlist .favs li:last-child .favx');await c.sleep(1400)}}},
   {title:'Co-living spaces',target:'label:has([data-show="cl"])',
     text:'Co-living spaces show as green dots. Each one opens to its details when you click it.',
     enter:async c=>{await searchPlace(c,'Barcelona');await setLayer(c,'cl',true);c.glow=nearest(window.whg.coliving(),BARCELONA);await c.sleep(1400)}},
   {title:'Filter co-living spaces',target:'#clf',
     text:'The funnel opens the filters, beside the Layers panel. Filter by type, price, rooms and rating. Here, pop-up stays are switched off and on again.',
     enter:async c=>{await tap(c,'#clfb');await waitFor(c,()=>!!shown('#clf'),3000);await c.sleep(600);
-      await tap(c,'#clf .clchip[data-v="u"]');await c.sleep(1800);await tap(c,'#clf .clchip[data-v="u"]');await c.sleep(3200);await tap(c,'#clfx');await c.sleep(300)}},
+      await tap(c,'#clf .clchip[data-v="u"]');await c.sleep(1800);await tap(c,'#clf .clchip[data-v="u"]');await c.sleep(3200)}},
   {title:'Coworking spaces',target:'label:has([data-show="cw"])',
     text:'Coworking spaces show as purple dots. They group together when you zoom out, and open up as you zoom in.',
     enter:async c=>{await searchPlace(c,'Berlin');await setLayer(c,'cw',true);c.glow=nearest(window.whg.cowork(),BERLIN);await c.sleep(1400)}},
   {title:'Filter coworking spaces',target:'#cwf',
     text:'Filter by type, operator, opening hours, facilities and more. Here, independent spaces only, then all of them again.',
     enter:async c=>{await tap(c,'#cwfb');await waitFor(c,()=>!!shown('#cwf'),3000);await c.sleep(600);
-      await tap(c,'#cwf [data-cwk="indep"]');await c.sleep(1800);await tap(c,'#cwf [data-cwk="all"]');await c.sleep(3200);await tap(c,'#cwfx');await c.sleep(300)}},
+      await tap(c,'#cwf [data-cwk="indep"]');await c.sleep(1800);await tap(c,'#cwf [data-cwk="all"]');await c.sleep(3200)}},
   {title:'Each layer’s settings',target:'#lyr',
     text:'The cog and the funnel beside a layer open its settings. Working hours, favourites, co-living and coworking have them. Webcams, current weather, day and night and place names simply switch on and off.',
     enter:async c=>{await setLayer(c,'hours',true);await c.sleep(1200)}},
@@ -185,7 +184,10 @@ function render(i){const s=STEPS[i],last=STEPS.length-1;
   card.querySelector('#tclose').onclick=end;
   card.querySelector('#tnext').focus({preventScroll:true})}
 
-async function go(i){const my=++gen;idx=i;cursor.classList.remove('on');render(i);
+// each step starts from a clean view: the popouts an earlier step opened are closed, so a step's own window is what shows
+function tidy(){for(const[sel,close]of[['#hoursset','#hoursx'],['#clf','#clfx'],['#cwf','#cwfx'],['#favlist','#favlistx'],['#bmmenu','#bmbtn']]){
+  const el=$(sel),b=$(close);if(el&&!el.hidden&&b)b.click()}}
+async function go(i){const my=++gen;idx=i;cursor.classList.remove('on');tidy();render(i);
   const c=cur=ctx(my);place();busy=true;
   try{if(STEPS[i].enter)await STEPS[i].enter(c)}
   catch(e){if(e!==CANCEL)console.warn('Tour step skipped:',e)}
