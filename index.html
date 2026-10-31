@@ -18,27 +18,21 @@
 <link rel="preconnect" href="https://api.openstreetcam.org" crossorigin>
 <link rel="preconnect" href="https://api.inaturalist.org" crossorigin>
 <link rel="preconnect" href="https://query.wikidata.org" crossorigin>
-<link rel="stylesheet" href="assets/style.css?v=202610311200">
+<link rel="stylesheet" href="assets/style.css?v=202610311302">
 
 </head>
 <body>
 <canvas id="stars" aria-hidden="true"></canvas>
 <canvas id="c" tabindex="0" aria-label="Globe of local working hours. Drag to spin, scroll to zoom, arrow keys to rotate, plus and minus to zoom."></canvas>
 
-<section class="panel glass collapsed" id="panel">
-  <button class="ph" id="ph" aria-expanded="false" aria-controls="pb">
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-    <span class="t"><b>Your working hours</b><span id="sum">12:00–20:00 UK, winter</span></span>
-    <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-  </button>
-  <div class="pb" id="pb"><div><div class="pin">
-    <div class="sec"><h3>Your shift in UK time</h3>
-      <div class="shift"><input type="time" id="s" value="12:00" aria-label="Start time, UK"><span>to</span><input type="time" id="e" value="20:00" aria-label="End time, UK"></div></div>
-    <div class="sec"><h3>Season</h3>
-      <div class="seg" role="group" aria-label="Season"><button id="w" aria-pressed="true">Winter</button><button id="su" aria-pressed="false">Summer</button></div>
-      <p class="note" id="snote"></p></div>
-  </div></div></div>
-</section>
+<aside class="clf glass hoursset" id="hoursset" hidden aria-label="Working hours settings">
+  <div class="clfh"><b>Working hours</b><button class="x" id="hoursx" aria-label="Close working hours settings">×</button></div>
+  <div class="sec"><h3>Your shift in UK time</h3>
+    <div class="shift"><input type="time" id="s" value="12:00" aria-label="Start time, UK"><span>to</span><input type="time" id="e" value="20:00" aria-label="End time, UK"></div></div>
+  <div class="sec"><h3>Season</h3>
+    <div class="seg" role="group" aria-label="Season"><button id="w" aria-pressed="true">Winter</button><button id="su" aria-pressed="false">Summer</button></div>
+    <p class="note" id="snote"></p></div>
+</aside>
 
 <input type="file" id="file" accept=".kml,.kmz,.geojson,.json" multiple hidden>
 <aside class="bandkey glass" id="bandkey" hidden aria-label="What the working-hours colours mean"><h4>Working hours</h4><ul id="bandlist"></ul></aside>
@@ -63,14 +57,14 @@
 <div class="ptoast glass" id="ptoast" hidden>Click the map to drop a pin <button id="pcancel">Cancel</button></div>
 <aside class="info glass" id="info" aria-live="polite"><button class="x" id="infox" aria-label="Close details">×</button><div id="infob"></div></aside>
 <div class="toast glass" id="toast">Drag to spin, scroll or pinch to zoom, click a place for details</div>
-<div class="ver" id="ver" aria-label="Version 1.43">v1.43</div>
+<div class="ver" id="ver" aria-label="Version 1.44">v1.44</div>
 
 <div class="tourpill glass" id="tourpill"><button type="button" id="tour">Start the tour</button></div>
 <div class="loading" id="loading" role="status">Loading the map…</div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="assets/app.js?v=202610311200"></script>
-<script src="assets/tour.js?v=202610311200"></script>
+<script src="assets/app.js?v=202610311302"></script>
+<script src="assets/tour.js?v=202610311302"></script>
 <script>
 // keep the page current: if the site has a newer version than this copy, load that one (checked on each visit to
 // the page and when you come back to its tab), so an ordinary refresh is enough

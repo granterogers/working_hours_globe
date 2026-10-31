@@ -26,12 +26,12 @@ const STEPS=[
   {title:'The globe',target:'#c',
     text:'Every country and time zone is coloured by when a working day falls in UK time. Drag to spin, scroll or pinch to zoom.',
     enter:c=>ensure2D(c)},
-  {title:'Your working hours',target:'#panel',
-    text:'Set your shift in UK time. Watch the colours move as the start time changes.',
-    enter:async c=>{await setPanel(c,true);await setShift(c,['12:00','11:00','10:00','09:00'])}},
+  {title:'Working hours settings',target:'#hoursset',
+    text:'The cog beside Working hours opens its settings. Set your shift in UK time and choose winter or summer; the colours move as you change them.',
+    enter:async c=>{await setHours(c,true);await setShift(c,['12:00','11:00','10:00','09:00'])}},
   {title:'What the colours mean',target:'#bandkey',
     text:'Each colour is a band of UK working hours. The key stays here while the working-hours layer is on.',
-    enter:async c=>{await setPanel(c,false);await setLayer(c,'hours',true)}},
+    enter:async c=>{await setHours(c,false);await setLayer(c,'hours',true)}},
   {title:'Search any place',target:'#search',
     text:'Search a country, state or island. The place is pinned and selected, its card opens, and the globe zooms in on it.',
     enter:c=>searchPlace(c,'Lisbon')},
@@ -61,16 +61,19 @@ const STEPS=[
     text:'Co-living spaces show as green dots. Each one opens to its details when you click it.',
     enter:async c=>{await searchPlace(c,'Barcelona');await setLayer(c,'cl',true);c.glow=nearest(window.whg.coliving(),BARCELONA);await c.sleep(1400)}},
   {title:'Filter co-living spaces',target:'#clf',
-    text:'The funnel opens the filters, beside the legend. Filter by type, price, rooms and rating. Here, pop-up stays are switched off and on again.',
+    text:'The funnel opens the filters, beside the Layers panel. Filter by type, price, rooms and rating. Here, pop-up stays are switched off and on again.',
     enter:async c=>{await tap(c,'#clfb');await waitFor(c,()=>!!shown('#clf'),3000);await c.sleep(600);
       await tap(c,'#clf .clchip[data-v="u"]');await c.sleep(1800);await tap(c,'#clf .clchip[data-v="u"]');await c.sleep(3200);await tap(c,'#clfx');await c.sleep(300)}},
   {title:'Coworking spaces',target:'label:has([data-show="cw"])',
     text:'Coworking spaces show as purple dots. They group together when you zoom out, and open up as you zoom in.',
     enter:async c=>{await searchPlace(c,'Berlin');await setLayer(c,'cw',true);c.glow=nearest(window.whg.cowork(),BERLIN);await c.sleep(1400)}},
   {title:'Filter coworking spaces',target:'#cwf',
-    text:'Filter by kind, website, opening hours and how established the listing is. Here, independent spaces only, then all of them again.',
+    text:'Filter by type, operator, opening hours, facilities and more. Here, independent spaces only, then all of them again.',
     enter:async c=>{await tap(c,'#cwfb');await waitFor(c,()=>!!shown('#cwf'),3000);await c.sleep(600);
       await tap(c,'#cwf [data-cwk="indep"]');await c.sleep(1800);await tap(c,'#cwf [data-cwk="all"]');await c.sleep(3200);await tap(c,'#cwfx');await c.sleep(300)}},
+  {title:'Each layer’s settings',target:'#lyr',
+    text:'The cog and the funnel beside a layer open its settings. Working hours, favourites, co-living and coworking have them. Webcams, current weather, day and night and place names simply switch on and off.',
+    enter:async c=>{await setLayer(c,'hours',true);await c.sleep(1200)}},
   {title:'Webcams',target:'label:has([data-show="cams"])',
     text:'Popular webcams in every country. Click a camera to watch its live view.',
     enter:async c=>{await setLayer(c,'cams',true);await c.sleep(1200)}},
@@ -120,7 +123,7 @@ async function ensure2D(c){if(document.body.classList.contains('in3d')){await ta
 // the 3D view is switched on before its map has loaded, so wait for the map's style too
 async function set3D(c,on){if(document.body.classList.contains('in3d')!==on){await tap(c,'#b3d');await waitFor(c,()=>document.body.classList.contains('in3d')===on,9000);
   if(on)await waitFor(c,()=>{const m=window.whg.map3d();return!!m&&m.isStyleLoaded()},30000);await c.sleep(1200)}}
-async function setPanel(c,open){const p=$('#panel');if(!p||p.classList.contains('collapsed')!==open)return;await tap(c,'#ph');await c.sleep(400)}
+async function setHours(c,open){const h=$('#hoursset');if(!h||h.hidden===!open)return;await tap(c,'#hoursgear');await c.sleep(400)}
 async function setLayer(c,key,on){const cb=$(`[data-show="${key}"]`);if(!cb)return;if(cb.checked!==on)await tap(c,`label:has([data-show="${key}"])`);await c.sleep(900)}
 async function bmOpen(c,open){const m=$('#bmmenu');if(!m||m.hidden===!open)return;await tap(c,'#bmbtn');await c.sleep(500)}
 async function switchBase(c,id){await bmOpen(c,true);await tap(c,`#bmmenu [data-id="${id}"]`);await c.sleep(2400)}
@@ -179,14 +182,14 @@ async function go(i){const my=++gen;idx=i;cursor.classList.remove('on');render(i
   if(my===gen){busy=false;cursor.classList.remove('on');place()}}
 
 function snapshot(){return{boxes:[...document.querySelectorAll('[data-show]')].map(c=>[c.dataset.show,c.checked]),
-  panel:$('#panel')?$('#panel').classList.contains('collapsed'):true,lyr:$('#lyr')?$('#lyr').classList.contains('folded'):false,
+  lyr:$('#lyr')?$('#lyr').classList.contains('folded'):false,
   start:$('#s')?$('#s').value:'',end:$('#e')?$('#e').value:'',basemap:window.whg.basemap()}}
 function restore(){if(!saved)return;
   for(const[k,on]of saved.boxes){const cb=$(`[data-show="${k}"]`);if(cb&&cb.checked!==on)cb.closest('label').click()}
   const s=$('#s'),e=$('#e');
   if(s&&saved.start&&s.value!==saved.start){s.value=saved.start;s.dispatchEvent(new Event('input',{bubbles:true}))}
   if(e&&saved.end&&e.value!==saved.end){e.value=saved.end;e.dispatchEvent(new Event('input',{bubbles:true}))}
-  const p=$('#panel');if(p&&p.classList.contains('collapsed')!==saved.panel)$('#ph').click();
+  if($('#hoursset')&&!$('#hoursset').hidden)$('#hoursx').click();
   const l=$('#lyr');if(l&&l.classList.contains('folded')!==saved.lyr)$('#lyrh').click();
   if(!$('#bmmenu').hidden)$('#bmbtn').click();
   if(window.whg.basemap()!==saved.basemap){$('#bmbtn').click();$(`#bmmenu [data-id="${saved.basemap}"]`)?.click();if(!$('#bmmenu').hidden)$('#bmbtn').click()}

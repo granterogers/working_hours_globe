@@ -23,20 +23,6 @@ button{font:inherit;color:inherit}
 button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 /* control panel */
-.panel{position:absolute;left:16px;top:16px;width:var(--col);max-width:calc(100% - 32px);border-radius:16px;overflow:hidden;transition:width .35s cubic-bezier(.2,.8,.2,1)}
-.panel.collapsed{width:var(--col)}
-.panel:not(.collapsed){max-height:calc(100% - 32px - var(--lyrh,0px));overflow-y:auto}
-.ph{all:unset;display:flex;align-items:center;gap:12px;padding:12px 16px 12px 14px;cursor:pointer;width:100%;box-sizing:border-box}
-.ph svg{flex:none}
-.ph .t{display:flex;flex-direction:column;line-height:1.15}
-.ph .t b{font-family:var(--serif);font-weight:600;font-size:1.05rem;letter-spacing:.005em}
-.ph .t span{font-size:.82rem;color:var(--ink2);font-variant-numeric:tabular-nums}
-.ph .chev{margin-left:auto;transition:transform .3s}
-.panel:not(.collapsed) .chev{transform:rotate(180deg)}
-.pb{display:grid;grid-template-rows:1fr;transition:grid-template-rows .35s cubic-bezier(.2,.8,.2,1)}
-.panel.collapsed .pb{grid-template-rows:0fr}
-.pb>div{overflow:hidden}
-.pin{padding:2px 16px 16px}
 .sec{margin-top:14px}
 .sec h3{font-family:var(--serif);font-weight:500;font-size:.92rem;margin:0 0 8px;color:var(--ink2)}
 .shift{display:flex;align-items:center;gap:8px}
@@ -106,8 +92,6 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .ver{position:fixed;left:50%;bottom:3px;transform:translateX(-50%);font-size:10px;letter-spacing:.04em;color:var(--ink2);opacity:.45;pointer-events:none;z-index:1}
 
 @media (max-width:700px){
-  .panel,.panel.collapsed{left:12px;top:12px;width:calc(100% - 128px);max-height:calc(100% - 120px);overflow:auto}
-  .ph .t span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .tools{right:12px;top:12px}
   .search{top:12px;width:calc(100vw - 170px);min-width:0}
   .strip{left:12px;right:68px;transform:none;flex-wrap:wrap;justify-content:center;border-radius:16px;max-width:none;bottom:12px}
@@ -191,7 +175,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .layers .clfb{opacity:.85;border-radius:7px;padding:4px 5px;position:relative}
 .layers .clfb.on{color:var(--accent);opacity:1}
 .layers .clfb.on::after{content:"";position:absolute;top:1px;right:1px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
-.clf{position:absolute;left:calc(var(--col) + 28px);bottom:16px;width:var(--col);max-height:calc(100% - 32px);overflow:auto;border-radius:16px;padding:14px 16px 16px;z-index:45;font-size:.88rem}
+.clf{position:absolute;left:calc(var(--col) + 28px);top:16px;width:var(--col);max-height:calc(100% - 32px);overflow:auto;border-radius:16px;padding:14px 16px 16px;z-index:47;font-size:.88rem}
 .clf[hidden]{display:none}
 .clfh{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .clfh b{font-family:var(--serif);font-weight:600;font-size:1.1rem}
@@ -318,7 +302,7 @@ body.in3d .tools{z-index:46}
 .bmtick{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:10px;cursor:pointer;font-size:.86rem;font-weight:600}
 .bmtick:hover{background:var(--field)}
 .bmtick input{accent-color:var(--accent);width:15px;height:15px;margin:0}
-.bmtick span{flex:1}
+.bmtick span{flex:1;white-space:nowrap}
 .bmtick .clcnt{color:var(--ink2);font-size:.74rem;font-weight:400;font-variant-numeric:tabular-nums}
 .bmtick .clfb{all:unset;cursor:pointer;color:var(--ink2);padding:3px 4px;border-radius:7px;display:flex;position:relative}
 .bmtick .clfb:hover,.bmtick .clfb.on{color:var(--accent)}
@@ -360,8 +344,8 @@ body.in3d .northbtn{z-index:46}
 .camimg img{display:block;width:100%;height:auto;max-height:240px;object-fit:cover}
 .camimg:focus-visible{outline:2px solid var(--accent)}
 
-/* Layers panel, bottom left */
-.lyr{position:absolute;left:16px;bottom:16px;width:var(--col);border-radius:16px;padding:4px 6px 6px;z-index:4}
+/* Layers panel, top left */
+.lyr{position:absolute;left:16px;top:16px;width:var(--col);border-radius:16px;padding:4px 6px 6px;z-index:4}
 .lyrh{all:unset;box-sizing:border-box;width:100%;display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:700;font-size:.9rem;padding:7px 8px}
 .lyrh .phchev{font-style:normal;margin-left:auto;color:var(--ink2);transform:rotate(90deg);transition:transform .2s}
 .lyr.folded .lyrh .phchev{transform:none}
@@ -370,7 +354,7 @@ body.in3d .northbtn{z-index:46}
 .lyrb{display:flex;flex-direction:column;gap:1px}
 .lyrb .bmtick{padding:6px 8px}
 body.in3d .lyr{z-index:46}
-@media (max-width:700px){.lyr{left:12px;bottom:12px;width:210px}}
+@media (max-width:700px){.lyr{left:12px;top:12px;width:210px}}
 
 .camplayer{position:relative;margin:10px 0 2px;border-radius:10px;overflow:hidden;background:var(--field);aspect-ratio:16/10}
 .camplayer iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
@@ -382,6 +366,8 @@ body.in3d .lyr{z-index:46}
 
 /* the layer list shows names only, without counts */
 .clcnt{display:none}
+/* the working-hours summary sits in its row, beside the cog */
+#sum{display:block;white-space:nowrap}
 
 /* the heart on a place card: adds the place to your favourites */
 .favbtn{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:6px;margin:10px 0 4px;padding:7px 13px;border-radius:999px;cursor:pointer;font-size:.88rem;background:var(--field);color:var(--ink);border:1px solid var(--glass-b)}
@@ -410,7 +396,7 @@ body.in3d .lyr{z-index:46}
 .phbox figcaption b{font-size:.72rem}
 .phbox figcaption span{color:var(--ink2)}
 /* the favourites list, from the gear in the Layers panel */
-#favlist{position:absolute;left:16px;top:auto;bottom:calc(var(--lyrh,0px) + 14px);height:auto;width:var(--col);max-height:50vh;overflow:auto;padding:12px;border-radius:16px;z-index:44}
+#favlist{position:absolute;left:calc(var(--col) + 28px);top:16px;height:auto;width:var(--col);max-height:calc(100% - 32px);overflow:auto;padding:12px;border-radius:16px;z-index:47}
 #favlist .favs{max-height:none}
 /* the previous and next arrows sit over the sides of the full-screen photo */
 .phbox .pha{position:absolute;top:50%;bottom:auto;transform:translateY(-50%);width:48px;height:48px;z-index:3}
@@ -435,7 +421,7 @@ body.in3d .lyr{z-index:46}
 /* in 3D the page keeps its own look: the same bars, panels and buttons as on the globe */
 body.in3d #search,body.in3d .attrib{z-index:47}
 /* the working-hours colour key, under the hours card while the Working hours layer is on */
-.bandkey{position:absolute;left:16px;top:var(--pnh,100px);z-index:2;width:var(--col);padding:4px 6px 6px;border-radius:16px;transition:opacity .3s}
+.bandkey{position:absolute;left:16px;top:calc(16px + var(--lyrh,0px));z-index:2;width:var(--col);padding:4px 6px 6px;border-radius:16px;transition:opacity .3s}
 .bandkey[hidden]{display:none}
 .bandkey h4{margin:0;padding:7px 8px;font-size:.9rem;font-weight:700;color:var(--ink)}
 .bandkey ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px}
@@ -446,7 +432,8 @@ body.in3d #search,body.in3d .attrib{z-index:47}
 .bandkey li small{color:var(--ink2);font-size:.8rem;white-space:nowrap;font-variant-numeric:tabular-nums}
 body.in3d #bandkey{z-index:47}
 /* the 2D globe is not drawn while the 3D view is showing; the star field behind still is */
-body.in3d #c{display:none}
+body.in3d #c{opacity:0;pointer-events:none}
+#c{transition:opacity .7s ease}
 
 /* guided tour (assets/tour.js): a light veil with a hole over the step's target, a ring around it, a glow on the
    map point being talked about, a cursor that clicks the real controls, and the card */
@@ -480,3 +467,11 @@ body.touring .tcard{opacity:1}
 body:has(#info.show) .tourpill{display:none}
 .tourpill[hidden],body.touring .tourpill{display:none}
 .tourpill #tour{border:0;cursor:pointer;background:var(--accent);color:var(--accent-ink);font:700 .92rem var(--sans);padding:9px 20px;border-radius:999px}
+
+/* working hours settings: opened from the cog beside Working hours, to the right of the Layers panel */
+.hoursset{padding:14px 16px 16px}
+.hoursset .sec{margin-top:12px}
+.hoursset .shift input{font-size:.9rem;padding:7px 5px 7px 8px}
+.hoursset .shift{gap:6px}
+.hoursset .sec:first-of-type{margin-top:4px}
+.hoursset .sec h3{font-family:var(--sans);font-size:.78rem;font-weight:600;letter-spacing:.02em;margin:0 0 8px;color:var(--ink2)}

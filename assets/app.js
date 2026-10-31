@@ -679,7 +679,7 @@ let placing=false,draft=null,pinDrag=null,geoTimer=0,geoSeq=0;
 const coordStr=o=>`${(+o.lat).toFixed(5)}, ${(+o.lon).toFixed(5)}`;
 const ptoast=document.getElementById('ptoast'),infob=document.getElementById('infob');
 function startPlacing(){placing=true;draft=null;cv.classList.add('placing');ptoast.hidden=false;hideInfo();
-  if(innerWidth<=700&&!panel.classList.contains('collapsed')){panel.classList.add('collapsed');ph.setAttribute('aria-expanded','false')}draw();}
+  draw();}
 function stopPlacing(){placing=false;cv.classList.remove('placing');ptoast.hidden=true}
 document.getElementById('pcancel').onclick=()=>{stopPlacing();draw()};
 // nearest named place: OpenStreetMap's Nominatim, falling back to the nearest region offline
@@ -850,17 +850,13 @@ function hideInfo(){document.getElementById('info').classList.remove('show');if(
 document.getElementById('infox').onclick=hideInfo;
 
 // panel & controls
-const panel=document.getElementById('panel'),ph=document.getElementById('ph');
-ph.onclick=()=>{const c=panel.classList.toggle('collapsed');ph.setAttribute('aria-expanded',String(!c))};
-// the colour key sits under the working-hours panel, whatever its height
-new ResizeObserver(()=>document.documentElement.style.setProperty('--pnh',(panel.offsetHeight+26)+'px')).observe(panel);
 const tval=v=>{const[a,b]=v.split(':').map(Number);return a+(b||0)/60};
 document.getElementById('s').oninput=e=>{if(e.target.value){S=tval(e.target.value);ui();draw()}};
 document.getElementById('e').oninput=e=>{if(e.target.value){E=tval(e.target.value);ui();draw()}};
 const bw=document.getElementById('w'),bs=document.getElementById('su');
 function setSeason(v){season=v;bw.setAttribute('aria-pressed',String(v===0));bs.setAttribute('aria-pressed',String(v===1));ui();draw();hideInfo()}
 bw.onclick=()=>setSeason(0);bs.onclick=()=>setSeason(1);
-function ui(){renderFavs();renderLayers();lyrRender();if(typeof m3dSync==='function')m3dSync();document.getElementById('sum').textContent=`${hhmm(S)}–${hhmm(E)} UK, ${season?'summer':'winter'}`;
+function ui(){renderFavs();renderLayers();lyrRender();if(typeof m3dSync==='function')m3dSync();document.getElementById('sum').textContent=`${hhmm(S)}–${hhmm(E)}`;
   const bl=document.getElementById('bandlist');if(bl)bl.innerHTML=BANDS.map((b,i)=>`<li><i style="background:${pal['b'+i]}"></i><span>${b.name}</span><small>${b.sub.replace('starts ','')}</small></li>`).join('');
   document.getElementById('snote').textContent=season?'Late March to late October, while the UK is on BST.':'Late October to late March, while the UK is on GMT.';
   stripRender();}
@@ -904,13 +900,19 @@ const LYI={
 function lyrRender(){const m=document.getElementById('lyrb');if(!m)return;
   const ic=k=>`<i class="lyi" aria-hidden="true">${typeof LYI[k]==='function'?LYI[k]():LYI[k]}</i>`;
   const tick=(k,on,label,extra)=>`<label class="bmtick"><input type="checkbox" data-show="${k}" ${on?'checked':''}>${ic(k)}<span>${label}</span>${extra||''}</label>`;
-  m.innerHTML=tick('hours',showHours,'Working hours')+tick('fav',showFavs,'Favourites',`<button type="button" class="clfb" id="favgear" aria-label="Show favourites list" title="Show favourites list"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>`)+
+  m.innerHTML=tick('hours',showHours,'Working hours',`<small class="clcnt" id="sum"></small><button type="button" class="clfb" id="hoursgear" aria-label="Working hours settings" title="Working hours settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>`)+tick('fav',showFavs,'Favourites',`<button type="button" class="clfb" id="favgear" aria-label="Show favourites list" title="Show favourites list"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>`)+
     (CL.data.length?tick('cl',CL.on,'Colivings',`<small class="clcnt" id="clcnt"></small><button type="button" class="clfb${clActive(CL.f)?' on':''}" id="clfb" aria-label="Filter colivings" title="Filter and updates">${FUNNEL}</button>`):'')+
     tick('cw',showCw,'Coworking spaces',`<small class="clcnt" id="cwcnt" aria-live="polite"></small><button type="button" class="clfb${cwActive()?' on':''}" id="cwfb" aria-label="Filter coworking spaces" title="Filter coworking spaces">${FUNNEL}</button>`)+tick('cams',showCams,'Webcams')+tick('weather',showWeather,'Current weather','<small class="clcnt">°C</small>')+tick('night',showNight,'Day and night')+tick('names',showNames,'Place names');
   m.querySelectorAll('[data-show]').forEach(c=>c.onchange=()=>setShow(c.dataset.show,c.checked));
   const fb=m.querySelector('#clfb');if(fb)fb.onclick=e=>{e.preventDefault();e.stopPropagation();clToggle()};
   const cb=m.querySelector('#cwfb');if(cb)cb.onclick=e=>{e.preventDefault();e.stopPropagation();cwToggle()};
-  const gb=m.querySelector('#favgear');if(gb)gb.onclick=e=>{e.preventDefault();e.stopPropagation();favListToggle()};clCounts();cwCounts();lyrFit()}
+  const gb=m.querySelector('#favgear');if(gb)gb.onclick=e=>{e.preventDefault();e.stopPropagation();favListToggle()};
+  const hg=m.querySelector('#hoursgear');if(hg)hg.onclick=e=>{e.preventDefault();e.stopPropagation();hoursToggle()};
+  const hs=m.querySelector('#sum');if(hs)hs.textContent=`${hhmm(S)}–${hhmm(E)}`;clCounts();cwCounts();lyrFit()}
+// working hours settings: the shift and the season, opened from the cog beside Working hours
+function hoursToggle(open){const el=document.getElementById('hoursset');if(!el)return;const show=open==null?el.hidden:open;el.hidden=!show;
+  if(show)document.getElementById('s').focus({preventScroll:true})}
+document.getElementById('hoursx').onclick=()=>hoursToggle(false);
 function lyrFold(open){const el=document.getElementById('lyr'),h=document.getElementById('lyrh');el.classList.toggle('folded',!open);h.setAttribute('aria-expanded',String(open));
   try{localStorage.setItem('whg.lyr',open?'open':'folded')}catch(e){}lyrFit()}
 // keep the working-hours panel clear of the Layers panel below it
@@ -993,20 +995,25 @@ const z2k=(z,lat)=>clamp(512*2**z/(2*Math.PI*base*Math.cos(lat*RAD)),MINK,MAXK);
 async function open3D(){let el=m3d.el;
   if(!el){el=m3d.el=document.createElement('div');el.className='m3d';el.innerHTML=`<div class="m3dmap" id="m3dmap"></div><p class="m3dmsg" id="m3dmsg" hidden></p>`;document.body.appendChild(el);
   }
-  el.hidden=false;document.body.classList.add('in3d');setModeLabel(true);const msg=el.querySelector('#m3dmsg');msg.hidden=true;
+  // the 3D view fades in over the globe, which fades out (the globe only draws when it changes, so it costs nothing while it waits)
+  clearTimeout(m3d.fadeT);el.hidden=false;el.style.transition='opacity .7s ease';el.style.opacity='0';
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{el.style.opacity='1'}));
+  document.body.classList.add('in3d');setModeLabel(true);const msg=el.querySelector('#m3dmsg');msg.hidden=true;
   let lib;try{lib=await m3dLoad()}catch(e){msg.textContent='The 3D view couldn’t load. Check your connection and try again.';msg.hidden=false;return}
   // start exactly where the globe was: same centre, same scale, looking straight down
   const lon=-rot[0],lat=clamp(-rot[1],-85,85),zoom=k2z(k,lat);
-  if(m3d.map){m3d.map.jumpTo({center:[lon,lat],zoom,pitch:0,bearing:0});m3d.map.resize();m3dSync();return}
+  if(m3d.map){m3d.map.jumpTo({center:[lon,lat],zoom,pitch:0,bearing:0});m3d.map.resize();m3dSync();tiltUp();return}
   try{const map=m3d.map=new lib.Map({container:'m3dmap',style:m3dStyleDef(),center:[lon,lat],zoom,pitch:0,bearing:0,maxPitch:85,attributionControl:false,hash:false,dragRotate:true,pitchWithRotate:true,maxTileCacheSize:3000,refreshExpiredTiles:false});
     map.on('rotate',northNeedle);map.on('pitch',northNeedle);
     map.on('style.load',()=>{m3d.mode=null;m3dExtras(map);m3dSync();for(const l of map.getStyle().layers)if(l.type==='background')map.setPaintProperty(l.id,'background-color','rgba(0,0,0,0)');stars()});
     map.on('move',()=>{if(document.body.classList.contains('in3d'))skyFrame()});
     map.on('zoomend',()=>{m3dMode(map);m3dLimit(map)});map.on('moveend',()=>{if(m3d.me&&myLoc)m3dMe()});
     map.on('click',m3dClick);map.on('moveend',m3dWx);map.on('load',()=>{m3dWx();m3dLimit(map)});map.on('moveend',()=>m3dAboveGround(map));
-    m3dWheelButton(map);
+    m3dWheelButton(map);tiltUp();
     map.on('error',e=>{if(e&&e.error&&/webgl/i.test(String(e.error.message)))msg.textContent='3D needs WebGL, which this browser has switched off.',msg.hidden=false})}
   catch(e){msg.textContent='3D needs WebGL, which this browser has switched off.';msg.hidden=false}}
+// as the view opens, the camera tilts up from straight down, so the change from the globe reads as a move
+function tiltUp(){const map=m3d.map;if(map)setTimeout(()=>{if(m3d.map===map&&document.body.classList.contains('in3d'))map.easeTo({pitch:35,duration:1400})},80)}
 // Globe projection with 3D terrain on top tore and flickered while panning, so the two never run together:
 // zoomed out it's a globe (terrain adds nothing at that scale); from zoom 5 in, a flat map with terrain.
 function m3dMode(map,force){const z=map.getZoom(),want=z>=5?'terrain':z<4.5?'globe':m3d.mode||'globe';if(!force&&want===m3d.mode)return;m3d.mode=want;
@@ -1029,7 +1036,11 @@ function m3dWheelButton(map){const c=map.getCanvasContainer();let st=null;
 function close3D(){if(!m3d.el)return;const map=m3d.map;
   if(map){const c=map.getCenter(),lat=clamp(c.lat,-85,85);rot=[-c.lng,-lat,0];k=kT=z2k(map.getZoom(),lat);fly=null;vel=[0,0]}
   if(m3d.pin){m3d.pin.remove();m3d.pin=null}m3d.pivot=null;
-  m3d.el.hidden=true;document.body.classList.remove('in3d');setModeLabel(false);northNeedle();bmToggle(false);hideInfo();draw()}
+  // the camera levels off and the 3D view fades out as the globe fades back in
+  const el=m3d.el;if(map&&!el.hidden)map.easeTo({pitch:0,duration:500});
+  document.body.classList.remove('in3d');setModeLabel(false);northNeedle();bmToggle(false);hideInfo();draw();
+  clearTimeout(m3d.fadeT);el.style.transition='opacity .7s ease';el.style.opacity='0';
+  m3d.fadeT=setTimeout(()=>{el.hidden=true;el.style.opacity='';el.style.transition=''},720)}
 
 // everything from the globe drawn into the 3D view as map layers, kept in step with the app
 const M3D_OWN='m3d-';

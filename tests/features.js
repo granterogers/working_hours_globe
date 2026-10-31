@@ -54,6 +54,15 @@ function openingHoursChecks() {
   check('Map layers menu has no horizontal scrollbar', scroll);
   await page.click('#bmbtn');
 
+  // 2b. layout: the Layers panel is at the top left, the working-hours settings open from its cog, and the old panel is gone
+  const lyr = await page.evaluate(() => { const r = document.getElementById('lyr').getBoundingClientRect(); return [r.left, r.top] });
+  check('Layers panel is at the top left', lyr[0] < 40 && lyr[1] < 40, lyr.map(Math.round).join(','));
+  check('the old working-hours panel is gone', await page.evaluate(() => !document.getElementById('panel')));
+  await page.click('#hoursgear');
+  await page.waitForTimeout(400);
+  check('the cog opens working hours settings', await page.evaluate(() => !document.getElementById('hoursset').hidden));
+  await page.click('#hoursx');
+
   // 3. the tour button sits at the bottom right and has no close control
   const tourPos = await page.evaluate(() => { const r = document.getElementById('tour').getBoundingClientRect(); return innerWidth - r.right < 60 && innerHeight - r.bottom < 60 });
   check('Start the tour is at the bottom right', tourPos);
@@ -100,6 +109,13 @@ function openingHoursChecks() {
     await page.evaluate(() => document.querySelector('.phbox .phx').click());
   }
 
+  // 7. 3D: the 2D globe and the 3D view cross-fade when the view changes
+  await page.evaluate(() => document.getElementById('b3d').click());
+  await page.waitForTimeout(250);
+  const mid = await page.evaluate(() => ({ globe: +getComputedStyle(document.getElementById('c')).opacity, view: +getComputedStyle(document.querySelector('.m3d')).opacity }));
+  check('2D and 3D cross-fade on entering 3D', mid.globe < 1 && mid.view > 0, JSON.stringify(mid));
+  await page.waitForFunction(() => document.body.classList.contains('in3d'), null, { timeout: 60000 });
+  await page.evaluate(() => document.getElementById('b3d').click());
   check('no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
   await browser.close();
   const failed = results.filter(r => !r).length;
