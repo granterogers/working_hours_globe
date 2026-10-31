@@ -27,7 +27,9 @@ import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, 'data', 'coworking.json')
-FIELDS = ['name', 'lat', 'lon', 'street', 'city', 'country', 'web', 'phone', 'hours', 'src', 'conf', 'brand', 'category']
+# fee, wifi, wheel, aircon and capacity come from OpenStreetMap tags only; Overture rows leave them empty
+FIELDS = ['name', 'lat', 'lon', 'street', 'city', 'country', 'web', 'phone', 'hours', 'src', 'conf', 'brand', 'category',
+          'fee', 'wifi', 'wheel', 'aircon', 'capacity']
 OSM_BUDGET = 900  # seconds for all Overpass attempts together; the weekly job is capped at 45 minutes
 UA = {'User-Agent': 'working_hours_globe coworking layer (github.com/granterogers/working_hours_globe)'}
 
@@ -122,7 +124,10 @@ def osm():
                     'country': iso2(t.get('addr:country')), 'web': (t.get('website') or t.get('contact:website') or '')[:120],
                     'phone': (t.get('phone') or t.get('contact:phone') or '')[:30], 'hours': (t.get('opening_hours') or '')[:80],
                     'src': 'o', 'conf': -1, 'brand': (t.get('brand') or '')[:40],
-                    'category': (t.get('amenity') or t.get('office') or '')[:40]})
+                    'category': (t.get('amenity') or t.get('office') or '')[:40],
+                    'fee': (t.get('fee') or t.get('charge') and 'yes' or '')[:10], 'wifi': (t.get('internet_access') or t.get('wifi') or '')[:10],
+                    'wheel': (t.get('wheelchair') or '')[:10], 'aircon': (t.get('air_conditioning') or '')[:10],
+                    'capacity': (t.get('capacity') or '')[:6]})
     print(len(out), 'coworking places from OpenStreetMap')
     return out
 
@@ -158,7 +163,7 @@ def merge(a, b):
             out.append(r)
         else:
             o = out[hit]
-            for k in ('street', 'city', 'country', 'web', 'phone', 'brand', 'category'):
+            for k in ('street', 'city', 'country', 'web', 'phone', 'brand', 'category', 'fee', 'wifi', 'wheel', 'aircon', 'capacity'):
                 o[k] = o[k] or r[k]
             o['hours'] = r['hours'] or o['hours']
             o['src'] = 'vo'

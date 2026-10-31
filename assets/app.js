@@ -1735,7 +1735,7 @@ function camShow(x){activeFav=null;draft=null;selected=null;if(typeof CL!=='unde
 // (category "coworking") with OpenStreetMap (amenity=coworking_space, office=coworking) into data/coworking.json,
 // which loads with the page like the colivings, so panning never waits on a download.
 const CW={list:new Map(),sel:null,vis:[],ccs:[]};
-const CWF_DEF={q:'',type:'all',kind:'all',brand:'',open:false,hours:false,web:false,phone:false,conf:false,cc:''};
+const CWF_DEF={q:'',type:'all',kind:'all',brand:'',open:false,hours:false,web:false,phone:false,conf:false,wifi:false,wheel:false,aircon:false,free:false,cc:''};
 CW.f=Object.assign({},CWF_DEF,(()=>{try{return JSON.parse(localStorage.getItem('whg.cwF')||'{}')}catch(e){return{}}})());
 const CW_CHAIN=/\b(regus|spaces|wework|industrious|iwg|servcorp|impact hub|mindspace|knotel|convene|ucommune|the office group|signature by regus|hq global|premier business|venture x|serendipity labs|workspace|clockwise|launchpad|bizspace|uptown|mindspace)\b/i;
 // opening hours as OpenStreetMap writes them ("Mo-Fr 09:00-18:00; Sa 10:00-14:00", "24/7"), read for the place's local
@@ -1760,7 +1760,9 @@ function cwPass(x,f){if(f.q.trim()){const s=(x.name+' '+x.addr).toLowerCase();if
   if(f.cc&&x.country!==f.cc)return false;
   if(f.open&&cwOpen(x.hours,x.lon,new Date())!==true)return false;
   if(f.hours&&!x.hours)return false;if(f.web&&!x.web)return false;if(f.phone&&!x.phone)return false;
-  if(f.conf&&!(x.conf>=70||x.src.includes('o')))return false;return true}
+  if(f.conf&&!(x.conf>=70||x.src.includes('o')))return false;
+  // facilities and price come from OpenStreetMap tags where a place has them; a place without the tag doesn't match
+  if(f.wifi&&!x.wifi)return false;if(f.wheel&&!/yes|limited/.test(x.wheel||''))return false;if(f.aircon&&x.aircon!=='yes')return false;if(f.free&&x.fee!=='no')return false;return true}
 function cwApply(){CW.vis=[...CW.list.values()].filter(x=>cwPass(x,CW.f));try{localStorage.setItem('whg.cwF',JSON.stringify(CW.f))}catch(e){}cwCounts();draw();m3dSync()}
 const cwAdd=x=>{x.v=vec(x.lon,x.lat);x.addr=[x.street,x.city,x.country].filter(Boolean).join(', ');x.chain=!!x.brand||CW_CHAIN.test(x.name);CW.list.set(x.id,x)};
 const cwCountry=c=>{try{return new Intl.DisplayNames(['en'],{type:'region'}).of(c)||c}catch(e){return c}};
@@ -1769,6 +1771,8 @@ function cwLoad(j){const f=j.fields;CW.list.clear();CW.updated=j.updated;
   j.rows.forEach((r,i)=>{const x={id:'cw'+i};f.forEach((k,n)=>x[k]=r[n]);cwAdd(x)});
   const cnt={};for(const x of CW.list.values())if(x.country)cnt[x.country]=(cnt[x.country]||0)+1;
   CW.ccs=Object.entries(cnt).sort((a,b)=>cwCountry(a[0]).localeCompare(cwCountry(b[0])));
+  // facility details appear once the weekly list carries them; until then their filters are switched off
+  CW.hasFac=[...CW.list.values()].some(x=>x.fee||x.wifi||x.wheel||x.aircon);
   cwApply()}
 fetch('data/coworking.json').then(r=>{if(!r.ok)throw 0;return r.json()}).then(cwLoad).catch(()=>{});
 function cwMark(X,Y,r,sel){ctx.beginPath();ctx.arc(X,Y,r,0,Math.PI*2);ctx.fillStyle='#8b5cf6';ctx.fill();ctx.lineWidth=sel?2.4:1.2;ctx.strokeStyle=sel?'#ffd27a':pal.halo;ctx.stroke()}
@@ -1793,7 +1797,8 @@ function cwDraw(){if(!CW.vis.length)return;const r=k<CW_CLUSTER_K?3.5:4.5,at=[];
   ctx.restore()}
 function cwHit(x,y){if(k<CW_SINGLE_K)return null;let best=null,bd=12;for(const c of CW.vis){const p=camProj(c.v);if(!p)continue;const d=Math.hypot(p[0]-x,p[1]-y);if(d<bd){bd=d;best=c}}return best}
 function cwShow(x){activeFav=null;draft=null;selected=null;if(typeof CL!=='undefined')CL.sel=null;CAM.sel=null;clickPin=null;CW.sel=x;infoTok++;
-  const rows=[['Address',x.addr],['Opening hours',x.hours],['Phone',x.phone],['Listed in',{v:'Overture Maps',o:'OpenStreetMap',vo:'Overture Maps and OpenStreetMap'}[x.src]||'']].filter(r=>r[1]);
+  const yn=v=>({yes:'Yes',no:'No',limited:'Limited'})[v]||v;
+  const rows=[['Address',x.addr],['Opening hours',x.hours],['Phone',x.phone],['Entry',{yes:'Paid',no:'Free'}[x.fee]||''],['Wi-Fi',yn(x.wifi)],['Wheelchair',yn(x.wheel)],['Air conditioning',yn(x.aircon)],['Capacity',x.capacity],['Listed in',{v:'Overture Maps',o:'OpenStreetMap',vo:'Overture Maps and OpenStreetMap'}[x.src]||'']].filter(r=>r[1]);
   document.getElementById('infob').innerHTML=`<p class="cltype"><i style="background:#8b5cf6;border-radius:50%"></i>Coworking space${x.chain?' · chain':''}</p><h2>${esc(x.name)}</h2>`+
     (rows.length?`<dl class="meta">${rows.map(([a,b])=>`<dt>${a}</dt><dd>${esc(b)}</dd>`).join('')}</dl>`:'')+
     `<div class="cllinks">${x.web?`<a class="clbtn" href="${esc(/^https?:/.test(x.web)?x.web:'https://'+x.web)}" target="_blank" rel="noopener noreferrer">Website ↗</a>`:''}<a class="clbtn" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(x.name+' '+x.lat.toFixed(5)+','+x.lon.toFixed(5))}" target="_blank" rel="noopener noreferrer">Reviews & photos ↗</a></div>`+
@@ -1881,18 +1886,21 @@ function cwToggle(open){let el=document.getElementById('cwf');
         <select id="cwbrand" class="flin" aria-label="Network or brand"></select></div>
       <div class="clg"><span class="cll">Opening</span>${ck('cwopen','Open now (local time)')}${ck('cwhrs','Opening hours listed')}</div>
       <div class="clg"><span class="cll">Contact</span>${ck('cwweb','Has a website')}${ck('cwphone','Has a phone number')}</div>
+      <div class="clg"><span class="cll">Facilities (where listed)</span>${ck('cwwifi','Wi-Fi')}${ck('cwwheel','Wheelchair access')}${ck('cwair','Air conditioning')}${ck('cwfree','Free to use')}<p class="clsmall" id="cwfac">Facility details arrive with the next weekly update.</p></div>
       <div class="clg"><span class="cll">Listing</span>${ck('cwconf','Well-established listings only')}</div>
       <div class="clg"><span class="cll">Country</span><select id="cwcc" class="flin" aria-label="Country"></select></div>
       <div class="clfoot"><button type="button" class="flb2" id="cwreset">Reset</button><button type="button" class="primary" id="cwshow"></button></div>
-      <p class="clsmall">Price and facilities are not in the data yet. From <a href="https://overturemaps.org/" target="_blank" rel="noopener noreferrer">Overture Maps</a> and <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>, refreshed weekly. Closed places are left out. <span id="cwupd"></span></p>`;
+      <p class="clsmall">Price is not in the data; facilities and entry fees come from OpenStreetMap where a place lists them. From <a href="https://overturemaps.org/" target="_blank" rel="noopener noreferrer">Overture Maps</a> and <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>, refreshed weekly. Closed places are left out. <span id="cwupd"></span></p>`;
     document.body.appendChild(el);const $=id=>el.querySelector('#'+id);
-    const box={cwopen:'open',cwhrs:'hours',cwweb:'web',cwphone:'phone',cwconf:'conf'};
+    const box={cwopen:'open',cwhrs:'hours',cwweb:'web',cwphone:'phone',cwconf:'conf',cwwifi:'wifi',cwwheel:'wheel',cwair:'aircon',cwfree:'free'};
     const sync=()=>{$('cwq').value=CW.f.q;el.querySelectorAll('[data-cwt]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.cwt===CW.f.type)));
       el.querySelectorAll('[data-cwk]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.cwk===CW.f.kind)));
       const brands={};for(const x of CW.list.values())if(x.brand)brands[x.brand]=(brands[x.brand]||0)+1;
       $('cwbrand').innerHTML='<option value="">Any network</option>'+Object.entries(brands).sort((a,b)=>b[1]-a[1]).slice(0,30).map(([n,c])=>`<option value="${esc(n)}">${esc(n)} (${c})</option>`).join('');$('cwbrand').value=CW.f.brand;
       $('cwcc').innerHTML='<option value="">All countries</option>'+CW.ccs.map(([c,n])=>`<option value="${c}">${esc(cwCountry(c))} (${n})</option>`).join('');$('cwcc').value=CW.f.cc;
-      for(const id in box)$(id).checked=!!CW.f[box[id]];cwCounts()};el._sync=sync;
+      for(const id in box)$(id).checked=!!CW.f[box[id]];
+      ['cwwifi','cwwheel','cwair','cwfree'].forEach(id=>{$(id).disabled=!CW.hasFac;$(id).closest('label').classList.toggle('off',!CW.hasFac)});
+      $('cwfac').hidden=CW.hasFac;cwCounts()};el._sync=sync;
     $('cwfx').onclick=()=>cwToggle(false);$('cwshow').onclick=()=>cwToggle(false);$('cwreset').onclick=()=>{CW.f=Object.assign({},CWF_DEF);cwApply();sync()};
     $('cwq').oninput=e=>{CW.f.q=e.target.value;cwApply()};$('cwcc').onchange=e=>{CW.f.cc=e.target.value;cwApply()};$('cwbrand').onchange=e=>{CW.f.brand=e.target.value;cwApply()};
     for(const id in box)$(id).onchange=e=>{CW.f[box[id]]=e.target.checked;cwApply()};
