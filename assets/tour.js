@@ -26,8 +26,8 @@ const nearest=(list,[lon,lat])=>list.reduce((best,p)=>{const d=(p.lon-lon)**2+(p
 // Each step: title, text, target (selector or null), and enter(c) which sets the interface up and acts out the step.
 // enter(c) can set c.glow to a place on the map to light up for the step.
 const STEPS=[
-  {title:'Welcome to the Working Hours Globe',
-    text:'A short guided tour. The cursor does the clicks for you. Press Esc at any time to stop, or use the arrow keys to move between steps.',
+  {title:'Plan your working life around the world',
+    text:'This map is for digital nomads. Set your working hours in UK time and see, country by country, when a working day falls, then find where to stay: co-living and coworking spaces, the weather and photos for each place. This short tour shows how. Press Esc at any time to stop.',
     target:null,enter:c=>ensure2D(c)},
   {title:'The globe',target:'#c',
     text:'Every country and time zone is coloured by when a working day falls in UK time. Drag to spin, scroll or pinch to zoom.',
@@ -54,7 +54,7 @@ const STEPS=[
       // the live services sometimes have nothing near a place, so the tour then shows its own credited sample photos
       if(!shown('#phg .pht')){window.whg.setPhotos(SAMPLES);await waitFor(c,()=>!!shown('#phg .pht'),4000)}
       await c.sleep(900);
-      if(shown('#phg .pht')){await tap(c,'#phg .pht');await c.sleep(2600);await tap(c,'.phbox .phnext');await c.sleep(2600);await tap(c,'.phbox .phx');await c.sleep(400)}}},
+      if(shown('#phg .pht')){await tap(c,'#phg .pht');await c.sleep(2600);await tap(c,'.phbox .phnext');await c.sleep(2600);await closeGallery(c)}}},
   {title:'Flights from here',target:'#fltog',
     text:'Choose a nearby airport and a date, and the route opens in Google Flights.',
     enter:async c=>{await tap(c,'#fltog');await c.sleep(3000)}},
@@ -184,8 +184,12 @@ function render(i){const s=STEPS[i],last=STEPS.length-1;
   card.querySelector('#tclose').onclick=end;
   card.querySelector('#tnext').focus({preventScroll:true})}
 
+// the photo gallery is closed by its own × (and by Escape if that doesn't work), so it can't cover the rest of the tour
+async function closeGallery(c){for(let n=0;n<3;n++){const box=$('.phbox');if(!box||box.hidden)return;const x=$('.phbox .phx');if(x)x.click();await c.sleep(400)}
+  const box=$('.phbox');if(box&&!box.hidden)document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await c.sleep(300)}
 // each step starts from a clean view: the popouts an earlier step opened are closed, so a step's own window is what shows
-function tidy(){for(const[sel,close]of[['#hoursset','#hoursx'],['#clf','#clfx'],['#cwf','#cwfx'],['#favlist','#favlistx'],['#bmmenu','#bmbtn']]){
+function tidy(){const g=$('.phgrid');if(g&&!g.hidden)$('.phgrid .phx')?.click();const box=$('.phbox');if(box&&!box.hidden)$('.phbox .phx')?.click();
+  for(const[sel,close]of[['#hoursset','#hoursx'],['#clf','#clfx'],['#cwf','#cwfx'],['#favlist','#favlistx'],['#bmmenu','#bmbtn']]){
   const el=$(sel),b=$(close);if(el&&!el.hidden&&b)b.click()}}
 async function go(i){const my=++gen;idx=i;cursor.classList.remove('on');tidy();render(i);
   const c=cur=ctx(my);place();busy=true;
