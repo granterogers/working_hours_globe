@@ -16,7 +16,7 @@ const step = async (name, fn) => { try { await fn() } catch (e) { check(name + '
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|net::ERR|404|429/.test(m.text())) errors.push('console: ' + m.text().slice(0, 160)) });
-  await page.route(/nominatim|photon|wikimedia|wikidata|panoramax|mapillary|overpass|open-meteo|windy/, r => r.abort());
+  await page.route(/nominatim|photon/, r => r.abort());
 
   await page.goto(BASE + 'index.html?t=' + Date.now(), { waitUntil: 'load', timeout: 60000 });
   await page.waitForFunction(() => window.whg && window.whg.ready(), null, { timeout: 180000 }).catch(() => {});
@@ -24,6 +24,7 @@ const step = async (name, fn) => { try { await fn() } catch (e) { check(name + '
 
   // 1. boot
   await step('boot', async () => {
+    await page.waitForFunction(() => getComputedStyle(document.getElementById('c')).opacity === '0', null, { timeout: 5000 }).catch(() => {});
     const s = await page.evaluate(() => ({ ready: window.whg.ready(), tilted: window.whg.tilted(), ver: document.getElementById('ver').textContent, canvasHidden: getComputedStyle(document.getElementById('c')).opacity === '0', map: !!window.whg.map3d(), strip: !!document.getElementById('strip') }));
     check('map is the view on load', s.ready && s.map && s.canvasHidden, JSON.stringify(s));
     check('version label matches the version in index.html', /^v1\.\d+$/.test(s.ver), s.ver);
@@ -160,18 +161,18 @@ const step = async (name, fn) => { try { await fn() } catch (e) { check(name + '
 
   // 10. base maps: every base map loads, and the menu says which is on
   await step('base maps', async () => {
-    await page.click('#bmbtn'); await page.waitForTimeout(400);
+    const open = async () => { if (await page.evaluate(() => document.getElementById('bmmenu').hidden)) await page.click('#bmbtn'); await page.waitForTimeout(300) };
+    await open();
     const ids = await page.evaluate(() => [...document.querySelectorAll('#bmmenu [data-id]')].map(b => b.dataset.id));
     check('base map menu lists the base maps', ids.length >= 3, ids.join(','));
     for (const id of ids) {
+      await open();
       await page.click(`#bmmenu [data-id="${id}"]`); await page.waitForTimeout(1500);
       const now = await page.evaluate(() => window.whg.basemap());
       check(`base map "${id}" is chosen`, now === id, now);
-      await page.click('#bmbtn').catch(() => {}); await page.waitForTimeout(200);
-      await page.click('#bmbtn').catch(() => {}); await page.waitForTimeout(200);
     }
-    await page.click(`#bmmenu [data-id="street"]`).catch(() => {}); await page.waitForTimeout(1200);
-    await page.evaluate(() => { const m = document.getElementById('bmmenu'); if (!m.hidden) document.getElementById('bmbtn').click() });
+    await open();
+    await page.click('#bmmenu [data-id="street"]'); await page.waitForTimeout(1200);
   });
 
   // 11. 3D: tilt and level; the north and locate buttons

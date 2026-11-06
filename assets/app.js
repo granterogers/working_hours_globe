@@ -1677,7 +1677,7 @@ function wxCands(){const out=[];
   const cities=wxCities();if(cities)out.push(...cities);
   return out.sort((a,b)=>b.pri-a.pri)}
 // every city with an airport (one entry per city): bigger airports rank first
-function wxCities(){if(!airports){loadAirports().then(()=>{draw();m3dSync()}).catch(()=>{});return null}
+function wxCities(){if(!airports){loadAirports().then(()=>{draw();m3dSync();m3dWx()}).catch(()=>{});return null}
   if(!WX.cities){const by=new Map();for(const a of airports){const key=a[2]+'|'+a[3],o=by.get(key);if(!o||(a[6]===1&&o.pri<-1))by.set(key,{name:String(a[2]||a[1]).replace(/ am Main$/,''),lat:a[4],lon:a[5],v:vec(a[5],a[4]),pri:a[6]===1?-1:-2})}
     WX.cities=[...by.values()]}
   return WX.cities}
