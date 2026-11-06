@@ -47,14 +47,17 @@ const STEPS=[
   {title:'Save a favourite',target:'#favadd',
     text:'Click the heart to save a place. It appears on the map as a heart, and in your list.',
     enter:async c=>{await setLayer(c,'fav',true);await tap(c,'#favadd');c.glow=window.whg.favourites().at(-1);await c.sleep(1200)}},
-  {title:'Photos nearby',target:'#phbtn',
-    text:'Click Photos nearby to see pictures taken close by. Click a picture to open the gallery, then use the arrows to move through them.',
-    enter:async c=>{const f=window.whg.favourites().at(-1);if(f)await pointAt(c,f.lon,f.lat);await tap(c,'#phbtn');
+  {title:'Photos nearby',target:'#phg',
+    text:'The first photos taken close by show straight away. Click one to open the gallery and use the arrows to move through them. All photos nearby opens every picture found.',
+    enter:async c=>{const f=window.whg.favourites().at(-1);if(f)await pointAt(c,f.lon,f.lat);
       await waitFor(c,()=>!!shown('#phg .pht'),12000);
       // the live services sometimes have nothing near a place, so the tour then shows its own credited sample photos
       if(!shown('#phg .pht')){window.whg.setPhotos(SAMPLES);await waitFor(c,()=>!!shown('#phg .pht'),4000)}
-      await c.sleep(900);
-      if(shown('#phg .pht')){await tap(c,'#phg .pht');await c.sleep(2600);await tap(c,'.phbox .phnext');await c.sleep(2600);await closeGallery(c)}}},
+      await c.sleep(600);
+      if(shown('#phg .pht')){await tap(c,'#phg .pht');await c.sleep(2600);await tap(c,'.phbox .phnext');await c.sleep(2600);await closeGallery(c)}
+      await tap(c,'#phbtn');await c.sleep(2600);const g=$('.phgrid .phx');if(g)g.click();await c.sleep(400)}},
+  {title:'Open in Google Maps',target:'#info a.gmaps',
+    text:'Every place has an Open in Google Maps link. It opens the same spot in Google Maps in a new tab, so you can check the streets, transport and reviews, and come back to the map afterwards.'},
   {title:'Flights from here',target:'#fltog',
     text:'Choose a nearby airport and a date, and the route opens in Google Flights.',
     enter:async c=>{await tap(c,'#fltog');await c.sleep(3000)}},

@@ -90,7 +90,8 @@ function openingHoursChecks() {
   await page.waitForTimeout(800);
   await page.click('#res li button');
   await page.waitForTimeout(3000);
-  await page.click('#phbtn');
+  const gm = await page.evaluate(() => { const a = document.querySelector('#info a.gmaps'); return a ? { href: a.href, target: a.target } : null });
+  check('Open in Google Maps link opens in a new tab', !!gm && gm.target === '_blank' && /google\.com\/maps/.test(gm.href), JSON.stringify(gm));
   await page.waitForTimeout(9000);
   const blocked = await page.evaluate(() => ({ retry: !!document.getElementById('phretry'), text: document.getElementById('phst').textContent }));
   check('photos: failure is reported with Try again', blocked.retry && blocked.text === 'not reached', JSON.stringify(blocked));
@@ -99,6 +100,7 @@ function openingHoursChecks() {
   await page.waitForTimeout(15000);
   const shown = await page.evaluate(() => document.querySelectorAll('#phg .pht').length);
   check('photos: Try again brings photos back', shown > 0, shown + ' thumbnails');
+  check('photos: the card shows at most three thumbnails without opening anything', shown >= 1 && shown <= 3, shown + ' thumbnails');
 
   // 6. the gallery's close button is clickable (not covered by the photo)
   if (shown > 0) {

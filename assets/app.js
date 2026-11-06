@@ -52,7 +52,7 @@ matchMedia('(prefers-color-scheme: light)').addEventListener('change',theme);
 // The sky behind the globe: real stars and constellation figures from data/sky.json (Yale Bright Star Catalogue,
 // d3-celestial). Seen from the sun's side of the Earth, the sky directly behind the globe is the anti-sun point, so
 // the view is a stereographic projection about that point: angles and shapes keep their true form, and the sky only
-// turns as the sun moves through the year. Shown in the dark theme only.
+// turns as the sun moves through the year. Light stars on the dark theme; navy stars on the light one, like a star chart.
 let SKYD=null;fetch('data/sky.json').then(r=>{if(!r.ok)throw 0;return r.json()}).then(j=>{SKYD=j;stars()}).catch(()=>{});
 let SKYKEY='';
 // redraw the sky when the view has turned by a quarter of a degree or a minute has passed
@@ -84,7 +84,7 @@ function planetsNow(){const d=Date.now()/864e5+2440587.5-2451543.5,D=Math.PI/180
 // screen, and the local sidereal time (Greenwich sidereal time plus the longitude) turns the sky as the globe turns.
 // It fills the whole screen with stars, with the planets marked as coloured dots.
 function stars(){const r=sc.getBoundingClientRect();sc.width=r.width*dpr;sc.height=r.height*dpr;const s=sc.getContext('2d');s.clearRect(0,0,sc.width,sc.height);
-  if(!dark||!SKYD)return;const rad=Math.PI/180;
+  if(!SKYD)return;const rad=Math.PI/180,ink=dark?'226,235,255':'24,40,80';
   const{lon:olon,lat:olat}=skyObs(),jd=Date.now()/864e5+2440587.5,lst=((280.46061837+360.98564736629*(jd-2451545.0)+olon)%360+360)%360;
   const ra0=lst*rad,de0=olat*rad,f=[Math.cos(de0)*Math.cos(ra0),Math.cos(de0)*Math.sin(ra0),Math.sin(de0)];
   let u=[-f[2]*f[0],-f[2]*f[1],1-f[2]*f[2]];const un=Math.hypot(...u);u=u.map(x=>x/un);
@@ -96,9 +96,12 @@ function stars(){const r=sc.getBoundingClientRect();sc.width=r.width*dpr;sc.heig
     return[cx+k2*(v[0]*R[0]+v[1]*R[1]+v[2]*R[2]),cy-k2*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2])]};
   for(const[ra,dec,mag]of SKYD.stars){const p=P(ra,dec);if(!p)continue;
     const rr=Math.max(0.35,(6.2-mag)*0.3)*dpr,a=Math.min(1,Math.max(0.3,1.05-mag*0.13));
-    s.fillStyle=`rgba(226,235,255,${a})`;s.beginPath();s.arc(p[0],p[1],rr,0,7);s.fill()}
-  for(const pl of planetsNow()){const p=P(pl.ra,pl.dec);if(!p)continue;s.fillStyle=pl.col;s.beginPath();s.arc(p[0],p[1],3.4*dpr,0,7);s.fill()}
+    s.fillStyle=`rgba(${ink},${a})`;s.beginPath();s.arc(p[0],p[1],rr,0,7);s.fill()}
+  for(const pl of planetsNow()){const p=P(pl.ra,pl.dec);if(!p)continue;s.fillStyle=dark?pl.col:darkTint(pl.col);s.beginPath();s.arc(p[0],p[1],3.4*dpr,0,7);s.fill()}
 }
+
+// a planet's colour darkened for the light theme, where the pale colours would vanish
+const darkTint=c=>{const n=parseInt(c.slice(1),16);return'rgb('+[16,8,0].map(q=>Math.round(((n>>q)&255)*0.5)).join(',')+')'};
 
 // time helpers
 const off=tz=>(D.zones[tz]||[0,0])[season];
@@ -163,7 +166,8 @@ function draw(){
   const hA=LAY.hours,bA=hA*(1-clamp((k-TILE_K)/4.5,0,1)),raster=basemap!=='street';
   const shown=drawTiles();if(shown){ctx.globalAlpha=1;ctx.drawImage(tcv,0,0,W,H);drawPoleCaps();ctx.globalAlpha=1}
   if(attrib)attrib.classList.toggle('show',shown);if(shown)attrib.textContent=raster?BM().attr:VT_ATTR;
-  if(bA>0.01){ctx.globalAlpha=bA;fillBands(D.gaps);fillBands(TZ);ctx.globalAlpha=1}
+  // the colours stop at 85° north and south: time zones have no meaning at the poles, where the caps show instead
+  if(bA>0.01){ctx.save();ctx.beginPath();path(BAND85);ctx.clip();ctx.globalAlpha=bA;fillBands(D.gaps);fillBands(TZ);ctx.restore()}
   // the working-hours part of the key fades with the colours; the coliving part stays while colivings show
   const stripEl=document.getElementById('strip');if(stripEl){const o=showHours?bA:0;if(stripEl._o!==o){stripEl._o=o;stripKey(o)}}
   // the country borders are fine and soft, so the colours sit under them rather than being cut up by them
@@ -589,7 +593,7 @@ function wireFav(name,ll,where,tz){const b=document.getElementById('favadd');if(
 function showFav(f,focus){activeFav=f;selected=null;draft=null;
   const when=new Date(f.created);const ds=isNaN(when)?'':when.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
   document.getElementById('infob').innerHTML=`<input class="ftitle" id="fname" value="${esc(f.name)}" aria-label="Favourite name" maxlength="80">
-    <p class="where"><span class="fh" aria-hidden="true">♥</span> ${esc(f.where?f.where+', ':'')}saved ${ds}</p><p class="coords">${coordStr(f)}</p>${hoursBlock(f.tz)}
+    <p class="where"><span class="fh" aria-hidden="true">♥</span> ${esc(f.where?f.where+', ':'')}saved ${ds}</p><p class="coords">${coordStr(f)}</p><div class="cllinks">${gmapsLink([f.lon,f.lat])}</div>${hoursBlock(f.tz)}
     <label class="nl" for="fnote">Note</label><textarea id="fnote" rows="4" placeholder="Where to stay, who to contact, what to check…">${esc(f.note||'')}</textarea>
     ${wxBlock()}${photosBlock()}${flightsBlock()}<p class="hint2">Drag the heart to move it.</p><div class="frow"><span class="saved" id="fsaved"></span><button class="ghost" id="fdel">Remove favourite</button></div>`;wireFlights([f.lon,f.lat]);wxLoad([f.lon,f.lat]);photosLoad([f.lon,f.lat]);
   const nm=document.getElementById('fname'),nt=document.getElementById('fnote'),sv=document.getElementById('fsaved');
@@ -701,7 +705,7 @@ function lookupDraft(){const d=draft;const nm=document.getElementById('dname');i
   geocode(d,res=>{if(draft!==d)return;if(!d.edited)d.name=res.name;d.where=res.where;updateDraft()});}
 function showDraft(){const d=draft;activeFav=null;selected=null;
   infob.innerHTML=`<input class="ftitle" id="dname" value="${esc(d.name)}" placeholder="Finding the nearest place…" aria-label="Favourite name" maxlength="80">
-    <p class="where" id="dwhere">${esc(d.where)}</p><p class="coords" id="dcoords">${coordStr(d)}</p><div id="dhrs">${hoursBlock(tzAt([d.lon,d.lat]))}</div>
+    <p class="where" id="dwhere">${esc(d.where)}</p><p class="coords" id="dcoords">${coordStr(d)}</p><div class="cllinks">${gmapsLink([d.lon,d.lat])}</div><div id="dhrs">${hoursBlock(tzAt([d.lon,d.lat]))}</div>
     <label class="nl" for="dnote">Note</label><textarea id="dnote" rows="3" placeholder="Where to stay, who to contact, what to check…">${esc(d.note)}</textarea>
     ${flightsBlock()}<p class="hint2">Drag the pin to fine-tune the spot, or click elsewhere to move it.</p>
     <div class="frow"><button class="ghost" id="dcancel">Cancel</button><button class="primary" id="dsave"><span aria-hidden="true">♥</span> Save favourite</button></div>`;
@@ -844,7 +848,7 @@ let infoTok=0;
 function showInfo(title,where,tz,ll){activeFav=null;draft=null;infoTok++;const z=D.zones[tz]||[0,0],o=z[season],b=band(o),other=z[1-season];
   document.getElementById('infob').innerHTML=`<h2>${esc(title)}</h2><p class="where">${esc(where&&where!==title?where:' ')}</p>
   <div class="big"><i style="background:${pal['b'+b]}"></i>${hours(o)}</div><p class="bandname">${BANDS[b].name}, ${season?'summer':'winter'}</p>
-  <dl><dt>${season?'Winter':'Summer'}</dt><dd>${hours(other)}</dd><dt>Difference</dt><dd>${vsUK(o)}</dd><dt>Time zone</dt><dd>${utc(o)}</dd></dl>${ll?favBtn(ll):''}${ll?wxBlock():''}${ll?photosBlock():''}${ll?flightsBlock():''}`;
+  <dl><dt>${season?'Winter':'Summer'}</dt><dd>${hours(other)}</dd><dt>Difference</dt><dd>${vsUK(o)}</dd><dt>Time zone</dt><dd>${utc(o)}</dd></dl>${ll?`<div class="cllinks">${gmapsLink(ll)}</div>`:''}${ll?favBtn(ll):''}${ll?wxBlock():''}${ll?photosBlock():''}${ll?flightsBlock():''}`;
   wireFlights(ll);wxLoad(ll);photosLoad(ll);if(ll)wireFav(title,ll,where,tz);document.getElementById('info').classList.add('show');}
 function hideInfo(){document.getElementById('info').classList.remove('show');if(typeof CW!=='undefined'&&CW.sel){CW.sel=null;draw()}if(typeof CAM!=='undefined'&&CAM.sel){CAM.sel=null;draw()}PH.tok++;if(clickPin){clickPin=null;draw()}if(typeof CL!=='undefined'&&CL.sel){CL.sel=null;draw()}if(selected||activeFav||draft){selected=null;activeFav=null;draft=null;draw()}}
 document.getElementById('infox').onclick=hideInfo;
@@ -1300,7 +1304,7 @@ function clShow(x){activeFav=null;draft=null;selected=null;CL.sel=x;clickPin=nul
     <h2>${esc(x.n)}</h2><p class="where">${esc([x.a,x.c].filter(Boolean).join(', '))}</p>
     <dl class="meta">${rows.map(([a,b])=>`<dt>${a}</dt><dd>${esc(b)}</dd>`).join('')}</dl>
     ${x.src==='estimate'&&x.eur!=null?'<p class="clsmall">Price is colivingDB’s estimate; check with the host.</p>':''}
-    <div class="cllinks">${links}</div>${favBtn([x.lon,x.lat])}<div>${hoursBlock(tzAt([x.lon,x.lat]))}</div>${wxBlock()}${photosBlock()}${flightsBlock()}`;
+    <div class="cllinks">${links}${gmapsLink([x.lon,x.lat])}</div>${favBtn([x.lon,x.lat])}<div>${hoursBlock(tzAt([x.lon,x.lat]))}</div>${wxBlock()}${photosBlock()}${flightsBlock()}`;
   wireFlights([x.lon,x.lat]);wxLoad([x.lon,x.lat]);photosLoad([x.lon,x.lat]);wireFav(x.n,[x.lon,x.lat],[x.a,x.c].filter(Boolean).join(', '),tzAt([x.lon,x.lat]));document.getElementById('info').classList.add('show');}
 function clGo(x){if(!CL.vis.includes(x)){CL.f=Object.assign({},CL_DEF);clSync();clApply()}flyTo(x.lon,x.lat,0.6);clShow(x);draw()}
 
@@ -1390,7 +1394,7 @@ Promise.all([fetch('data/coliving.json').then(r=>{if(!r.ok)throw new Error(r.sta
 const PH={cache:new Map(),list:[],tok:0,box:null,grid:null,i:0,ac:null};
 (()=>{const m=/[#&]mapillary=([^&]+)/.exec(location.hash);if(!m)return;try{localStorage.setItem('whg.mapillary',decodeURIComponent(m[1]))}catch(e){}
   history.replaceState(null,'',location.pathname+location.search)})();
-const PH_RADII=[10000,50000],PH_WANT=10,PH_SHOW=6;
+const PH_RADII=[10000,50000],PH_WANT=10,PH_SHOW=3;
 const phDist=(a,b,c,d)=>{const R=6371000,r=Math.PI/180,x=Math.sin((c-a)*r/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin((d-b)*r/2)**2;return 2*R*Math.asin(Math.sqrt(x))};
 const phFmtD=m=>m<10?'<10 m':m<1000?Math.round(m/10)*10+' m':m<10000?(m/1000).toFixed(1)+' km':Math.round(m/1000)+' km';
 const phStrip=h=>{const d=document.createElement('div');d.innerHTML=String(h||'');return d.textContent.replace(/\s+/g,' ').trim()};
@@ -1512,17 +1516,19 @@ async function phSearch(lat,lon,onUpdate){const seen=new Map();let radius=0,answ
   await phFillCommons(list);if(list.some(p=>p.off))onUpdate(phRank(seen),radius,true)}
 
 // --- card section ---
-// The search starts as soon as the card opens; the thumbnails only show once the Photos button is pressed.
-const photosBlock=()=>`<div class="phs" id="phs"><button type="button" class="phbtn" id="phbtn" aria-expanded="false" aria-controls="phg"><span>Photos nearby</span><small id="phst">Searching…</small><i class="phchev" aria-hidden="true">›</i></button><div class="phg" id="phg" hidden></div></div>`;
+// The search starts as soon as the card opens. The first photos show in the card as soon as any source answers;
+// the button under them opens every photo found so far in the full grid.
+const photosBlock=()=>`<div class="phs" id="phs"><div class="phg" id="phg"></div><button type="button" class="phbtn" id="phbtn" aria-controls="phg"><span>All photos nearby</span><small id="phst">Searching…</small><i class="phchev" aria-hidden="true">›</i></button></div>`;
+// the location in Google Maps, opened in a new tab
+const gmapsLink=ll=>ll?`<a class="clbtn gmaps" href="https://www.google.com/maps/search/?api=1&query=${ll[1].toFixed(6)},${ll[0].toFixed(6)}" target="_blank" rel="noopener noreferrer">Open in Google Maps ↗</a>`:'';
 function photosLoad(ll){if(!ll)return;const tok=++PH.tok;if(PH.ac)PH.ac.abort();PH.ac=new AbortController();PH.list=[];PH.done=false;PH.failed=false;PH.radius=0;PH.sig='';PH.ll=ll;
-  const btn=document.getElementById('phbtn');if(btn)btn.onclick=()=>{const g=document.getElementById('phg');const open=g.hidden;g.hidden=!open;btn.setAttribute('aria-expanded',open);if(open)photosRender(true)};
+  const btn=document.getElementById('phbtn');if(btn)btn.onclick=()=>{if(PH.list.length)phGrid()};
   phSearch(ll[1],ll[0],(list,r,done)=>{if(tok!==PH.tok||!document.getElementById('phg'))return false;PH.list=list;PH.radius=r;PH.done=done;photosRender()})}
 function photosRender(force){const st=document.getElementById('phst'),g=document.getElementById('phg'),btn=document.getElementById('phbtn');if(!st||!g)return;
   const n=PH.list.length;
-  st.textContent=PH.done?(n?`${n} within ${phFmtD(PH.radius)}`:PH.failed?'not reached':`none within ${phFmtD(PH.radius)}`):n?`${n} so far…`:'Searching…';
-  btn.classList.toggle('empty',PH.done&&!n);
-  if(g.hidden)return;
-  if(!n){PH.sig='';g.innerHTML=PH.done?(PH.failed?'<p class="clsmall">The photo services didn’t answer. Try again in a moment.</p><button type="button" class="add" id="phretry">Try again</button>':`<p class="clsmall">No photos found within ${phFmtD(PH.radius)}.</p>`):Array(6).fill('<span class="phsk"></span>').join('');
+  st.textContent=PH.done?(n?`${n} nearby`:PH.failed?'not reached':`none within ${phFmtD(PH.radius)}`):n?`${n} so far…`:'Searching…';
+  btn.classList.toggle('empty',PH.done&&!n);btn.disabled=!n;
+  if(!n){PH.sig='';g.innerHTML=PH.done?(PH.failed?'<p class="clsmall">The photo services didn’t answer. Try again in a moment.</p><button type="button" class="add" id="phretry">Try again</button>':`<p class="clsmall">No photos found within ${phFmtD(PH.radius)}.</p>`):Array(PH_SHOW).fill('<span class="phsk"></span>').join('');
     const rt=g.querySelector('#phretry');if(rt)rt.onclick=()=>photosLoad(PH.ll);return}
   const shown=PH.list.slice(0,PH_SHOW),more=n>PH_SHOW,sig=shown.map(p=>p.key).join('|')+'#'+(more?n:0);
   if(sig===PH.sig&&!force)return;PH.sig=sig;
@@ -1740,7 +1746,7 @@ function camShow(x){activeFav=null;draft=null;selected=null;if(typeof CL!=='unde
   const src={windy:'Windy Webcams',osm:'OpenStreetMap',wikidata:'Wikidata'}[x.src];
   document.getElementById('infob').innerHTML=`<p class="cltype"><i style="background:${x.src==='windy'?'#e2453c':'#1f2937'}"></i>Webcam</p><h2>${esc(x.title||'Webcam')}</h2><p class="where">${esc(x.place||'')}</p>`+
     (x.src==='windy'?`<div class="camplayer"><iframe src="https://webcams.windy.com/webcams/public/embed/player/${x.wid}/day" title="${esc(x.title||'Webcam')}: today" loading="lazy" allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe></div><p class="clsmall">Today’s images from this camera, by <a href="https://www.windy.com/webcams" target="_blank" rel="noopener noreferrer">Windy.com</a>. Press play, or open it on Windy for the live view.</p>`:`<p class="clsmall">This webcam is listed on ${src}; its live view opens on the camera’s own site.</p>`)+
-    `<div class="cllinks"><a class="clbtn" href="${esc(x.link)}" target="_blank" rel="noopener noreferrer">${x.src==='windy'?'Open on Windy ↗':'Open webcam ↗'}</a></div>`+
+    `<div class="cllinks"><a class="clbtn" href="${esc(x.link)}" target="_blank" rel="noopener noreferrer">${x.src==='windy'?'Open on Windy ↗':'Open webcam ↗'}</a>${gmapsLink([x.lon,x.lat])}</div>`+
     `<div>${hoursBlock(tzAt([x.lon,x.lat]))}</div>${wxBlock()}`;
   wxLoad([x.lon,x.lat]);
   document.getElementById('info').classList.add('show')}
@@ -1833,17 +1839,33 @@ const NIGHT_BANDS=(()=>{const out=[],maxA=0.4,step=1;let prev=0;
   for(let d=93;d>=72;d-=step){const t=(93-d)/21,T=maxA*t*t*(3-2*t),a=1-(1-T)/(1-prev);prev=T;out.push([d,a])}return out})();
 // Zoomed in to town level the street map takes over (see TILE_K), so the night shading fades out over the same
 // zoom range and leaves the base map's own brightness alone
-// the poles: the sun is at the same height all the way round a pole, so a cap is either in night or not, and by how
-// many tiers; the cap is filled with that darkness directly
-const poleNight=sign=>{const sd=Math.sin(sunNow(Date.now())[1]*Math.PI/180);let a=0;for(const[e,al]of NIGHT_TIERS)if(sign*sd<-Math.sin(e*Math.PI/180))a+=al;return a};
-function drawPoleNight(a,alphaScale){if(a<=0)return;for(const sign of[1,-1]){const pa=poleNight(sign)*alphaScale;if(pa<=0)continue;
-  const col=dark?'2,6,22':'8,14,40';
-  ctx.beginPath();path(d3.geoCircle().center([0,sign*90]).radius(5.45).precision(2)());ctx.fillStyle=`rgba(${col},${(pa*0.35).toFixed(4)})`;ctx.fill();
-  ctx.beginPath();path(d3.geoCircle().center([0,sign*90]).radius(5).precision(2)());ctx.fillStyle=`rgba(${col},${pa.toFixed(4)})`;ctx.fill()}}
-function drawNight(){const nf=1-clamp((k-TILE_K)/4.5,0,1);if(nf<=0)return;const col=dark?'2,6,22':'8,14,40';
-  // the night side is traced from the sun's position (see nightFeaturesGeo), so its edge stays clean over the poles
-  ctx.save();for(const f of nightFeaturesGeo().features){ctx.beginPath();path(f);ctx.fillStyle=`rgba(${col},${(f.properties.a*nf).toFixed(4)})`;ctx.fill()}
-  drawPoleNight(1,nf);ctx.restore()}
+// Day and night on the 2D globe: every screen pixel gets its own darkness from the sun's height above the horizon at
+// the point under it, so the poles, the terminator and the twilight need no special cases (the older polygon shading
+// left a disc and wedges over the poles). Darkness is nothing while the sun is up, and deepens smoothly to the full
+// amount 18° below the horizon. It is worked out on a grid of pixels, rebuilt when the view or the minute changes
+// (a coarser grid while the globe moves), and stretched over the globe.
+const NIGHT_MAX=0.4,NIGHT_FULL=18;
+const nightCv=document.createElement('canvas'),nightMask=document.createElement('canvas');
+let nightKey='';
+function nightGrid(){
+  const step=viewMoving?6:3,key=[rot.map(v=>v.toFixed(4)).join(','),k.toFixed(5),W,H,step,dark,Math.floor(Date.now()/6e4)].join('|');
+  if(key===nightKey)return;
+  const gw=Math.ceil(W/step),gh=Math.ceil(H/step),R=proj.scale();
+  if(nightCv.width!==gw||nightCv.height!==gh){nightCv.width=nightMask.width=gw;nightCv.height=nightMask.height=gh}
+  const nc=nightCv.getContext('2d'),mc=nightMask.getContext('2d'),ni=nc.createImageData(gw,gh),mi=mc.createImageData(gw,gh),
+    col=dark?[2,6,22]:[8,14,40],D=Math.PI/180,[sl,sd]=sunNow(Date.now()),ss=Math.sin(sd*D),cs=Math.cos(sd*D);
+  for(let j=0;j<gh;j++)for(let i=0;i<gw;i++){
+    const x=i*step+step/2-cx,y=j*step+step/2-cy;if(x*x+y*y>R*R)continue;
+    const ll=proj.invert([x+cx,y+cy]);if(!ll)continue;
+    const lat=ll[1]*D,sinEl=Math.sin(lat)*ss+Math.cos(lat)*cs*Math.cos((ll[0]-sl)*D);
+    const el=Math.asin(Math.max(-1,Math.min(1,sinEl)))/D,a=NIGHT_MAX*clamp(-el/NIGHT_FULL,0,1);
+    if(a<=0)continue;
+    const q=(j*gw+i)*4;
+    ni.data[q]=col[0];ni.data[q+1]=col[1];ni.data[q+2]=col[2];ni.data[q+3]=Math.round(a*255);
+    mi.data[q]=mi.data[q+1]=mi.data[q+2]=255;mi.data[q+3]=Math.round(Math.min(1,a*2.5)*255)}
+  nc.putImageData(ni,0,0);mc.putImageData(mi,0,0);nightKey=key}
+function drawNight(){const nf=1-clamp((k-TILE_K)/4.5,0,1);if(nf<=0)return;nightGrid();
+  ctx.save();ctx.globalAlpha*=nf;ctx.imageSmoothingEnabled=true;ctx.drawImage(nightCv,0,0,W,H);ctx.restore()}
 // City lights: the Black Marble night imagery, shown only over the night side. It is drawn with the same tile
 // pipeline as the basemap, then masked by the night shading, so the lights are brightest where it is darkest.
 const lightsCv=document.createElement('canvas'),maskCv=document.createElement('canvas');
@@ -1861,10 +1883,7 @@ function drawLights(){const lf=1-clamp((k-TILE_K)/4.5,0,1);if(lf<=0||basemap==='
   // only the bright city lights are kept: the dark ground of the night imagery is pushed to black, so adding it
   // over the colours brightens the lights and nothing else
   lc.setTransform(1,0,0,1,0,0);lc.clearRect(0,0,lightsCv.width,lightsCv.height);lc.filter='contrast(3) brightness(0.6)';lc.drawImage(tcv,0,0);lc.filter='none';
-  mc.setTransform(1,0,0,1,0,0);mc.clearRect(0,0,maskCv.width,maskCv.height);mc.setTransform(dpr,0,0,dpr,0,0);
-  const mp=d3.geoPath(proj).context(mc);
-  for(const f of nightFeaturesGeo().features){mc.beginPath();mp(f);mc.fillStyle=`rgba(255,255,255,${Math.min(1,f.properties.a*2.5).toFixed(4)})`;mc.fill()}
-  for(const sign of[1,-1]){const pa=poleNight(sign);if(pa<=0)continue;mc.beginPath();mp(d3.geoCircle().center([0,sign*90]).radius(5).precision(2)());mc.fillStyle=`rgba(255,255,255,${Math.min(1,pa*2.5).toFixed(4)})`;mc.fill()}
+  nightGrid();mc.setTransform(1,0,0,1,0,0);mc.clearRect(0,0,maskCv.width,maskCv.height);mc.imageSmoothingEnabled=true;mc.drawImage(nightMask,0,0,maskCv.width,maskCv.height);
   lc.setTransform(1,0,0,1,0,0);lc.globalCompositeOperation='destination-in';lc.drawImage(maskCv,0,0);lc.globalCompositeOperation='source-over';
   lightsKey=key}
   if(!lightsKey)return;
@@ -1874,6 +1893,7 @@ setInterval(()=>{if(showNight&&!running)draw()},60000);
 
 // Web map tiles stop at 85° north and south, which left a dark disc over each pole. Fill those caps in the base
 // map's own colours: ice for Antarctica, sea for the Arctic, with a soft edge so the join doesn't show.
+const BAND85={type:'Polygon',coordinates:[[[-180,85],[180,85],[180,-85],[-180,-85],[-180,85]]]};
 const POLE={street:['#ddecec','#aad3df'],satellite:['#eef2f5','#1f4262'],s2:['#eef2f5','#1f4262'],topo:['#f4f7f7','#97d2e3'],ocean:['#e8eef0','#a8c4d4'],night:['#0b0d1a','#05070f']};
 // the polar caps the basemap stops short of: filled in its colours, with the edge feathered outwards
 function drawPoleCaps(){const c=POLE[basemap]||POLE.street,a0=ctx.globalAlpha;
