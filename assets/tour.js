@@ -29,7 +29,7 @@ const STEPS=[
   {title:'Plan your working life around the world',
     text:'This map is for digital nomads. Set your working hours in UK time and see, country by country, when a working day falls, then find where to stay: co-living and coworking spaces, the weather and photos for each place. This short tour shows how. Press Esc at any time to stop.',
     target:null,enter:c=>ensure2D(c)},
-  {title:'The globe',target:'#c',
+  {title:'The globe',target:'.m3dmap',
     text:'Every country and time zone is coloured by when a working day falls in UK time. Drag to spin, scroll or pinch to zoom.',
     enter:c=>ensure2D(c)},
   {title:'Working hours settings',target:'#hoursset',
@@ -127,9 +127,9 @@ async function tap(c,sel){const el=shown(sel);if(!el){console.warn('Tour could n
 async function pointAt(c,lon,lat){const p=window.whg.screen(lon,lat);if(!p)return;await moveTo(c,p.x,p.y);ripple();await c.sleep(500)}
 
 // Interface actions. Each one only acts when the interface is not already in the wanted state.
-async function ensure2D(c){if(document.body.classList.contains('in3d')){await tap(c,'#b3d');await waitFor(c,()=>!document.body.classList.contains('in3d'),6000);await c.sleep(600)}}
+async function ensure2D(c){if(window.whg.tilted()){await tap(c,'#b3d');await waitFor(c,()=>!window.whg.tilted(),6000);await c.sleep(600)}}
 // the 3D view is switched on before its map has loaded, so wait for the map's style too
-async function set3D(c,on){if(document.body.classList.contains('in3d')!==on){await tap(c,'#b3d');await waitFor(c,()=>document.body.classList.contains('in3d')===on,9000);
+async function set3D(c,on){if(window.whg.tilted()!==on){await tap(c,'#b3d');await waitFor(c,()=>window.whg.tilted()===on,9000);
   if(on)await waitFor(c,()=>{const m=window.whg.map3d();return!!m&&m.isStyleLoaded()},30000);await c.sleep(1200)}}
 async function setHours(c,open){const h=$('#hoursset');if(!h||h.hidden===!open)return;await tap(c,'#hoursgear');await c.sleep(400)}
 async function setLayer(c,key,on){const cb=$(`[data-show="${key}"]`);if(!cb){console.warn('Tour: no layer',key);return}if(cb.checked!==on)await tap(c,`label:has([data-show="${key}"])`);await c.sleep(900)}
@@ -216,7 +216,7 @@ function restore(){if(!saved)return;
   if($('#cwf')&&!$('#cwf').hidden)$('#cwfx').click();
   if($('#favlist')&&!$('#favlist').hidden)$('#favlistx')?.click();
   if($('#info').classList.contains('show'))$('#infox').click();
-  if(document.body.classList.contains('in3d'))$('#b3d').click()}
+  if(window.whg.tilted())$('#b3d').click()}
 
 function start(){if(active)return;active=true;saved=snapshot();
   document.body.classList.add('touring');veil.hidden=false;ring.hidden=false;card.hidden=false;glowEl.hidden=false;cursor.hidden=false;

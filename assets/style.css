@@ -288,7 +288,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .bmdot{width:12px;height:12px;border-radius:50%;border:2px solid var(--ink2);margin-top:3px;flex:none;box-sizing:border-box}
 .bmmenu [aria-checked=true] .bmdot{border-color:var(--accent);background:radial-gradient(var(--accent) 45%,transparent 50%)}
 .bmmenu .bm3d{border-top:1px solid var(--glass-b);margin-top:4px;padding-top:9px;border-radius:0 0 10px 10px}
-.m3d{position:fixed;inset:0;z-index:45;background:transparent}
+.m3d{position:fixed;inset:0;z-index:0;background:transparent;transition:opacity .7s ease}
+.m3d.placing .maplibregl-canvas{cursor:crosshair}
 .m3d[hidden]{display:none}
 .m3dmap{position:absolute;inset:0;width:100%;height:100%}
 .m3d .maplibregl-map{position:absolute}
@@ -296,7 +297,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .m3dbar small{color:var(--ink2);font-size:.76rem}
 .m3dbar .primary,.m3dbar .flb2{padding:7px 14px;white-space:nowrap}
 .m3dmsg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:#fff;background:rgba(0,0,0,.6);padding:12px 16px;border-radius:12px;margin:0}
-body.in3d .tools{z-index:46}
+.tools{z-index:46}
 @media (max-width:700px){.m3dbar small{display:none}}
 
 .bmtick{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:10px;cursor:pointer;font-size:.86rem;font-weight:600}
@@ -308,8 +309,8 @@ body.in3d .tools{z-index:46}
 .bmtick .clfb:hover,.bmtick .clfb.on{color:var(--accent)}
 .bmtick .clfb.on::after{content:"";position:absolute;top:0;right:0;width:6px;height:6px;border-radius:50%;background:var(--accent)}
 .bmh2{border-top:1px solid var(--glass-b);margin-top:4px;padding-top:9px}
-body.in3d .info,body.in3d .clf{z-index:47}
-body.in3d .strip{display:none}
+.info,.clf{z-index:47}
+body.tilted .strip{display:none}
 
 /* weather in cards */
 .wx{margin:12px 0 4px;border-top:1px solid var(--glass-b);padding-top:10px}
@@ -331,14 +332,12 @@ body.in3d .strip{display:none}
 
 .locbtn{z-index:3}
 .locbtn.busy svg{animation:phsp 1s linear infinite}
-body.in3d .locbtn{z-index:46}
 .msgtoast{position:fixed;left:50%;bottom:70px;transform:translateX(-50%) translateY(20px);opacity:0;pointer-events:none;padding:10px 16px;border-radius:12px;font-size:.88rem;z-index:60;transition:opacity .2s,transform .2s;max-width:min(90vw,460px);text-align:center}
 .msgtoast.show{opacity:1;transform:translateX(-50%)}
 .me3d{width:15px;height:15px;border-radius:50%;background:#2f7df6;border:3px solid #fff;box-shadow:0 0 0 8px rgba(47,125,246,.18),0 2px 6px rgba(0,0,0,.3)}
 
 .northbtn{z-index:3}
 .northbtn svg{transition:transform .15s}
-body.in3d .northbtn{z-index:46}
 
 .camimg{all:unset;display:block;cursor:zoom-in;margin:10px 0 2px;border-radius:10px;overflow:hidden;background:var(--field)}
 .camimg img{display:block;width:100%;height:auto;max-height:240px;object-fit:cover}
@@ -353,7 +352,6 @@ body.in3d .northbtn{z-index:46}
 .lyr.folded{width:auto}.lyr.folded .lyrb{display:none}
 .lyrb{display:flex;flex-direction:column;gap:1px}
 .lyrb .bmtick{padding:6px 8px}
-body.in3d .lyr{z-index:46}
 @media (max-width:700px){.lyr{left:12px;top:12px;width:210px}}
 
 .camplayer{position:relative;margin:10px 0 2px;border-radius:10px;overflow:hidden;background:var(--field);aspect-ratio:16/10}
@@ -419,7 +417,7 @@ body.in3d .lyr{z-index:46}
 #favlist .favs li button:first-child{width:auto;min-width:0}
 #favlist .favs li .fn{display:inline-block;width:auto;flex:1 1 0;min-width:0}
 /* in 3D the page keeps its own look: the same bars, panels and buttons as on the globe */
-body.in3d #search,body.in3d .attrib{z-index:47}
+.attrib{z-index:6}
 /* the working-hours colour key, under the hours card while the Working hours layer is on */
 .bandkey{position:absolute;left:16px;top:calc(16px + var(--lyrh,0px));z-index:2;width:var(--col);padding:4px 6px 6px;border-radius:16px;transition:opacity .3s}
 .bandkey[hidden]{display:none}
@@ -430,7 +428,6 @@ body.in3d #search,body.in3d .attrib{z-index:47}
 .bandkey li i{width:14px;height:14px;border-radius:4px;flex:none}
 .bandkey li span{flex:1;min-width:0;font-weight:600}
 .bandkey li small{color:var(--ink2);font-size:.8rem;white-space:nowrap;font-variant-numeric:tabular-nums}
-body.in3d #bandkey{z-index:47}
 /* the 2D globe is not drawn while the 3D view is showing; the star field behind still is */
 body.in3d #c{opacity:0;pointer-events:none}
 #c{transition:opacity .7s ease}

@@ -111,13 +111,16 @@ function openingHoursChecks() {
     await page.evaluate(() => document.querySelector('.phbox .phx').click());
   }
 
-  // 7. 3D: the 2D globe and the 3D view cross-fade when the view changes
+  // 7. the globe is a MapLibre map from the start; the 3D button tilts it and levels it again
+  await page.waitForFunction(() => window.whg.ready(), null, { timeout: 60000 });
   await page.evaluate(() => document.getElementById('b3d').click());
-  await page.waitForTimeout(250);
-  const mid = await page.evaluate(() => ({ globe: +getComputedStyle(document.getElementById('c')).opacity, view: +getComputedStyle(document.querySelector('.m3d')).opacity }));
-  check('2D and 3D cross-fade on entering 3D', mid.globe < 1 && mid.view > 0, JSON.stringify(mid));
-  await page.waitForFunction(() => document.body.classList.contains('in3d'), null, { timeout: 60000 });
+  await page.waitForTimeout(2000);
+  const tilt = await page.evaluate(() => ({ pitch: window.whg.map3d().getPitch(), label: document.querySelector('#b3d b').textContent }));
+  check('3D button tilts the globe', tilt.pitch > 20 && tilt.label === '2D', JSON.stringify(tilt));
   await page.evaluate(() => document.getElementById('b3d').click());
+  await page.waitForTimeout(4000);
+  const flat = await page.evaluate(() => ({ pitch: window.whg.map3d().getPitch(), label: document.querySelector('#b3d b').textContent }));
+  check('3D button levels the globe again', flat.pitch < 5 && flat.label === '3D', JSON.stringify(flat));
   check('no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
   await browser.close();
   const failed = results.filter(r => !r).length;

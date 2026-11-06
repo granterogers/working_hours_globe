@@ -46,7 +46,7 @@ function theme(){dark=!matchMedia('(prefers-color-scheme: light)').matches;
             land:'#2b3854',ink:'#f6f7fb',ink2:'rgba(226,232,246,.82)',halo:'rgba(5,10,24,.82)',shadeLite:'rgba(255,255,255,.10)',shadeDark:'rgba(0,4,16,.55)',coast1:'rgba(120,190,255,.07)',coast2:'rgba(140,200,255,.14)',pbTile:'rgba(40,30,80,.45)',borderTile:'rgba(30,20,70,.75)'}
           :{oceanIn:'#d4e6f8',oceanOut:'#9dbfe2',glow:'rgba(120,170,235,',grat:'rgba(30,70,130,.08)',border:'rgba(255,255,255,.85)',pb:'rgba(255,255,255,.55)',
             land:'#e9e3d6',ink:'#111a30',ink2:'rgba(30,42,70,.85)',halo:'rgba(255,255,255,.9)',shadeLite:'rgba(255,255,255,.22)',shadeDark:'rgba(20,40,80,.22)',coast1:'rgba(255,255,255,.25)',coast2:'rgba(255,255,255,.45)',pbTile:'rgba(40,30,80,.4)',borderTile:'rgba(30,20,70,.7)'};
-  BANDS.forEach((b,i)=>pal['b'+i]=dark?b.dark:b.light);stars();ui();draw();}
+  BANDS.forEach((b,i)=>pal['b'+i]=dark?b.dark:b.light);stars();ui();draw();if(m3d.ready)m3dStyle();}
 matchMedia('(prefers-color-scheme: light)').addEventListener('change',theme);
 
 // The sky behind the globe: real stars and constellation figures from data/sky.json (Yale Bright Star Catalogue,
@@ -143,6 +143,7 @@ function fillBands(fc){const g=[[],[],[],[],[],[]];
 function strokeFC(fc,style,w){ctx.beginPath();for(const f of fc.features)if(f.rings&&inView(f))for(const r of f.rings)ring(r,false);ctx.strokeStyle=style;ctx.lineWidth=w;ctx.stroke();}
 
 function draw(){
+  if(mapOn()){mapSync();return}
   if(!W)return;
   ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
   const s=base*k;proj.rotate(rot).scale(s);computeView();setMatrix();skyFrame();
@@ -259,7 +260,7 @@ function tick(now){
   if(busy)requestAnimationFrame(tick);else{running=false;draw()}
 }
 function rotateBy(dx,dy){const s=base*k;rot[0]=wrap(rot[0]+dx/s*DEG);rot[1]=clamp(rot[1]-dy/s*DEG,-85,85)}
-function zoomTo(nk,at){kT=clamp(nk,MINK,MAXK);anchor=at||null;fly=null;kick()}
+function zoomTo(nk,at){if(mapOn()){const m=m3d.map;m.easeTo({zoom:k2z(clamp(nk,MINK,MAXK),m.getCenter().lat),duration:300});return}kT=clamp(nk,MINK,MAXK);anchor=at||null;fly=null;kick()}
 
 const pts=new Map();let moved=0,lastMove=0,pinch0=null;
 cv.addEventListener('pointerdown',e=>{
@@ -284,6 +285,8 @@ cv.addEventListener('keydown',e=>{const st=40;if(e.key==='ArrowLeft'){vel=[st/4,
   else if(e.key==='+'||e.key==='='){zoomTo(kT*1.6,[cx,cy])}else if(e.key==='-'){zoomTo(kT/1.6,[cx,cy])}else return;e.preventDefault();kick()});
 
 function flyTo(lon,lat,sizeDeg,dur,minDeg){
+  if(mapOn()){const target=clamp((Math.min(W,H)*0.38)/(Math.max(sizeDeg,minDeg??1.2)*base/DEG),1,MAXK);
+    m3d.map.flyTo({center:[lon,lat],zoom:k2z(target,lat),duration:matchMedia('(prefers-reduced-motion: reduce)').matches?0:(dur||1500),essential:true});return}
   const target=clamp((Math.min(W,H)*0.38)/(Math.max(sizeDeg,minDeg??1.2)*base/DEG),1,MAXK);
   const r0=rot.slice(),r1=[-lon,clamp(-lat,-85,85),0];r1[0]=r0[0]+wrap(r1[0]-r0[0]);
   const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -941,9 +944,9 @@ document.addEventListener('click',e=>{const m=document.getElementById('bmmenu');
 document.getElementById('bmmenu').addEventListener('keydown',e=>{if(e.key==='Escape'){bmToggle(false);document.getElementById('bmbtn').focus()}});
 // the 3D button becomes a 2D button in 3D; the credits show in the same place as on the globe
 const M3D_ATTR='© Mapterhorn · © OpenFreeMap · © OpenMapTiles · Data © OpenStreetMap contributors';
-function setModeLabel(on){const b=document.getElementById('b3d');if(b){b.querySelector('b').textContent=on?'2D':'3D';b.setAttribute('aria-label',on?'2D view':'3D view');b.title=on?'Back to the 2D globe':'3D view'}
+function setModeLabel(on){document.body.classList.toggle('tilted',!!on);const b=document.getElementById('b3d');if(b){b.querySelector('b').textContent=on?'2D':'3D';b.setAttribute('aria-label',on?'2D view':'3D view');b.title=on?'Back to the 2D globe':'3D view'}
   const a=document.getElementById('attrib');if(a&&on){a.textContent=M3D_ATTR;a.classList.add('show')}}
-document.getElementById('b3d').onclick=()=>document.body.classList.contains('in3d')?close3D():open3D();
+document.getElementById('b3d').onclick=()=>{if(!mapOn()){openMap();return}tiltTo(isTilted()?0:45)};
 try{if(localStorage.getItem('whg.lyr')==='folded')lyrFold(false)}catch(e){}
 addEventListener('resize',lyrFit);
 document.getElementById('loc').onclick=locate;
@@ -961,9 +964,11 @@ var m3d={map:null,el:null,lib:null,pin:null};
 // for the guided tour (assets/tour.js): where a place is on screen now (null when it is behind the globe), and the points it can point at
 window.whg={screen(lon,lat){if(document.body.classList.contains('in3d')&&m3d.map){const p=m3d.map.project([lon,lat]);return{x:p.x,y:p.y}}const p=scr([lon,lat]);return p?{x:p[0],y:p[1]}:null},
   map3d:()=>m3d.map,
+  tilted:()=>isTilted(),
+  ready:()=>!!m3d.ready,
   zoomTo:k=>zoomTo(k),
   zoomBy:f=>zoomTo(kT*f),
-  rotate:d=>{rot[0]+=d;kick()},
+  rotate:d=>{if(mapOn()){const c=m3d.map.getCenter();m3d.map.jumpTo({center:[c.lng-d,c.lat]});return}rot[0]+=d;kick()},
   basemap:()=>basemap,
   // shows a list of photos in the nearby-photos panel, as if the search had found them (the tour uses this for its samples)
   // selects a place as a search result does, flying to the given centre (the tour uses it to reach cities)
@@ -977,7 +982,7 @@ function m3dLoad(){if(m3d.lib)return m3d.lib;m3d.lib=new Promise((ok,fail)=>{con
   const sc=document.createElement('script');sc.src=M3D_JS;sc.onload=()=>{if(!window.maplibregl)return fail(new Error('MapLibre missing'));m3d.libRef=window.maplibregl;ok(window.maplibregl)};sc.onerror=()=>{m3d.lib=null;fail(new Error('load'))};document.head.appendChild(sc)});return m3d.lib}
 const NAME_EN=['coalesce',['get','name:en'],['get','name']];
 function m3dStyleDef(){const B=BM();
-  if(basemap==='street')return'https://tiles.openfreemap.org/styles/liberty';
+  if(basemap==='street')return dark?'https://tiles.openfreemap.org/styles/dark':'https://tiles.openfreemap.org/styles/liberty';
   return{version:8,glyphs:'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
     sources:{base:{type:'raster',tiles:[B.url],tileSize:256,maxzoom:B.max,attribution:B.attr},
       ofm:{type:'vector',url:'https://tiles.openfreemap.org/planet',attribution:'OpenFreeMap © OpenMapTiles · © OpenStreetMap contributors'}},
@@ -986,6 +991,31 @@ function m3dStyleDef(){const B=BM();
       {id:'peaks',type:'symbol',source:'ofm','source-layer':'mountain_peak',minzoom:10,filter:['has','ele'],layout:{'text-field':['concat',NAME_EN,'\n',['to-string',['get','ele']],' m'],'text-font':['Noto Sans Regular'],'text-size':11},paint:{'text-color':'#fff','text-halo-color':'rgba(0,0,0,.75)','text-halo-width':1.3}},
       {id:'places',type:'symbol',source:'ofm','source-layer':'place',filter:['in',['get','class'],['literal',['city','town','village','suburb','hamlet','island']]],
         layout:{'text-field':NAME_EN,'text-font':['Noto Sans Bold'],'text-size':['match',['get','class'],'city',16,'town',14,12]},paint:{'text-color':B.dark?'#fff':'#111','text-halo-color':B.dark?'rgba(0,0,0,.8)':'#fff','text-halo-width':1.5}}]:[])}}
+// Day and night on the globe: the night side is an image worked out pixel by pixel from the sun, with the same darkness
+// as the canvas globe. Its rows are spaced as the Mercator map spaces them, so it lines up with the map. The image is
+// rebuilt each minute. (MapLibre's Mercator geometry stops at 85°, so nothing can be drawn over the poles themselves.)
+const NIGHT_IMG={key:'',url:'',an:0,as:0},NIGHT_MAXA=0.4,NIGHT_FULLDEG=18;
+function nightImage(){const key=Math.floor(Date.now()/6e4)+'|'+(dark?1:0);if(key===NIGHT_IMG.key)return NIGHT_IMG;
+  const W=720,H=720,cv=document.createElement('canvas');cv.width=W;cv.height=H;const cx=cv.getContext('2d'),im=cx.createImageData(W,H);
+  const D=Math.PI/180,[sl,sd]=sunNow(Date.now()),ss=Math.sin(sd*D),cs=Math.cos(sd*D),col=dark?[2,6,22]:[8,14,40];
+  const YM=Math.log(Math.tan(Math.PI/4+85.0511*D/2));
+  for(let j=0;j<H;j++){const y=YM-2*YM*(j+0.5)/H,lat=2*Math.atan(Math.exp(y))-Math.PI/2,sa=Math.sin(lat),ca=Math.cos(lat);
+    for(let i=0;i<W;i++){const lon=(-180+360*(i+0.5)/W)*D;
+      const sinEl=sa*ss+ca*cs*Math.cos(lon-sl*D),el=Math.asin(Math.max(-1,Math.min(1,sinEl)))/D,a=NIGHT_MAXA*clamp(-el/NIGHT_FULLDEG,0,1);
+      if(a<=0)continue;const q=(j*W+i)*4;im.data[q]=col[0];im.data[q+1]=col[1];im.data[q+2]=col[2];im.data[q+3]=Math.round(a*255)}}
+  cx.putImageData(im,0,0);
+  const at=sinEl=>NIGHT_MAXA*clamp(-Math.asin(Math.max(-1,Math.min(1,sinEl)))/D/NIGHT_FULLDEG,0,1);
+  NIGHT_IMG.url=cv.toDataURL('image/png');NIGHT_IMG.an=at(ss);NIGHT_IMG.as=at(-ss);NIGHT_IMG.key=key;return NIGHT_IMG}
+// the night image on the map, faded out with the same zoom range as the working-hours colours, and the caps updated with it
+function nightSync(map,zA,zB){const url=nightImage().url;
+  const src=map.getSource(M3D_OWN+'nightimg');
+  if(src){if(src._whgUrl!==url){src.updateImage({url});src._whgUrl=url}}
+  else{map.addSource(M3D_OWN+'nightimg',{type:'image',url,coordinates:[[-180,85.0511],[180,85.0511],[180,-85.0511],[-180,-85.0511]]});map.getSource(M3D_OWN+'nightimg')._whgUrl=url}
+  if(!map.getLayer(M3D_OWN+'nightimg')){const first=(map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id;
+    map.addLayer({id:M3D_OWN+'nightimg',type:'raster',source:M3D_OWN+'nightimg',paint:{'raster-fade-duration':0,'raster-resampling':'linear'}},first)}
+  // on and off is a change of opacity, which the map animates
+  map.setPaintProperty(M3D_OWN+'nightimg','raster-opacity',['*',showNight?1:0,['interpolate',['linear'],['zoom'],zA,1,zB,0]]);
+  }
 function m3dExtras(map){
   // terrain heights from Mapterhorn (the open terrain set MapLibre's own examples use); the older AWS/Mapzen
   // tiles had stray spikes, mostly along coasts and at close zoom
@@ -1002,28 +1032,37 @@ function m3dStyle(){const map=m3d.map;if(map){map.stop();map.setStyle(m3dStyleDe
 // 2D zoom k <-> MapLibre zoom: same on-screen scale at the centre of the view
 const k2z=(kk,lat)=>clamp(Math.log2(2*Math.PI*base*kk*Math.cos(lat*RAD)/512),0,20);
 const z2k=(z,lat)=>clamp(512*2**z/(2*Math.PI*base*Math.cos(lat*RAD)),MINK,MAXK);
-async function open3D(){let el=m3d.el;
-  if(!el){el=m3d.el=document.createElement('div');el.className='m3d';el.innerHTML=`<div class="m3dmap" id="m3dmap"></div><p class="m3dmsg" id="m3dmsg" hidden></p>`;document.body.appendChild(el);
-  }
-  // the 3D view fades in over the globe, which fades out (the globe only draws when it changes, so it costs nothing while it waits)
-  clearTimeout(m3d.fadeT);el.hidden=false;el.style.transition='opacity .7s ease';el.style.opacity='0';
-  requestAnimationFrame(()=>requestAnimationFrame(()=>{el.style.opacity='1'}));
-  document.body.classList.add('in3d');setModeLabel(true);const msg=el.querySelector('#m3dmsg');msg.hidden=true;
-  let lib;try{lib=await m3dLoad()}catch(e){msg.textContent='The 3D view couldn’t load. Check your connection and try again.';msg.hidden=false;return}
-  // start exactly where the globe was: same centre, same scale, looking straight down
-  const lon=-rot[0],lat=clamp(-rot[1],-85,85),zoom=k2z(k,lat);
-  if(m3d.map){m3d.map.jumpTo({center:[lon,lat],zoom,pitch:0,bearing:0});m3d.map.resize();m3dSync();tiltUp();return}
-  try{const map=m3d.map=new lib.Map({container:'m3dmap',style:m3dStyleDef(),center:[lon,lat],zoom,pitch:0,bearing:0,maxPitch:85,attributionControl:false,hash:false,dragRotate:true,pitchWithRotate:true,maxTileCacheSize:3000,refreshExpiredTiles:false});
-    map.on('rotate',northNeedle);map.on('pitch',northNeedle);
-    map.on('style.load',()=>{m3d.mode=null;m3dExtras(map);m3dSync();for(const l of map.getStyle().layers)if(l.type==='background')map.setPaintProperty(l.id,'background-color','rgba(0,0,0,0)');stars()});
-    map.on('move',()=>{if(document.body.classList.contains('in3d'))skyFrame()});
-    map.on('zoomend',()=>{m3dMode(map);m3dLimit(map)});map.on('moveend',()=>{if(m3d.me&&myLoc)m3dMe()});
-    map.on('click',m3dClick);map.on('moveend',m3dWx);map.on('load',()=>{m3dWx();m3dLimit(map)});map.on('moveend',()=>m3dAboveGround(map));
-    m3dWheelButton(map);tiltUp();
-    map.on('error',e=>{if(e&&e.error&&/webgl/i.test(String(e.error.message)))msg.textContent='3D needs WebGL, which this browser has switched off.',msg.hidden=false})}
-  catch(e){msg.textContent='3D needs WebGL, which this browser has switched off.';msg.hidden=false}}
-// as the view opens, the camera tilts up from straight down, so the change from the globe reads as a move
-function tiltUp(){const map=m3d.map;if(map)setTimeout(()=>{if(m3d.map===map&&document.body.classList.contains('in3d'))map.easeTo({pitch:35,duration:1400})},80)}
+// v3: the MapLibre globe is the view. It opens on load and takes over from the canvas globe once it is ready. The canvas
+// stays as the fallback when WebGL or the map library can't load. Tilting (the 3D button, or right-drag) is the map's pitch.
+async function openMap(){let el=m3d.el;
+  if(!el){el=m3d.el=document.createElement('div');el.className='m3d';el.style.opacity='0';el.innerHTML=`<div class="m3dmap" id="m3dmap"></div><p class="m3dmsg" id="m3dmsg" hidden></p>`;document.body.appendChild(el);}
+  if(m3d.opening)return m3d.opening;
+  const msg=el.querySelector('#m3dmsg');
+  m3d.opening=(async()=>{let lib;try{lib=await m3dLoad()}catch(e){msg.textContent='The 3D view couldn’t load. Check your connection and try again.';msg.hidden=false;return}
+    // start exactly where the globe was: same centre, same scale
+    const lon=-rot[0],lat=clamp(-rot[1],-85,85),zoom=k2z(k,lat);
+    try{const map=m3d.map=new lib.Map({container:'m3dmap',style:m3dStyleDef(),center:[lon,lat],zoom,pitch:0,bearing:0,maxPitch:85,attributionControl:false,hash:false,dragRotate:true,pitchWithRotate:true,maxTileCacheSize:3000,refreshExpiredTiles:false});
+      map.on('rotate',northNeedle);map.on('pitch',()=>{northNeedle();setModeLabel(isTilted())});
+      map.on('style.load',()=>{m3d.mode=null;m3dExtras(map);m3dSync();for(const l of map.getStyle().layers)if(l.type==='background')map.setPaintProperty(l.id,'background-color','rgba(0,0,0,0)');stars()});
+      map.on('move',()=>{if(mapOn())syncFromMap();if(document.body.classList.contains('in3d'))skyFrame()});
+      map.on('zoomend',()=>{m3dMode(map);m3dLimit(map)});map.on('moveend',()=>{if(m3d.me&&myLoc)m3dMe()});
+      map.on('click',m3dClick);map.on('moveend',m3dWx);map.on('load',()=>{m3dWx();m3dLimit(map);mapReady(map)});map.on('moveend',()=>m3dAboveGround(map));
+      // the pointer turns into a hand over anything that can be clicked
+      let hov=false;map.on('mousemove',e=>{if(hov)return;hov=true;const pt=e.point;requestAnimationFrame(()=>{hov=false;const h=map.queryRenderedFeatures(pt,{layers:HOVER_IDS.map(x=>M3D_OWN+x).filter(id=>map.getLayer(id))});map.getCanvas().style.cursor=h.length?'pointer':''})});
+      m3dWheelButton(map);
+      map.on('error',e=>{if(e&&e.error&&/webgl/i.test(String(e.error.message))){msg.textContent='3D needs WebGL, which this browser has switched off.';msg.hidden=false}})}
+    catch(e){msg.textContent='3D needs WebGL, which this browser has switched off.';msg.hidden=false}})();
+  return m3d.opening}
+// the map is on screen: it takes over from the canvas globe, which then stops drawing
+function mapReady(map){if(m3d.ready)return;m3d.ready=true;syncFromMap();document.body.classList.add('in3d');setModeLabel(isTilted());
+  requestAnimationFrame(()=>{if(m3d.el)m3d.el.style.opacity='1'});markersSync();}
+function mapOn(){return!!(m3d.ready&&m3d.map)}
+function isTilted(){return!!(m3d.map&&m3d.map.getPitch()>5)}
+// the map's centre and zoom, mirrored into the globe's state, so the place and sky code keeps the same numbers
+function syncFromMap(){const map=m3d.map,c=map.getCenter(),lat=clamp(c.lat,-85,85);rot=[-c.lng,-lat,0];k=kT=z2k(map.getZoom(),lat)}
+// tilts the map to the given pitch (0 is looking straight down)
+function tiltTo(p){const map=m3d.map;if(map)map.easeTo({pitch:p,duration:900})}
+const HOVER_IDS=['cwk','cm','fv','cl','ovp','ovl','ovf'];
 // Globe projection with 3D terrain on top tore and flickered while panning, so the two never run together:
 // zoomed out it's a globe (terrain adds nothing at that scale); from zoom 5 in, a flat map with terrain.
 function m3dMode(map,force){const z=map.getZoom(),want=z>=5?'terrain':z<4.5?'globe':m3d.mode||'globe';if(!force&&want===m3d.mode)return;m3d.mode=want;
@@ -1043,14 +1082,8 @@ function m3dWheelButton(map){const c=map.getCanvasContainer();let st=null;
       const cc=map.project(map.getCenter());map.jumpTo({center:map.unproject([cc.x+dx,cc.y+dy])})}});
   window.addEventListener('mouseup',e=>{if(st&&e.button===1){st=null;c.style.cursor=''}});
   c.addEventListener('auxclick',e=>{if(e.button===1)e.preventDefault()})}
-function close3D(){if(!m3d.el)return;const map=m3d.map;
-  if(map){const c=map.getCenter(),lat=clamp(c.lat,-85,85);rot=[-c.lng,-lat,0];k=kT=z2k(map.getZoom(),lat);fly=null;vel=[0,0]}
-  if(m3d.pin){m3d.pin.remove();m3d.pin=null}m3d.pivot=null;
-  // the camera levels off and the 3D view fades out as the globe fades back in
-  const el=m3d.el;if(map&&!el.hidden)map.easeTo({pitch:0,duration:500});
-  document.body.classList.remove('in3d');setModeLabel(false);northNeedle();bmToggle(false);hideInfo();draw();
-  clearTimeout(m3d.fadeT);el.style.transition='opacity .7s ease';el.style.opacity='0';
-  m3d.fadeT=setTimeout(()=>{el.hidden=true;el.style.opacity='';el.style.transition=''},720)}
+// closing the 3D view levels the camera (the map stays on screen as the globe)
+function close3D(){tiltTo(0);bmToggle(false);hideInfo();}
 
 // everything from the globe drawn into the 3D view as map layers, kept in step with the app
 const M3D_OWN='m3d-';
@@ -1085,7 +1118,7 @@ function m3dGeo(){
   const pc=POLE[basemap]||POLE.street,pole={type:'FeatureCollection',features:[[85,90,pc[1]],[-90,-85,pc[0]]].map(([a,b,c])=>({type:'Feature',properties:{c},geometry:{type:'Polygon',coordinates:[[[-180,a],[180,a],[180,b],[-180,b],[-180,a]]]}}))};
   // the country borders, over the working-hours colours as on the 2D globe
   const cb={type:'FeatureCollection',features:showHours?D.cbM.features:[]};
-  return{tz,cb,lab,cl,fv,ov,wx,cm,cwk,night:nightFeaturesGeo(),pole}}
+  return{tz,cb,lab,cl,fv,ov,wx,cm,cwk}}
 // the night tiers: each is the sun below an angle of the horizon, with a small share of the darkness
 // the twilight is 37 thin bands half a degree apart rather than a few wide ones, so the day-night edge fades rather than steps
 const NIGHT_TIERS=(()=>{const t=[];for(let i=0;i<=36;i++)t.push([i*0.5,0.4/37]);return t})();
@@ -1109,13 +1142,12 @@ setInterval(()=>{if(showNight&&m3d&&m3d.map&&!m3d.el.hidden)m3dSync()},60000);
 function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.getStyle())return}catch(e){return}
   try{g=m3dGeo()}catch(e){return}
   const src=(id,data)=>{const s=map.getSource(M3D_OWN+id);if(s)s.setData(data);else map.addSource(M3D_OWN+id,{type:'geojson',data})};
-  try{src('tz',g.tz);src('cb',g.cb);src('lab',g.lab);src('cl',g.cl);src('fv',g.fv);src('ov',g.ov);src('wx',g.wx);src('cm',g.cm);src('cwk',g.cwk);src('night',g.night);src('pole',g.pole)}catch(e){return}
+  try{src('tz',g.tz);src('cb',g.cb);src('lab',g.lab);src('cl',g.cl);src('fv',g.fv);src('ov',g.ov);src('wx',g.wx);src('cm',g.cm);src('cwk',g.cwk)}catch(e){return}
   const font=['Noto Sans Bold'],dk=BM().dark||false;
   const lay=(def,before)=>{if(!map.getLayer(def.id))map.addLayer(def,before)};
   // working-hours colours fade out as you zoom in, like on the globe
   // same fade as on the globe: full colour until the street-map zoom, gone 4.5 zoom steps later
   const la=map.getCenter().lat,zA=k2z(TILE_K,la),zB=Math.max(zA+0.5,k2z(TILE_K+4.5,la)),op=1;
-  lay({id:M3D_OWN+'pole',type:'fill',source:M3D_OWN+'pole',paint:{'fill-color':['get','c']}},(map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
   lay({id:M3D_OWN+'tz',type:'fill',source:M3D_OWN+'tz',paint:{'fill-color':['get','c'],'fill-opacity':op}},
     (map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
   map.setPaintProperty(M3D_OWN+'tz','fill-opacity',['interpolate',['linear'],['zoom'],zA,op,zB,0]);
@@ -1123,9 +1155,7 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
   lay({id:M3D_OWN+'cb',type:'line',source:M3D_OWN+'cb',paint:{'line-color':pal.border,'line-width':0.7}},
     (map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
   map.setPaintProperty(M3D_OWN+'cb','line-opacity',['interpolate',['linear'],['zoom'],zA,1,zB,0]);
-  lay({id:M3D_OWN+'night',type:'fill',source:M3D_OWN+'night',paint:{'fill-color':dk?'#02061a':'#080e28','fill-opacity':0}});
-  // on and off is a change of opacity, which the map animates, rather than the shading appearing all at once
-  map.setPaintProperty(M3D_OWN+'night','fill-opacity',['*',['get','a'],showNight?1:0,['interpolate',['linear'],['zoom'],zA,1,zB,0]]);
+  nightSync(map,zA,zB);
   lay({id:M3D_OWN+'ovf',type:'fill',source:M3D_OWN+'ov',filter:['==',['geometry-type'],'Polygon'],paint:{'fill-color':['get','c'],'fill-opacity':0.2}});
   lay({id:M3D_OWN+'ovl',type:'line',source:M3D_OWN+'ov',filter:['in',['geometry-type'],['literal',['LineString','Polygon']]],paint:{'line-color':['get','c'],'line-width':2.5}});
   lay({id:M3D_OWN+'ovp',type:'circle',source:M3D_OWN+'ov',filter:['==',['geometry-type'],'Point'],paint:{'circle-color':['get','c'],'circle-radius':5,'circle-stroke-color':'#fff','circle-stroke-width':1.5}});
@@ -1157,8 +1187,11 @@ function m3dWx(){const map=m3d.map;if(!map||!showWeather||m3d.el.hidden)return;c
     if(at.some(a=>Math.hypot(a[0]-q.x,a[1]-q.y)<140))continue;at.push([q.x,q.y]);out.push(p)}
   WX.shown3d=out;m3dSync();wxFetch()}
 // clicks in 3D open the same cards as on the globe
-function m3dClick(e){const map=m3d.map,hits=map.queryRenderedFeatures(e.point,{layers:[M3D_OWN+'cwk',M3D_OWN+'cm',M3D_OWN+'fv',M3D_OWN+'cl',M3D_OWN+'ovp',M3D_OWN+'ovl',M3D_OWN+'ovf'].filter(id=>map.getLayer(id))});
-  const ll=[e.lngLat.lng,e.lngLat.lat];if(m3d.pin){m3d.pin.remove();m3d.pin=null}
+function m3dClick(e){const map=m3d.map,hits=map.queryRenderedFeatures(e.point,{layers:HOVER_IDS.map(x=>M3D_OWN+x).filter(id=>map.getLayer(id))});
+  const ll=[e.lngLat.lng,e.lngLat.lat];
+  // placing a favourite drops its pin here; with a draft open, a click elsewhere moves it
+  if(placing){dropPin(ll);return}
+  if(draft&&!hits.some(x=>x.layer.id===M3D_OWN+'fv')){draft.lon=ll[0];draft.lat=ll[1];draft.v=vec(ll[0],ll[1]);lookupDraft();updateDraft();draw();return}
   m3d.pivot=e.lngLat;   // turning and tilting now orbit around this spot
   const h=hits[0];
   if(h&&h.layer.id===M3D_OWN+'cwk'&&map.getZoom()>=7){const c=CW.list.get(h.properties.id);if(c){cwShow(c);return}}
@@ -1166,13 +1199,27 @@ function m3dClick(e){const map=m3d.map,hits=map.queryRenderedFeatures(e.point,{l
   if(h&&h.layer.id===M3D_OWN+'fv'){const f=favs[h.properties.i];if(f){showFav(f);return}}
   if(h&&h.layer.id===M3D_OWN+'cl'){const x=CL.byId.get(h.properties.id);if(x){clShow(x);return}}
   if(h&&h.layer.id.startsWith(M3D_OWN+'ov')){const L=overlays[h.properties.li],f=L&&L.fc.features[h.properties.fi];if(f){selected={L,f};showFeature(L,f,ll);return}}
-  k=z2k(map.getZoom(),ll[1]);   // lookup detail follows the 3D zoom
   const tz=tzAt(ll);if(!tz){hideInfo();return}
-  m3d.pin=new m3d.libRef.Marker({color:'#2f7df6'}).setLngLat(ll).addTo(map);
+  clickPin=ll;
   showInfo('Looking up this spot…',' ',tz,ll);
   const hEl=document.querySelector('#infob h2'),w=document.querySelector('#infob .where'),tok=infoTok;hEl.classList.add('pending');
   geocode({lon:ll[0],lat:ll[1]},res=>{if(tok!==infoTok)return;hEl.classList.remove('pending');hEl.textContent=res.name;w.textContent=res.where||' '})}
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&m3d.el&&!m3d.el.hidden&&document.getElementById('bmmenu').hidden&&!(PH.box&&!PH.box.hidden)&&!(PH.grid&&!PH.grid.hidden))close3D()});
+// v3 markers on the map: the pin of a clicked place, and the draggable pins of a favourite being dropped or moved.
+// Every change to the globe's state calls draw(), which on the map only asks for these to be brought up to date.
+var mapSyncQ=false;
+function mapSync(){if(mapSyncQ)return;mapSyncQ=true;requestAnimationFrame(()=>{mapSyncQ=false;markersSync()})}
+function markersSync(){const map=m3d.map;if(!map||!m3d.ready)return;const ML=m3d.libRef;
+  if(m3d.el)m3d.el.classList.toggle('placing',placing);
+  if(clickPin&&!draft){if(!m3d.pin)m3d.pin=new ML.Marker({color:'#2f7df6'});m3d.pin.setLngLat(clickPin).addTo(map)}else if(m3d.pin){m3d.pin.remove();m3d.pin=null}
+  dragPin('draft',draft);dragPin('fav',activeFav)}
+// a draggable pin for a favourite: dropped where it is let go, and saved as the canvas version did
+function dragPin(key,o){const map=m3d.map,ML=m3d.libRef,cur=m3d['dp'+key];
+  if(!o){if(cur){cur.remove();m3d['dp'+key]=null}return}
+  m3d['dpo'+key]=o;
+  if(cur){cur.setLngLat([o.lon,o.lat]).addTo(map);return}
+  const mk=m3d['dp'+key]=new ML.Marker({draggable:true,color:key==='draft'?'#f0a500':'#e0457b'});
+  mk.on('dragend',()=>{const q=mk.getLngLat(),t=m3d['dpo'+key];if(!t)return;t.lon=q.lng;t.lat=q.lat;t.v=vec(t.lon,t.lat);endPinDrag(t)});
+  mk.setLngLat([o.lon,o.lat]).addTo(map)}document.addEventListener('keydown',e=>{if(e.key==='Escape'&&m3d.el&&!m3d.el.hidden&&document.getElementById('bmmenu').hidden&&!(PH.box&&!PH.box.hidden)&&!(PH.grid&&!PH.grid.hidden))close3D()});
 
 
 // search
@@ -1952,6 +1999,7 @@ const intro=()=>{if(matchMedia('(prefers-reduced-motion: reduce)').matches){k=kT
   const t0=performance.now(),r0=[-70,-20,0],r1=rot.slice();
   fly={t0,dur:2200,ir:d3.interpolate(r0,r1),ik:t=>Math.log(0.7)+(Math.log(1)-Math.log(0.7))*t};kick();};
 intro();
+openMap();
 const fontsReady=document.fonts?Promise.all([document.fonts.load(F.cn),document.fonts.load(F.pn),document.fonts.load(F.hr)]):Promise.resolve();
 fontsReady.then(()=>{for(const x in mcache)delete mcache[x];draw()});
 setTimeout(()=>document.getElementById('toast').classList.add('hide'),4500);
