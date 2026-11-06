@@ -454,6 +454,9 @@ const y2lat=(y,n)=>Math.atan(Math.sinh(Math.PI*(1-2*y/n)))*DEG;
 function drawTiles(){
   if(tcv.width!==cv.width||tcv.height!==cv.height){tcv.width=cv.width;tcv.height=cv.height}
   tctx.setTransform(dpr,0,0,dpr,0,0);tctx.clearRect(0,0,W,H);let drew=0;vtUsed.clear();vBudget=performance.now()+(running?6:14);
+  // the globe is first painted in the basemap's sea colour: the hairline gaps where neighbouring tile pieces meet (most
+  // visible near the poles, as dark spokes) then show sea colour rather than the dark sea behind the globe
+  tctx.beginPath();d3.geoPath(proj,tctx)({type:'Sphere'});tctx.fillStyle=(POLE[basemap]||POLE.street)[1];tctx.fill();
   const c0=-rot[0];let r0=1e9,r1=-1e9,la0=90,la1=-90,hit=0;
   for(let i=0;i<=8;i++)for(let j=0;j<=8;j++){const ll=proj.invert([W*i/8,H*j/8]);if(!ll||d3.geoDistance(ll,viewCap[0])>1.5)continue;hit++;
     const r=wrap(ll[0]-c0);r0=Math.min(r0,r);r1=Math.max(r1,r);la0=Math.min(la0,ll[1]);la1=Math.max(la1,ll[1]);}
