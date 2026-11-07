@@ -1007,7 +1007,7 @@ function lightsLoad(){if(LIGHTS.loading||LIGHTS.lum)return;LIGHTS.loading=true;
     jobs.push(new Promise(ok=>{const im=new Image();im.crossOrigin='anonymous';im.onload=()=>{g.drawImage(im,x*T,y*T);ok()};im.onerror=()=>ok();im.src=url}))}
   Promise.all(jobs).then(()=>{try{// full resolution, so the small lights keep their brightness; the night image takes the brightest nearby light
       const d=g.getImageData(0,0,N*T,N*T).data,n=N*T,lum=new Uint8Array(n*n);for(let i=0;i<n*n;i++)lum[i]=(d[i*4]*0.3+d[i*4+1]*0.59+d[i*4+2]*0.11);
-      LIGHTS.lum=lum;LIGHTS.n=n;NIGHT_IMG.key='';if(m3d.map&&m3d.ready)m3dSync()}catch(e){LIGHTS.loading=false}})}
+      LIGHTS.lum=lum;LIGHTS.n=n;NIGHT_IMG.key='';if(m3d.map)m3dSync()}catch(e){LIGHTS.loading=false}})}
 function nightImage(){const key=Math.floor(Date.now()/6e4)+'|'+(dark?1:0)+'|'+(LIGHTS.lum?1:0);if(key===NIGHT_IMG.key)return NIGHT_IMG;lightsLoad();
   const W=720,H=720,cv=document.createElement('canvas');cv.width=W;cv.height=H;const cx=cv.getContext('2d'),im=cx.createImageData(W,H);
   const D=Math.PI/180,[sl,sd]=sunNow(Date.now()),ss=Math.sin(sd*D),cs=Math.cos(sd*D),col=dark?[2,6,22]:[8,14,40];
@@ -1125,7 +1125,7 @@ async function openMap(){let el=m3d.el;
     catch(e){msg.textContent='3D needs WebGL, which this browser has switched off.';msg.hidden=false}})();
   return m3d.opening}
 // the map is on screen: it takes over from the canvas globe, which then stops drawing
-function mapReady(map){if(m3d.ready)return;m3d.ready=true;syncFromMap();document.body.classList.add('in3d');setModeLabel(isTilted());
+function mapReady(map){if(m3d.ready)return;m3d.ready=true;syncFromMap();document.body.classList.add('in3d');setModeLabel(isTilted());m3dSync();
   requestAnimationFrame(()=>{if(m3d.el)m3d.el.style.opacity='1'});markersSync();}
 function mapOn(){return!!(m3d.ready&&m3d.map)}
 function isTilted(){return!!(m3d.map&&m3d.map.getPitch()>5)}
