@@ -996,14 +996,18 @@ function m3dStyleDef(){const B=BM();
 // rebuilt each minute. (MapLibre's Mercator geometry stops at 85°, so nothing can be drawn over the poles themselves.)
 const NIGHT_IMG={key:'',url:'',an:0,as:0},NIGHT_MAXA=0.4,NIGHT_FULLDEG=18,LIGHT_COL=[255,214,150];
 // City lights: NASA's Black Marble at zoom 3, sampled in the night image's own Mercator rows. They show only where it's night.
-const LIGHTS={lum:null,loading:false};
+const LIGHTS={lum:null,n:0,loading:false};
+// the brightest light in the small block of the full-resolution lights under this pixel of the night image, 0..1
+function lightAt(i,j,W,H){const n=LIGHTS.n,x=Math.floor((i+0.5)*n/W),y=Math.floor((j+0.5)*n/H);let m=0;
+  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const xx=x+dx,yy=y+dy;if(xx<0||yy<0||xx>=n||yy>=n)continue;const v=LIGHTS.lum[yy*n+xx];if(v>m)m=v}
+  return clamp((m/255-0.1)*1.6,0,1)}
 function lightsLoad(){if(LIGHTS.loading||LIGHTS.lum)return;LIGHTS.loading=true;
   const Z=3,N=2**Z,T=256,big=document.createElement('canvas');big.width=big.height=N*T;const g=big.getContext('2d');
   const jobs=[];for(let x=0;x<N;x++)for(let y=0;y<N;y++){const url=BASEMAPS.night.url.replace('{z}',Z).replace('{x}',x).replace('{y}',y);
     jobs.push(new Promise(ok=>{const im=new Image();im.crossOrigin='anonymous';im.onload=()=>{g.drawImage(im,x*T,y*T);ok()};im.onerror=()=>ok();im.src=url}))}
-  Promise.all(jobs).then(()=>{const S=720,sm=document.createElement('canvas');sm.width=sm.height=S;const sc=sm.getContext('2d');sc.drawImage(big,0,0,S,S);
-    try{const d=sc.getImageData(0,0,S,S).data,lum=new Float32Array(S*S);for(let i=0;i<S*S;i++)lum[i]=(d[i*4]*0.3+d[i*4+1]*0.59+d[i*4+2]*0.11)/255;
-      LIGHTS.lum=lum;NIGHT_IMG.key='';if(m3d.map&&m3d.ready)m3dSync()}catch(e){LIGHTS.loading=false}})}
+  Promise.all(jobs).then(()=>{try{// full resolution, so the small lights keep their brightness; the night image takes the brightest nearby light
+      const d=g.getImageData(0,0,N*T,N*T).data,n=N*T,lum=new Uint8Array(n*n);for(let i=0;i<n*n;i++)lum[i]=(d[i*4]*0.3+d[i*4+1]*0.59+d[i*4+2]*0.11);
+      LIGHTS.lum=lum;LIGHTS.n=n;NIGHT_IMG.key='';if(m3d.map&&m3d.ready)m3dSync()}catch(e){LIGHTS.loading=false}})}
 function nightImage(){const key=Math.floor(Date.now()/6e4)+'|'+(dark?1:0)+'|'+(LIGHTS.lum?1:0);if(key===NIGHT_IMG.key)return NIGHT_IMG;lightsLoad();
   const W=720,H=720,cv=document.createElement('canvas');cv.width=W;cv.height=H;const cx=cv.getContext('2d'),im=cx.createImageData(W,H);
   const D=Math.PI/180,[sl,sd]=sunNow(Date.now()),ss=Math.sin(sd*D),cs=Math.cos(sd*D),col=dark?[2,6,22]:[8,14,40];
@@ -1013,7 +1017,7 @@ function nightImage(){const key=Math.floor(Date.now()/6e4)+'|'+(dark?1:0)+'|'+(L
       const sinEl=sa*ss+ca*cs*Math.cos(lon-sl*D),el=Math.asin(Math.max(-1,Math.min(1,sinEl)))/D,a=NIGHT_MAXA*clamp(-el/NIGHT_FULLDEG,0,1);
       if(a<=0)continue;const q=(j*W+i)*4;
       // a light shows over the darkness, where the night is (the share of night in this pixel is a/NIGHT_MAXA)
-      const Lv=LIGHTS.lum?clamp((LIGHTS.lum[j*W+i]-0.06)*2.2,0,1)*(a/NIGHT_MAXA)*0.9:0,al=a+(1-a)*Lv;
+      const Lv=LIGHTS.lum?lightAt(i,j,W,H)*(a/NIGHT_MAXA)*0.9:0,al=a+(1-a)*Lv;
       im.data[q]=(col[0]*a+LIGHT_COL[0]*Lv*(1-a))/al;im.data[q+1]=(col[1]*a+LIGHT_COL[1]*Lv*(1-a))/al;im.data[q+2]=(col[2]*a+LIGHT_COL[2]*Lv*(1-a))/al;im.data[q+3]=Math.round(al*255)}}
   cx.putImageData(im,0,0);
   const at=sinEl=>NIGHT_MAXA*clamp(-Math.asin(Math.max(-1,Math.min(1,sinEl)))/D/NIGHT_FULLDEG,0,1);
