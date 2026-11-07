@@ -1025,7 +1025,7 @@ function nightImage(){const key=Math.floor(Date.now()/6e4)+'|'+(dark?1:0)+'|'+(L
 // The polar caps. MapLibre's Mercator geometry stops at 85°, so the two caps beyond that are drawn here as a sphere mesh, in
 // the globe's own projection (the custom layer gets its matrix from MapLibre). Each vertex's colour is the basemap's sea or ice
 // colour with the night darkness at that point, so the caps and the tiles at 85° meet without a seam.
-const CAP_LAT0=85.0511,CAP_LAT1=87.5,CAP_LON=180;
+const CAP_LAT0=85.0511,CAP_LAT1=87.5,CAP_LON=360;
 function mercY(lat){return(1-Math.log(Math.tan(Math.PI/4+lat*Math.PI/360))/Math.PI)/2}
 const CAP_MESH={verts:null,idx:null};
 function capMesh(){if(CAP_MESH.verts)return CAP_MESH;const v=[],idx=[];
@@ -1035,6 +1035,15 @@ function capMesh(){if(CAP_MESH.verts)return CAP_MESH;const v=[],idx=[];
     const pole=v.length;v.push({lat:sg*90,lon:0,x:0.5,y:sg>0?-2:3});
     for(let i=0;i<CAP_LON;i++){const a=r0[i],b=r0[i+1],c=r1[i+1],d=r1[i];idx.push(a,b,c,a,c,d,r1[i],r1[i+1],pole)}}
   CAP_MESH.verts=v;CAP_MESH.idx=new Uint16Array(idx);return CAP_MESH}
+// the working-hours colours where each sector reaches the caps, sampled every degree of longitude at the edge of the tiles,
+// so each sector carries on over its cap to the pole. Cached until the settings change.
+const HRS_CACHE={key:'',N:null,S:null};
+const hexRgb=c=>[parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16)];
+function capHours(){if(!showHours)return null;const key=[S,E,season,dark].join('|');if(HRS_CACHE.key===key)return HRS_CACHE;
+  const samp=sg=>{const out=[];for(let i=0;i<=CAP_LON;i++){const pt=[-180+i*360/CAP_LON,sg*CAP_LAT0];
+    const f=TZHIT.features.find(z=>d3.geoContains(z,pt))||D.gaps.features.find(z=>d3.geoContains(z,pt));
+    out.push(f?hexRgb(pal['b'+band(off(f.properties.z))]):null)}return out};
+  HRS_CACHE.key=key;HRS_CACHE.N=samp(1);HRS_CACHE.S=samp(-1);return HRS_CACHE}
 // the basemap's colours at the caps: sea or ice, for the street style in each theme and for the other base maps
 // sampled from the street style at the caps: the Arctic is sea, Antarctica is land (dark) or ice (light)
 function capBase(){if(basemap==='street')return dark?{n:[29,29,31],s:[7,7,7]}:{n:[159,190,255],s:[226,236,238]};
@@ -1062,9 +1071,13 @@ void main(){vec2 m=u_tile.xy+u_tile.zw*a_pos;float sx=m.x*6.283185307+3.14159265
     this.idxBuf=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.idxBuf);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,M.idx,gl.STATIC_DRAW);
     this.nIdx=M.idx.length;this.colBuf=gl.createBuffer();this.recolour();},
   // the colours follow the sun: called each minute and when the theme or base map changes
-  recolour(){const gl=this.gl;if(!gl||!this.colBuf)return;const M=capMesh(),B=capBase(),T=sunTerms(),col=dark?[2,6,22]:[8,14,40];
+  recolour(){const gl=this.gl;if(!gl||!this.colBuf)return;const M=capMesh(),B=capBase(),T=sunTerms(),col=dark?[2,6,22]:[8,14,40],H=capHours();
+    // before the night: each vertex takes the hours colour of its longitude (or the basemap's), and the pole the average of its ring
+    const base=M.verts.map(q=>{if(Math.abs(q.lat)>89)return null;if(H){const arr=q.lat>0?H.N:H.S,v=arr&&arr[Math.round((q.lon+180)/(360/CAP_LON))];if(v)return v}return q.lat>0?B.n:B.s});
+    M.verts.forEach((q,i)=>{if(base[i])return;const sg=Math.sign(q.lat),ring=[];M.verts.forEach((r,j)=>{if(base[j]&&r.lat===sg*CAP_LAT1)ring.push(base[j])});
+      base[i]=[0,1,2].map(k=>ring.reduce((t,c)=>t+c[k],0)/ring.length)});
     const c=new Uint8Array(M.verts.length*4);
-    M.verts.forEach((q,i)=>{const a=nightAlpha(q.lat,q.lon,T),b=q.lat>0?B.n:B.s;
+    M.verts.forEach((q,i)=>{const a=nightAlpha(q.lat,q.lon,T),b=base[i];
       for(let k=0;k<3;k++)c[i*4+k]=Math.round(b[k]*(1-a)+col[k]*a);c[i*4+3]=255});
     gl.bindBuffer(gl.ARRAY_BUFFER,this.colBuf);gl.bufferData(gl.ARRAY_BUFFER,c,gl.DYNAMIC_DRAW)},
   render(gl,o){if(!this.prog)return;const d=o.defaultProjectionData;gl.useProgram(this.prog);
