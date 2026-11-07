@@ -994,18 +994,84 @@ function m3dStyleDef(){const B=BM();
 // Day and night on the globe: the night side is an image worked out pixel by pixel from the sun, with the same darkness
 // as the canvas globe. Its rows are spaced as the Mercator map spaces them, so it lines up with the map. The image is
 // rebuilt each minute. (MapLibre's Mercator geometry stops at 85°, so nothing can be drawn over the poles themselves.)
-const NIGHT_IMG={key:'',url:'',an:0,as:0},NIGHT_MAXA=0.4,NIGHT_FULLDEG=18;
-function nightImage(){const key=Math.floor(Date.now()/6e4)+'|'+(dark?1:0);if(key===NIGHT_IMG.key)return NIGHT_IMG;
+const NIGHT_IMG={key:'',url:'',an:0,as:0},NIGHT_MAXA=0.4,NIGHT_FULLDEG=18,LIGHT_COL=[255,214,150];
+// City lights: NASA's Black Marble at zoom 3, sampled in the night image's own Mercator rows. They show only where it's night.
+const LIGHTS={lum:null,loading:false};
+function lightsLoad(){if(LIGHTS.loading||LIGHTS.lum)return;LIGHTS.loading=true;
+  const Z=3,N=2**Z,T=256,big=document.createElement('canvas');big.width=big.height=N*T;const g=big.getContext('2d');
+  const jobs=[];for(let x=0;x<N;x++)for(let y=0;y<N;y++){const url=BASEMAPS.night.url.replace('{z}',Z).replace('{x}',x).replace('{y}',y);
+    jobs.push(new Promise(ok=>{const im=new Image();im.crossOrigin='anonymous';im.onload=()=>{g.drawImage(im,x*T,y*T);ok()};im.onerror=()=>ok();im.src=url}))}
+  Promise.all(jobs).then(()=>{const S=720,sm=document.createElement('canvas');sm.width=sm.height=S;const sc=sm.getContext('2d');sc.drawImage(big,0,0,S,S);
+    try{const d=sc.getImageData(0,0,S,S).data,lum=new Float32Array(S*S);for(let i=0;i<S*S;i++)lum[i]=(d[i*4]*0.3+d[i*4+1]*0.59+d[i*4+2]*0.11)/255;
+      LIGHTS.lum=lum;NIGHT_IMG.key='';if(m3d.map&&m3d.ready)m3dSync()}catch(e){LIGHTS.loading=false}})}
+function nightImage(){const key=Math.floor(Date.now()/6e4)+'|'+(dark?1:0)+'|'+(LIGHTS.lum?1:0);if(key===NIGHT_IMG.key)return NIGHT_IMG;lightsLoad();
   const W=720,H=720,cv=document.createElement('canvas');cv.width=W;cv.height=H;const cx=cv.getContext('2d'),im=cx.createImageData(W,H);
   const D=Math.PI/180,[sl,sd]=sunNow(Date.now()),ss=Math.sin(sd*D),cs=Math.cos(sd*D),col=dark?[2,6,22]:[8,14,40];
   const YM=Math.log(Math.tan(Math.PI/4+85.0511*D/2));
   for(let j=0;j<H;j++){const y=YM-2*YM*(j+0.5)/H,lat=2*Math.atan(Math.exp(y))-Math.PI/2,sa=Math.sin(lat),ca=Math.cos(lat);
     for(let i=0;i<W;i++){const lon=(-180+360*(i+0.5)/W)*D;
       const sinEl=sa*ss+ca*cs*Math.cos(lon-sl*D),el=Math.asin(Math.max(-1,Math.min(1,sinEl)))/D,a=NIGHT_MAXA*clamp(-el/NIGHT_FULLDEG,0,1);
-      if(a<=0)continue;const q=(j*W+i)*4;im.data[q]=col[0];im.data[q+1]=col[1];im.data[q+2]=col[2];im.data[q+3]=Math.round(a*255)}}
+      if(a<=0)continue;const q=(j*W+i)*4;
+      // a light shows over the darkness, where the night is (the share of night in this pixel is a/NIGHT_MAXA)
+      const Lv=LIGHTS.lum?clamp((LIGHTS.lum[j*W+i]-0.06)*2.2,0,1)*(a/NIGHT_MAXA)*0.9:0,al=a+(1-a)*Lv;
+      im.data[q]=(col[0]*a+LIGHT_COL[0]*Lv*(1-a))/al;im.data[q+1]=(col[1]*a+LIGHT_COL[1]*Lv*(1-a))/al;im.data[q+2]=(col[2]*a+LIGHT_COL[2]*Lv*(1-a))/al;im.data[q+3]=Math.round(al*255)}}
   cx.putImageData(im,0,0);
   const at=sinEl=>NIGHT_MAXA*clamp(-Math.asin(Math.max(-1,Math.min(1,sinEl)))/D/NIGHT_FULLDEG,0,1);
   NIGHT_IMG.url=cv.toDataURL('image/png');NIGHT_IMG.an=at(ss);NIGHT_IMG.as=at(-ss);NIGHT_IMG.key=key;return NIGHT_IMG}
+// The polar caps. MapLibre's Mercator geometry stops at 85°, so the two caps beyond that are drawn here as a sphere mesh, in
+// the globe's own projection (the custom layer gets its matrix from MapLibre). Each vertex's colour is the basemap's sea or ice
+// colour with the night darkness at that point, so the caps and the tiles at 85° meet without a seam.
+const CAP_LAT0=85.0511,CAP_LAT1=87.5,CAP_LON=180;
+function mercY(lat){return(1-Math.log(Math.tan(Math.PI/4+lat*Math.PI/360))/Math.PI)/2}
+const CAP_MESH={verts:null,idx:null};
+function capMesh(){if(CAP_MESH.verts)return CAP_MESH;const v=[],idx=[];
+  for(const sg of[1,-1]){const base=v.length;const r0=[],r1=[];
+    for(let i=0;i<=CAP_LON;i++){const lon=-180+i*360/CAP_LON;r0.push(v.length);v.push({lat:sg*CAP_LAT0,lon,x:(lon+180)/360,y:mercY(sg*CAP_LAT0)})}
+    for(let i=0;i<=CAP_LON;i++){const lon=-180+i*360/CAP_LON;r1.push(v.length);v.push({lat:sg*CAP_LAT1,lon,x:(lon+180)/360,y:mercY(sg*CAP_LAT1)})}
+    const pole=v.length;v.push({lat:sg*90,lon:0,x:0.5,y:sg>0?-2:3});
+    for(let i=0;i<CAP_LON;i++){const a=r0[i],b=r0[i+1],c=r1[i+1],d=r1[i];idx.push(a,b,c,a,c,d,r1[i],r1[i+1],pole)}}
+  CAP_MESH.verts=v;CAP_MESH.idx=new Uint16Array(idx);return CAP_MESH}
+// the basemap's colours at the caps: sea or ice, for the street style in each theme and for the other base maps
+function capBase(){if(basemap==='street')return dark?{n:[27,27,29],s:[45,45,49]}:{n:[158,189,255],s:[244,246,247]};
+  const hex=c=>[parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16)];return{n:hex(POLE[basemap][1]),s:hex(POLE[basemap][0])}}
+// the sun's terms for the night formula, as nightImage uses them
+function sunTerms(){const D=Math.PI/180,[sl,sd]=sunNow(Date.now());return{sl:sl*D,ss:Math.sin(sd*D),cs:Math.cos(sd*D)}}
+function nightAlpha(latDeg,lonDeg,T){const D=Math.PI/180,la=latDeg*D,sinEl=Math.sin(la)*T.ss+Math.cos(la)*T.cs*Math.cos(lonDeg*D-T.sl);
+  const el=Math.asin(Math.max(-1,Math.min(1,sinEl)))/D;return NIGHT_MAXA*clamp(-el/NIGHT_FULLDEG,0,1)}
+const CAP={id:M3D_OWN+'caps',type:'custom',renderingMode:'3d',
+  onAdd(map,gl){this.gl=gl;const M=capMesh();
+    const vs=`precision highp float;
+attribute vec2 a_pos;attribute vec4 a_col;varying vec4 v_col;
+uniform mat4 u_matrix;uniform mat4 u_fallback;uniform vec4 u_tile;uniform vec4 u_clip;uniform float u_trans;
+void main(){vec2 m=u_tile.xy+u_tile.zw*a_pos;float sx=m.x*6.283185307+3.141592653;float sy=2.0*atan(exp(3.141592653-m.y*6.283185307))-1.570796327;
+  float len=cos(sy);vec3 p=vec3(sin(sx)*len,sin(sy),cos(sx)*len);
+  vec4 g=u_matrix*vec4(p,1.0);g.z=(1.0-(dot(p,u_clip.xyz)+u_clip.w))*g.w;
+  vec4 f=u_fallback*vec4(a_pos,0.0,1.0);gl_Position=u_trans>0.999?g:mix(f,g,u_trans);v_col=a_col;}`;
+    const fs=`precision mediump float;varying vec4 v_col;void main(){gl_FragColor=v_col;}`;
+    const sh=(t,src)=>{const o=gl.createShader(t);gl.shaderSource(o,src);gl.compileShader(o);if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))console.warn('caps shader',gl.getShaderInfoLog(o));return o};
+    const pr=gl.createProgram();gl.attachShader(pr,sh(gl.VERTEX_SHADER,vs));gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,fs));gl.linkProgram(pr);
+    this.prog=pr;this.aPos=gl.getAttribLocation(pr,'a_pos');this.aCol=gl.getAttribLocation(pr,'a_col');
+    this.uMat=gl.getUniformLocation(pr,'u_matrix');this.uFb=gl.getUniformLocation(pr,'u_fallback');this.uTile=gl.getUniformLocation(pr,'u_tile');this.uClip=gl.getUniformLocation(pr,'u_clip');this.uTrans=gl.getUniformLocation(pr,'u_trans');
+    const pos=new Float32Array(M.verts.length*2);M.verts.forEach((q,i)=>{pos[i*2]=q.x;pos[i*2+1]=q.y});
+    this.posBuf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.posBuf);gl.bufferData(gl.ARRAY_BUFFER,pos,gl.STATIC_DRAW);
+    this.idxBuf=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.idxBuf);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,M.idx,gl.STATIC_DRAW);
+    this.nIdx=M.idx.length;this.colBuf=gl.createBuffer();this.recolour();},
+  // the colours follow the sun: called each minute and when the theme or base map changes
+  recolour(){const gl=this.gl;if(!gl||!this.colBuf)return;const M=capMesh(),B=capBase(),T=sunTerms(),col=dark?[2,6,22]:[8,14,40];
+    const c=new Uint8Array(M.verts.length*4);
+    M.verts.forEach((q,i)=>{const a=nightAlpha(q.lat,q.lon,T),b=q.lat>0?B.n:B.s;
+      for(let k=0;k<3;k++)c[i*4+k]=Math.round(b[k]*(1-a)+col[k]*a);c[i*4+3]=255});
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.colBuf);gl.bufferData(gl.ARRAY_BUFFER,c,gl.DYNAMIC_DRAW)},
+  render(gl,o){if(!this.prog)return;const d=o.defaultProjectionData;gl.useProgram(this.prog);
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.posBuf);gl.enableVertexAttribArray(this.aPos);gl.vertexAttribPointer(this.aPos,2,gl.FLOAT,false,0,0);
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.colBuf);gl.enableVertexAttribArray(this.aCol);gl.vertexAttribPointer(this.aCol,4,gl.UNSIGNED_BYTE,true,0,0);
+    gl.uniformMatrix4fv(this.uMat,false,d.mainMatrix);gl.uniformMatrix4fv(this.uFb,false,d.fallbackMatrix);gl.uniform4fv(this.uTile,d.tileMercatorCoords);
+    gl.uniform4fv(this.uClip,d.clippingPlane);gl.uniform1f(this.uTrans,d.projectionTransition);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.idxBuf);gl.drawElements(gl.TRIANGLES,this.nIdx,gl.UNSIGNED_SHORT,0);
+    gl.disableVertexAttribArray(this.aPos);gl.disableVertexAttribArray(this.aCol)}};
+// the polar caps go in above the tiles and the working-hours colours, below the labels
+function capsSync(map){if(!map.getLayer(CAP.id)){const first=(map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id;map.addLayer(CAP,first)}
+  CAP.recolour();map.triggerRepaint()}
 // the night image on the map, faded out with the same zoom range as the working-hours colours, and the caps updated with it
 function nightSync(map,zA,zB){const url=nightImage().url;
   const src=map.getSource(M3D_OWN+'nightimg');
@@ -1015,7 +1081,7 @@ function nightSync(map,zA,zB){const url=nightImage().url;
     map.addLayer({id:M3D_OWN+'nightimg',type:'raster',source:M3D_OWN+'nightimg',paint:{'raster-fade-duration':0,'raster-resampling':'linear'}},first)}
   // on and off is a change of opacity, which the map animates
   map.setPaintProperty(M3D_OWN+'nightimg','raster-opacity',['*',showNight?1:0,['interpolate',['linear'],['zoom'],zA,1,zB,0]]);
-  }
+  try{capsSync(map)}catch(e){console.warn('caps',e)}}
 function m3dExtras(map){
   // terrain heights from Mapterhorn (the open terrain set MapLibre's own examples use); the older AWS/Mapzen
   // tiles had stray spikes, mostly along coasts and at close zoom
