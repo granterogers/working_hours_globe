@@ -1032,7 +1032,8 @@ function capMesh(){if(CAP_MESH.verts)return CAP_MESH;const v=[],idx=[];
     for(let i=0;i<CAP_LON;i++){const a=r0[i],b=r0[i+1],c=r1[i+1],d=r1[i];idx.push(a,b,c,a,c,d,r1[i],r1[i+1],pole)}}
   CAP_MESH.verts=v;CAP_MESH.idx=new Uint16Array(idx);return CAP_MESH}
 // the basemap's colours at the caps: sea or ice, for the street style in each theme and for the other base maps
-function capBase(){if(basemap==='street')return dark?{n:[27,27,29],s:[45,45,49]}:{n:[158,189,255],s:[244,246,247]};
+// sampled from the street style at the caps: the Arctic is sea, Antarctica is land (dark) or ice (light)
+function capBase(){if(basemap==='street')return dark?{n:[29,29,31],s:[7,7,7]}:{n:[159,190,255],s:[226,236,238]};
   const hex=c=>[parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16)];return{n:hex(POLE[basemap][1]),s:hex(POLE[basemap][0])}}
 // the sun's terms for the night formula, as nightImage uses them
 function sunTerms(){const D=Math.PI/180,[sl,sd]=sunNow(Date.now());return{sl:sl*D,ss:Math.sin(sd*D),cs:Math.cos(sd*D)}}
