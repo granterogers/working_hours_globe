@@ -1077,7 +1077,7 @@ void main(){vec2 m=u_tile.xy+u_tile.zw*a_pos;float sx=m.x*6.283185307+3.14159265
     M.verts.forEach((q,i)=>{if(base[i])return;const sg=Math.sign(q.lat),ring=[];M.verts.forEach((r,j)=>{if(base[j]&&r.lat===sg*CAP_LAT1)ring.push(base[j])});
       base[i]=[0,1,2].map(k=>ring.reduce((t,c)=>t+c[k],0)/ring.length)});
     const c=new Uint8Array(M.verts.length*4);
-    M.verts.forEach((q,i)=>{const a=nightAlpha(q.lat,q.lon,T),b=base[i];
+    M.verts.forEach((q,i)=>{const a=showNight?nightAlpha(q.lat,q.lon,T):0,b=base[i];
       for(let k=0;k<3;k++)c[i*4+k]=Math.round(b[k]*(1-a)+col[k]*a);c[i*4+3]=255});
     gl.bindBuffer(gl.ARRAY_BUFFER,this.colBuf);gl.bufferData(gl.ARRAY_BUFFER,c,gl.DYNAMIC_DRAW)},
   render(gl,o){if(!this.prog)return;const d=o.defaultProjectionData;gl.useProgram(this.prog);
@@ -1098,7 +1098,7 @@ function nightSync(map,zA,zB){const url=nightImage().url;
   if(!map.getLayer(M3D_OWN+'nightimg')){const first=(map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id;
     map.addLayer({id:M3D_OWN+'nightimg',type:'raster',source:M3D_OWN+'nightimg',paint:{'raster-fade-duration':0,'raster-resampling':'linear'}},first)}
   // on and off is a change of opacity, which the map animates
-  map.setPaintProperty(M3D_OWN+'nightimg','raster-opacity',['*',showNight?1:0,['interpolate',['linear'],['zoom'],zA,1,zB,0]]);
+  map.setPaintProperty(M3D_OWN+'nightimg','raster-opacity',['interpolate',['linear'],['zoom'],zA,showNight?1:0,zB,0]);
   try{capsSync(map)}catch(e){console.warn('caps',e)}}
 function m3dExtras(map){
   // terrain heights from Mapterhorn (the open terrain set MapLibre's own examples use); the older AWS/Mapzen
