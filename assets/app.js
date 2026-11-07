@@ -1038,7 +1038,7 @@ function capBase(){if(basemap==='street')return dark?{n:[27,27,29],s:[45,45,49]}
 function sunTerms(){const D=Math.PI/180,[sl,sd]=sunNow(Date.now());return{sl:sl*D,ss:Math.sin(sd*D),cs:Math.cos(sd*D)}}
 function nightAlpha(latDeg,lonDeg,T){const D=Math.PI/180,la=latDeg*D,sinEl=Math.sin(la)*T.ss+Math.cos(la)*T.cs*Math.cos(lonDeg*D-T.sl);
   const el=Math.asin(Math.max(-1,Math.min(1,sinEl)))/D;return NIGHT_MAXA*clamp(-el/NIGHT_FULLDEG,0,1)}
-const CAP={id:M3D_OWN+'caps',type:'custom',renderingMode:'3d',
+const CAP={id:'m3d-caps',type:'custom',renderingMode:'3d',
   onAdd(map,gl){this.gl=gl;const M=capMesh();
     const vs=`precision highp float;
 attribute vec2 a_pos;attribute vec4 a_col;varying vec4 v_col;
