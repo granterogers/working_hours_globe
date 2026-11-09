@@ -13,6 +13,18 @@ const BANDS=[
   {lo:14,hi:17,name:"Afternoon into evening",sub:"starts 14:00–17:00",dark:"#ee7a5a",light:"#e0623f"},
   {lo:17,hi:21,name:"Evening into night",sub:"starts 17:00–21:00",dark:"#d8578f",light:"#c63e78"},
   {lo:21,hi:29,name:"Overnight",sub:"starts 21:00–05:00",dark:"#5a6bdc",light:"#4656c8"}];
+// one colour for each whole hour of the start time, interpolated between the six band colours (each band's middle hour is
+// its anchor), so the colours run smoothly through the day. The six bands keep their names for the legend.
+const HOUR_ANCHORS=BANDS.map(b=>(b.lo+b.hi)/2);
+const rgbHex=a=>'#'+a.map(v=>Math.round(v).toString(16).padStart(2,'0')).join('');
+function hourColour(h,theme){// h is the start hour in the 5..29 range
+  const A=BANDS.map(b=>hexRgb(theme==='dark'?b.dark:b.light)),n=A.length;
+  let x=h<HOUR_ANCHORS[0]?h+24:h;const i0=(()=>{let k=n-1;for(let j=0;j<n;j++)if(HOUR_ANCHORS[j]<=x)k=j;return k})();
+  const i1=(i0+1)%n,a0=HOUR_ANCHORS[i0],a1=i1===0?HOUR_ANCHORS[0]+24:HOUR_ANCHORS[i1],t=clamp((x-a0)/(a1-a0),0,1);
+  return rgbHex(A[i0].map((v,k)=>v+(A[i1][k]-v)*t))}
+const HOUR_BINS=24;   // band index = start hour minus 5, so 0 is 05:00 and 23 is 04:00
+function bandName(bin){const h=bin+5;const b=BANDS.find(q=>h>=q.lo&&h<q.hi)||BANDS[5];return b.name}
+function bandSub(bin){const h=bin+5;return(BANDS.find(q=>h>=q.lo&&h<q.hi)||BANDS[5]).sub}
 const DEG=180/Math.PI, MINK=0.85, MAXK=9000;
 let S=12,E=20,season=0,W=0,H=0,dpr=1,base=300,cx=0,cy=0;
 // the layers start in the same state on every launch: working hours, favourites and day and night on, the rest off
@@ -46,7 +58,7 @@ function theme(){dark=!matchMedia('(prefers-color-scheme: light)').matches;
             land:'#2b3854',ink:'#f6f7fb',ink2:'rgba(226,232,246,.82)',halo:'rgba(5,10,24,.82)',shadeLite:'rgba(255,255,255,.10)',shadeDark:'rgba(0,4,16,.55)',coast1:'rgba(120,190,255,.07)',coast2:'rgba(140,200,255,.14)',pbTile:'rgba(40,30,80,.45)',borderTile:'rgba(30,20,70,.75)'}
           :{oceanIn:'#d4e6f8',oceanOut:'#9dbfe2',glow:'rgba(120,170,235,',grat:'rgba(30,70,130,.08)',border:'rgba(255,255,255,.85)',pb:'rgba(255,255,255,.55)',
             land:'#e9e3d6',ink:'#111a30',ink2:'rgba(30,42,70,.85)',halo:'rgba(255,255,255,.9)',shadeLite:'rgba(255,255,255,.22)',shadeDark:'rgba(20,40,80,.22)',coast1:'rgba(255,255,255,.25)',coast2:'rgba(255,255,255,.45)',pbTile:'rgba(40,30,80,.4)',borderTile:'rgba(30,20,70,.7)'};
-  BANDS.forEach((b,i)=>pal['b'+i]=dark?b.dark:b.light);stars();ui();draw();if(m3d.ready)m3dStyle();}
+  for(let i=0;i<HOUR_BINS;i++)pal['b'+i]=hourColour(i+5,dark?'dark':'light');stars();ui();draw();if(m3d.ready)m3dStyle();}
 matchMedia('(prefers-color-scheme: light)').addEventListener('change',theme);
 
 // The sky behind the globe: real stars and constellation figures from data/sky.json (Yale Bright Star Catalogue,
@@ -83,8 +95,8 @@ function planetsNow(){const d=Date.now()/864e5+2440587.5-2451543.5,D=Math.PI/180
 // the night sky as seen from the place at the centre of the globe, for the time now: the zenith is the centre of the
 // screen, and the local sidereal time (Greenwich sidereal time plus the longitude) turns the sky as the globe turns.
 // It fills the whole screen with stars, with the planets marked as coloured dots.
-function stars(){const r=sc.getBoundingClientRect();sc.width=r.width*dpr;sc.height=r.height*dpr;const s=sc.getContext('2d');s.fillStyle='#03060d';s.fillRect(0,0,sc.width,sc.height);
-  if(!SKYD)return;const rad=Math.PI/180,ink='240,244,255';
+function stars(){const r=sc.getBoundingClientRect();sc.width=r.width*dpr;sc.height=r.height*dpr;const s=sc.getContext('2d');s.clearRect(0,0,sc.width,sc.height);
+  if(!dark||!SKYD)return;const rad=Math.PI/180,ink='226,235,255';
   const{lon:olon,lat:olat}=skyObs(),jd=Date.now()/864e5+2440587.5,lst=((280.46061837+360.98564736629*(jd-2451545.0)+olon)%360+360)%360;
   const ra0=lst*rad,de0=olat*rad,f=[Math.cos(de0)*Math.cos(ra0),Math.cos(de0)*Math.sin(ra0),Math.sin(de0)];
   let u=[-f[2]*f[0],-f[2]*f[1],1-f[2]*f[2]];const un=Math.hypot(...u);u=u.map(x=>x/un);
@@ -107,7 +119,7 @@ const darkTint=c=>{const n=parseInt(c.slice(1),16);return'rgb('+[16,8,0].map(q=>
 const off=tz=>(D.zones[tz]||[0,0])[season];
 const hhmm=x=>{x=((x%24)+24)%24;let h=Math.floor(x+1e-9),m=Math.round((x-h)*60);if(m===60){h=(h+1)%24;m=0}return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')};
 const hours=o=>hhmm(S+o)+'–'+hhmm(E+o);
-const band=o=>{let s=(((S+o)%24)+24)%24;if(s<5)s+=24;for(let i=0;i<6;i++)if(s>=BANDS[i].lo&&s<BANDS[i].hi)return i;return 5};
+const band=o=>{let s=(((S+o)%24)+24)%24;if(s<5)s+=24;return Math.min(HOUR_BINS-1,Math.floor(s)-5)};
 const vsUK=o=>{if(!o)return'Same as the UK';const a=Math.abs(o),h=Math.floor(a),m=Math.round((a-h)*60);
   return(h?h+(h===1?' hour':' hours'):'')+(h&&m?' ':'')+(m?m+' min':'')+(o>0?' ahead of':' behind')+' the UK'};
 const utc=o=>{const u=o+(season?1:0),a=Math.abs(u),h=Math.floor(a),m=Math.round((a-h)*60);return'UTC'+(u?(u>0?'+':'−')+h+(m?':'+String(m).padStart(2,'0'):''):'')};
@@ -585,7 +597,7 @@ function heart(x,y,s,fill,stroke){ctx.beginPath();ctx.moveTo(x,y+0.9*s);ctx.bezi
   ctx.fillStyle=fill;ctx.fill();ctx.lineWidth=2;ctx.strokeStyle=stroke;ctx.stroke();}
 const FAVC='#ff4f87';let activeFav=null,favTimer=0;
 function hoursBlock(tz){if(!tz||!D.zones[tz])return'';const z=D.zones[tz],o=z[season],b=band(o);
-  return`<div class="big"><i style="background:${pal['b'+b]}"></i>${hours(o)}</div><p class="bandname">${BANDS[b].name}, ${season?'summer':'winter'}. ${season?'Winter':'Summer'}: ${hours(z[1-season])}</p>`}
+  return`<div class="big"><i style="background:${pal['b'+b]}"></i>${hours(o)}</div><p class="bandname">${bandName(b)}, ${season?'summer':'winter'}. ${season?'Winter':'Summer'}: ${hours(z[1-season])}</p>`}
 // a heart on every place card: saving it adds it to your favourites; a saved place opens its favourite
 function favAt(ll){return favs.find(f=>Math.abs(f.lon-ll[0])<2e-4&&Math.abs(f.lat-ll[1])<2e-4)}
 function favBtn(ll){const on=!!favAt(ll);return`<button type="button" class="favbtn${on?' on':''}" id="favadd" aria-pressed="${on}"><span class="fh" aria-hidden="true">♥</span> ${on?'Saved to favourites':'Add to favourites'}</button>`}
@@ -853,7 +865,7 @@ function nearestMapPlace(ll){let best=null,bd=0.004;const VQ=vec(ll[0],ll[1]);
 let infoTok=0;
 function showInfo(title,where,tz,ll){activeFav=null;draft=null;infoTok++;const z=D.zones[tz]||[0,0],o=z[season],b=band(o),other=z[1-season];
   document.getElementById('infob').innerHTML=`<h2>${esc(title)}</h2><p class="where">${esc(where&&where!==title?where:' ')}</p>
-  <div class="big"><i style="background:${pal['b'+b]}"></i>${hours(o)}</div><p class="bandname">${BANDS[b].name}, ${season?'summer':'winter'}</p>
+  <div class="big"><i style="background:${pal['b'+b]}"></i>${hours(o)}</div><p class="bandname">${bandName(b)}, ${season?'summer':'winter'}</p>
   <dl><dt>${season?'Winter':'Summer'}</dt><dd>${hours(other)}</dd><dt>Difference</dt><dd>${vsUK(o)}</dd><dt>Time zone</dt><dd>${utc(o)}</dd></dl>${ll?`<div class="cllinks">${gmapsLink(ll)}</div>`:''}${ll?favBtn(ll):''}${ll?wxBlock():''}${ll?photosBlock():''}${ll?flightsBlock():''}`;
   wireFlights(ll);wxLoad(ll);photosLoad(ll);if(ll)wireFav(title,ll,where,tz);document.getElementById('info').classList.add('show');}
 function hideInfo(){document.getElementById('info').classList.remove('show');if(typeof CW!=='undefined'&&CW.sel){CW.sel=null;draw()}if(typeof CAM!=='undefined'&&CAM.sel){CAM.sel=null;draw()}PH.tok++;if(clickPin){clickPin=null;draw()}if(typeof CL!=='undefined'&&CL.sel){CL.sel=null;draw()}if(selected||activeFav||draft){selected=null;activeFav=null;draft=null;draw()}}
@@ -867,14 +879,14 @@ const bw=document.getElementById('w'),bs=document.getElementById('su');
 function setSeason(v){season=v;bw.setAttribute('aria-pressed',String(v===0));bs.setAttribute('aria-pressed',String(v===1));ui();draw();hideInfo()}
 bw.onclick=()=>setSeason(0);bs.onclick=()=>setSeason(1);
 function ui(){renderFavs();renderLayers();lyrRender();if(typeof m3dSync==='function')m3dSync();document.getElementById('sum').textContent=`${hhmm(S)}–${hhmm(E)}`;
-  const bl=document.getElementById('bandlist');if(bl)bl.innerHTML=BANDS.map((b,i)=>`<li><i style="background:${pal['b'+i]}"></i><span>${b.name}</span><small>${b.sub.replace('starts ','')}</small></li>`).join('');
+  const bl=document.getElementById('bandlist');if(bl)bl.innerHTML=`<li class="bgrow"><div class="bgrad" style="background:linear-gradient(to right,${Array.from({length:HOUR_BINS+1},(_,i)=>pal['b'+(i%HOUR_BINS)]+' '+(i/HOUR_BINS*100).toFixed(2)+'%').join(',')})"></div><div class="bgticks"><span>05</span><span>08</span><span>11</span><span>14</span><span>17</span><span>21</span><span>05</span></div></li>`+BANDS.map(b=>{const mid=Math.floor((b.lo+b.hi)/2)-5;return `<li><i style="background:${pal['b'+mid]}"></i><span>${b.name}</span><small>${b.sub.replace('starts ','')}</small></li>`}).join('');
   document.getElementById('snote').textContent=season?'Late March to late October, while the UK is on BST.':'Late October to late March, while the UK is on GMT.';
   stripRender();}
 // colour key at the bottom: working-hours bands, then the coliving dot colours when that layer is on
 function stripRender(){const el=document.getElementById('strip');if(!el)return;
   const cl=typeof CL!=='undefined'&&CL.on&&CL.data.length?['p','u','f'].filter(t=>CL.f.types.includes(t)):[];
   const CLN={p:'Coliving',u:'Pop-up',f:'Festival'};
-  el.innerHTML=`<span class="sbands">${BANDS.map((b,i)=>`<span><i style="background:${pal['b'+i]}"></i>${b.name}</span>`).join('')}</span>`+
+  el.innerHTML=`<span class="sbands">${BANDS.map(b=>`<span><i style="background:${pal['b'+(Math.floor((b.lo+b.hi)/2)-5)]}"></i>${b.name}</span>`).join('')}</span>`+
     (cl.length?`<span class="scl">${cl.map(t=>`<span><i class="cldot" style="background:${CLT[t].col}"></i>${CLN[t]}</span>`).join('')}</span>`:'');
   el._o=undefined;stripKey(el._o2==null?1:el._o2)}
 function stripKey(o){const el=document.getElementById('strip');if(!el)return;el._o2=o;const sb=el.querySelector('.sbands'),scl=el.querySelector('.scl');
