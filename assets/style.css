@@ -488,3 +488,6 @@ body:has(#info.show) .tourpill{display:none}
 .opac output{min-width:44px;text-align:right;color:var(--ink2);font-variant-numeric:tabular-nums}
 
 .lyrb .bmtick>span:not(.lslot){min-width:0;overflow:hidden;text-overflow:ellipsis}
+
+/* while the map starts, the older canvas globe is kept out of sight; the map replaces it once it is ready */
+body.booting #c{opacity:0}

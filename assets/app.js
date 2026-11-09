@@ -4,7 +4,7 @@ fetch('data/globe-data.json').then(r=>{if(!r.ok)throw new Error('HTTP '+r.status
   el.textContent='The map data could not be loaded ('+err.message+'). If you opened index.html straight from your disk, run a local web server instead (see README).';});
 
 function start(D){
-document.getElementById('loading').remove();
+document.body.classList.add('booting');
 const TZHIT={type:'FeatureCollection',features:D.tzM.features.map(f=>({type:'Feature',properties:f.properties,geometry:JSON.parse(JSON.stringify(f.geometry))}))};
 const BANDS=[
   {lo:5,hi:8,name:"Early bird",sub:"starts 05:00–08:00",dark:"#b7a3f3",light:"#8c72e0"},
@@ -1142,7 +1142,7 @@ async function openMap(){let el=m3d.el;
   if(!el){el=m3d.el=document.createElement('div');el.className='m3d';el.style.opacity='0';el.innerHTML=`<div class="m3dmap" id="m3dmap"></div><p class="m3dmsg" id="m3dmsg" hidden></p>`;document.body.appendChild(el);}
   if(m3d.opening)return m3d.opening;
   const msg=el.querySelector('#m3dmsg');
-  m3d.opening=(async()=>{let lib;try{lib=await m3dLoad()}catch(e){msg.textContent='The 3D view couldn’t load. Check your connection and try again.';msg.hidden=false;return}
+  m3d.opening=(async()=>{let lib;try{lib=await m3dLoad()}catch(e){msg.textContent='The 3D view couldn’t load. Check your connection and try again.';msg.hidden=false;showCanvasFallback();return}
     // start exactly where the globe was: same centre, same scale
     const lon=-rot[0],lat=clamp(-rot[1],-85,85),zoom=fitZoom();
     try{const map=m3d.map=new lib.Map({container:'m3dmap',style:m3dStyleDef(),center:[lon,lat],zoom,pitch:0,bearing:0,maxPitch:85,attributionControl:false,hash:false,dragRotate:true,pitchWithRotate:true,maxTileCacheSize:3000,refreshExpiredTiles:false});
@@ -1155,12 +1155,13 @@ async function openMap(){let el=m3d.el;
       let hov=false;map.on('mousemove',e=>{if(hov)return;hov=true;const pt=e.point;requestAnimationFrame(()=>{hov=false;const h=map.queryRenderedFeatures(pt,{layers:HOVER_IDS.map(x=>M3D_OWN+x).filter(id=>map.getLayer(id))});map.getCanvas().style.cursor=h.length?'pointer':''})});
       m3dWheelButton(map);
       map.on('error',e=>{if(e&&e.error&&/webgl/i.test(String(e.error.message))){msg.textContent='3D needs WebGL, which this browser has switched off.';msg.hidden=false}})}
-    catch(e){msg.textContent='3D needs WebGL, which this browser has switched off.';msg.hidden=false}})();
+    catch(e){msg.textContent='3D needs WebGL, which this browser has switched off.';msg.hidden=false;showCanvasFallback()}})();
   return m3d.opening}
 // the map is on screen: it takes over from the canvas globe, which then stops drawing
-function mapReady(map){if(m3d.ready)return;m3d.ready=true;syncFromMap();document.body.classList.add('in3d');setModeLabel(isTilted());m3dSync();
+function mapReady(map){if(m3d.ready)return;m3d.ready=true;syncFromMap();document.body.classList.add('in3d');document.body.classList.remove('booting');const ld=document.getElementById('loading');if(ld)ld.remove();setModeLabel(isTilted());m3dSync();
   requestAnimationFrame(()=>{if(m3d.el)m3d.el.style.opacity='1'});markersSync();}
 function mapOn(){return!!(m3d.ready&&m3d.map)}
+function showCanvasFallback(){document.body.classList.remove('booting');const ld=document.getElementById('loading');if(ld)ld.remove()}
 // the zoom at which the globe is the same size as the canvas globe at its opening scale (its radius is 43% of the shorter side)
 function fitZoom(){const shorter=Math.min(innerWidth,innerHeight);return clamp(Math.log2(0.43*shorter*2*Math.PI/512),0,6)}
 function isTilted(){return!!(m3d.map&&m3d.map.getPitch()>5)}
