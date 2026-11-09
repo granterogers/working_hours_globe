@@ -482,7 +482,9 @@ body:has(#info.show) .tourpill{display:none}
 .themebtn{position:fixed;left:16px;bottom:16px;z-index:40;width:44px;height:44px;display:grid;place-items:center;padding:0;cursor:pointer}
 
 /* the Layers rows: the count and the cog or filter sit in the same two columns on every row, so they line up */
-.bmtick .lslot{flex:none;display:grid;grid-template-columns:84px 24px;justify-items:end;align-items:center;column-gap:2px}
+.bmtick .lslot{flex:none;width:100px;display:grid;grid-template-columns:72px 24px;justify-items:end;align-items:center;column-gap:2px}
+.bmtick .lslot>small{overflow:hidden;white-space:nowrap;text-align:right;max-width:72px}
+.lyrb .bmtick>span:not(.lslot){min-width:0;overflow:hidden;text-overflow:ellipsis}
 .bmtick .lslot>*{grid-column:2}
 .bmtick .lslot>small{grid-column:1}
 .opac{display:flex;align-items:center;gap:10px;padding:2px 4px 4px}

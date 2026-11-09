@@ -1282,7 +1282,7 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
   map.setPaintProperty(M3D_OWN+'wxt','text-opacity',showWeather?1:0);map.setPaintProperty(M3D_OWN+'wxt','icon-opacity',showWeather?1:0);
   // with the hours on, the base map's own town and country names give way to the names in the hour labels
   const hideBase=showNames&&showHours;
-  for(const l of map.getStyle().layers)if(l.type==='symbol'&&!l.id.startsWith(M3D_OWN))try{map.setPaintProperty(l.id,'text-opacity',showNames&&!(hideBase&&/^label_/.test(l.id))?1:0)}catch(e){}}
+  for(const l of map.getStyle().layers)if(l.type==='symbol'&&!l.id.startsWith(M3D_OWN))try{map.setPaintProperty(l.id,'text-opacity',showNames&&!(hideBase&&l['source-layer']==='place')?1:0)}catch(e){}}
 // weather in 3D: towns and cities spread across the view, bigger places first, about 140 px apart
 function m3dWx(){const map=m3d.map;if(!map||!showWeather||m3d.el.hidden)return;const c=wxCities();if(!c)return;
   const W3=map.getContainer().clientWidth,H3=map.getContainer().clientHeight,cap=clamp(Math.round(W3*H3/60000),8,30),at=[],out=[],b=map.getBounds();
