@@ -7,20 +7,15 @@ function start(D){
 document.body.classList.add('booting');
 const TZHIT={type:'FeatureCollection',features:D.tzM.features.map(f=>({type:'Feature',properties:f.properties,geometry:JSON.parse(JSON.stringify(f.geometry))}))};
 const BANDS=[
-  {lo:5,hi:8,name:"Early bird",sub:"starts 05:00–08:00",dark:"#b7a3f3",light:"#8c72e0"},
-  {lo:8,hi:11,name:"Classic day",sub:"starts 08:00–11:00",dark:"#f7d774",light:"#e6b92e"},
-  {lo:11,hi:14,name:"Late start",sub:"starts 11:00–14:00",dark:"#f4a844",light:"#e9922a"},
-  {lo:14,hi:17,name:"Afternoon into evening",sub:"starts 14:00–17:00",dark:"#ee7a5a",light:"#e0623f"},
-  {lo:17,hi:21,name:"Evening into night",sub:"starts 17:00–21:00",dark:"#d8578f",light:"#c63e78"},
-  {lo:21,hi:29,name:"Overnight",sub:"starts 21:00–05:00",dark:"#5a6bdc",light:"#4656c8"}];
-// one colour for each whole hour of the start time, interpolated between the six band colours (each band's middle hour is
-// its anchor), so the colours run smoothly through the day. The six bands keep their names for the legend.
-const HOUR_ANCHORS=BANDS.map(b=>(b.lo+b.hi)/2);
+  {lo:5,hi:8,name:"Early bird",sub:"starts 05:00–08:00",dark:"#e63946",light:"#e63946"},
+  {lo:8,hi:11,name:"Classic day",sub:"starts 08:00–11:00",dark:"#f4a261",light:"#f4a261"},
+  {lo:11,hi:14,name:"Late start",sub:"starts 11:00–14:00",dark:"#f2cc4b",light:"#f2cc4b"},
+  {lo:14,hi:17,name:"Afternoon into evening",sub:"starts 14:00–17:00",dark:"#6cc070",light:"#6cc070"},
+  {lo:17,hi:21,name:"Evening into night",sub:"starts 17:00–21:00",dark:"#3a86ff",light:"#3a86ff"},
+  {lo:21,hi:29,name:"Overnight",sub:"starts 21:00–05:00",dark:"#7b4bb8",light:"#7b4bb8"}];
+// the six bands each have one clearly different colour; every whole hour takes the colour of its band
 const rgbHex=a=>'#'+a.map(v=>Math.round(v).toString(16).padStart(2,'0')).join('');
-const HOT_COLD=['#d73027','#f46d43','#fdae61','#fee090','#ffffbf','#e0f3f8','#abd9e9','#74add1','#4575b4'];   // hot to cold
-// one colour for each whole hour of the start time, running once from hot at 05:00 to cold at 04:00: no colour repeats
-function hourColour(h){const pos=clamp((h-5)/24,0,1)*(HOT_COLD.length-1),i0=Math.floor(pos),i1=Math.min(HOT_COLD.length-1,i0+1),t=pos-i0;
-  const A=hexRgb(HOT_COLD[i0]),B=hexRgb(HOT_COLD[i1]);return rgbHex(A.map((v,k)=>v+(B[k]-v)*t))}
+function hourColour(h){const b=BANDS.find(q=>h>=q.lo&&h<q.hi)||BANDS[5];return b.light}
 const HOUR_BINS=24;   // band index = start hour minus 5, so 0 is 05:00 and 23 is 04:00
 function bandName(bin){const h=bin+5;const b=BANDS.find(q=>h>=q.lo&&h<q.hi)||BANDS[5];return b.name}
 function bandSub(bin){const h=bin+5;return(BANDS.find(q=>h>=q.lo&&h<q.hi)||BANDS[5]).sub}
@@ -439,7 +434,8 @@ const BASEMAPS={
     attr:'Tiles © Esri: GEBCO, NOAA, CHS, OSU, UNH, CSUMB, National Geographic, DeLorme, NAVTEQ · Names © OpenStreetMap contributors'},
   night:{name:'Earth at night',sub:'City lights from space, NASA Black Marble',url:'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png',max:8,labels:true,dark:true,
     attr:'NASA Earth Observatory / NASA GIBS · Names © OpenStreetMap contributors'}};
-let basemap=(()=>{try{const b=localStorage.getItem('whg.basemap');return BASEMAPS[b]?b:'street'}catch(e){return'street'}})();
+// the default base map is satellite (stored under its own key, so an earlier choice doesn't override it)
+let basemap=(()=>{try{const b=localStorage.getItem('whg.basemap2');return BASEMAPS[b]?b:'satellite'}catch(e){return'satellite'}})();
 const BM=()=>BASEMAPS[basemap];
 const rimg=new Map();
 function rtile(z,x,y,load){const B=BM(),key=basemap+z+'/'+x+'/'+y;let t=rimg.get(key);
@@ -881,7 +877,7 @@ const bw=document.getElementById('w'),bs=document.getElementById('su');
 function setSeason(v){season=v;bw.setAttribute('aria-pressed',String(v===0));bs.setAttribute('aria-pressed',String(v===1));ui();draw();hideInfo()}
 bw.onclick=()=>setSeason(0);bs.onclick=()=>setSeason(1);
 function ui(){renderFavs();renderLayers();lyrRender();if(typeof m3dSync==='function')m3dSync();document.getElementById('sum').textContent=`${hhmm(S)}–${hhmm(E)}`;
-  const bl=document.getElementById('bandlist');if(bl)bl.innerHTML=`<li class="bgrow"><div class="bgrad" style="background:linear-gradient(to right,${Array.from({length:HOUR_BINS+1},(_,i)=>pal['b'+(i%HOUR_BINS)]+' '+(i/HOUR_BINS*100).toFixed(2)+'%').join(',')})"></div><div class="bgticks"><span style="left:0.00%">05</span><span style="left:16.67%">09</span><span style="left:33.33%">13</span><span style="left:50.00%">17</span><span style="left:66.67%">21</span><span style="left:83.33%">01</span></div></li>`+BANDS.map(b=>{const mid=Math.floor((b.lo+b.hi)/2)-5;return `<li><i style="background:${pal['b'+mid]}"></i><span>${b.name}</span><small>${b.sub.replace('starts ','')}</small></li>`}).join('');
+  const bl=document.getElementById('bandlist');if(bl)bl.innerHTML=`<li class="bgrow"><div class="bgrad" style="background:linear-gradient(to right,${BANDS.map(b=>{const c=pal['b'+(b.lo-5)],a=((b.lo-5)/HOUR_BINS*100).toFixed(2),z=((Math.min(b.hi,29)-5)/HOUR_BINS*100).toFixed(2);return c+' '+a+'%,'+c+' '+z+'%'}).join(',')})"></div><div class="bgticks"><span style="left:0.00%">05</span><span style="left:16.67%">09</span><span style="left:33.33%">13</span><span style="left:50.00%">17</span><span style="left:66.67%">21</span><span style="left:83.33%">01</span></div></li>`+BANDS.map(b=>{const mid=Math.floor((b.lo+b.hi)/2)-5;return `<li><i style="background:${pal['b'+mid]}"></i><span>${b.name}</span><small>${b.sub.replace('starts ','')}</small></li>`}).join('');
   document.getElementById('snote').textContent=season?'Late March to late October, while the UK is on BST.':'Late October to late March, while the UK is on GMT.';
   stripRender();}
 // colour key at the bottom: working-hours bands, then the coliving dot colours when that layer is on
@@ -950,7 +946,7 @@ function bmRender(){const m=document.getElementById('bmmenu');
   m.querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>{setBasemap(b.dataset.id);bmToggle(false)});
   m.querySelector('#add').onclick=()=>document.getElementById('file').click();
   renderLayers();renderFavs()}
-function setBasemap(id){if(!BASEMAPS[id]||id===basemap)return;basemap=id;try{localStorage.setItem('whg.basemap',id)}catch(e){}vtUsed.clear();if(m3d.map)m3dStyle();draw()}
+function setBasemap(id){if(!BASEMAPS[id]||id===basemap)return;basemap=id;try{localStorage.setItem('whg.basemap2',id)}catch(e){}vtUsed.clear();if(m3d.map)m3dStyle();draw()}
 function bmToggle(open){const m=document.getElementById('bmmenu'),b=document.getElementById('bmbtn');const show=open==null?m.hidden:open;if(show)bmRender();m.hidden=!show;b.setAttribute('aria-expanded',String(show));
   if(show)setTimeout(()=>{const f=m.querySelector('[aria-checked=true]');if(f)f.focus()})}
 document.getElementById('bmbtn').onclick=e=>{e.stopPropagation();bmToggle()};
@@ -991,7 +987,9 @@ window.whg={screen(lon,lat){if(document.body.classList.contains('in3d')&&m3d.map
   favourites:()=>favs.map(f=>({lon:f.lon,lat:f.lat,name:f.name})),
   coliving:()=>CL.vis.map(x=>({lon:x.lon,lat:x.lat})),
   cowork:()=>CW.vis.map(x=>({lon:x.lon,lat:x.lat})),
-  weather:()=>(WX.shown||[]).map(p=>{const q=WX.pts.get(wxKey(p.lat,p.lon));return{lon:p.lon,lat:p.lat,temp:q?q.temp:null}})};
+  weather:()=>(WX.shown||[]).map(p=>{const q=WX.pts.get(wxKey(p.lat,p.lon));return{lon:p.lon,lat:p.lat,temp:q?q.temp:null}}),
+  // the 3D view's weather points, and how many of them have a reading so far
+  wx3d:()=>({shown:(WX.shown3d||[]).length,read:(WX.shown3d||[]).filter(p=>WX.pts.has(wxKey(p.lat,p.lon))).length,pts:WX.pts.size})};
 function m3dLoad(){if(m3d.lib)return m3d.lib;m3d.lib=new Promise((ok,fail)=>{const l=document.createElement('link');l.rel='stylesheet';l.href=M3D_CSS;document.head.appendChild(l);
   const sc=document.createElement('script');sc.src=M3D_JS;sc.onload=()=>{if(!window.maplibregl)return fail(new Error('MapLibre missing'));m3d.libRef=window.maplibregl;ok(window.maplibregl)};sc.onerror=()=>{m3d.lib=null;fail(new Error('load'))};document.head.appendChild(sc)});return m3d.lib}
 const NAME_EN=['coalesce',['get','name:en'],['get','name']];
@@ -1138,7 +1136,9 @@ async function openMap(){let el=m3d.el;
       map.on('style.load',()=>{m3d.mode=null;m3dExtras(map);m3dSync();for(const l of map.getStyle().layers)if(l.type==='background')map.setPaintProperty(l.id,'background-color','#9ebdff');stars()});
       map.on('move',()=>{if(mapOn())syncFromMap();if(document.body.classList.contains('in3d'))skyFrame()});
       map.on('zoomend',()=>{m3dMode(map);m3dLimit(map)});map.on('moveend',()=>{if(m3d.me&&myLoc)m3dMe()});
-      map.on('click',m3dClick);map.on('moveend',m3dWx);map.on('load',()=>{m3dWx();m3dLimit(map);setTimeout(()=>mapReady(map),5000);map.once('render',()=>mapReady(map))});map.on('moveend',()=>m3dAboveGround(map));
+      map.on('click',m3dClick);map.on('moveend',m3dWx);
+      // the towns come from the map's vector tiles, which can arrive after the view has settled: the weather points are then re-picked
+      map.on('sourcedata',e=>{if(!e.isSourceLoaded||!showWeather)return;const sd=map.getStyle().sources[e.sourceId];if(!sd||sd.type!=='vector')return;clearTimeout(m3d.wxT2);m3d.wxT2=setTimeout(m3dWx,150)});map.on('load',()=>{m3dWx();m3dLimit(map);setTimeout(()=>mapReady(map),5000);map.once('render',()=>mapReady(map))});map.on('moveend',()=>m3dAboveGround(map));
       // the pointer turns into a hand over anything that can be clicked
       let hov=false;map.on('mousemove',e=>{if(hov)return;hov=true;const pt=e.point;requestAnimationFrame(()=>{hov=false;const h=map.queryRenderedFeatures(pt,{layers:HOVER_IDS.map(x=>M3D_OWN+x).filter(id=>map.getLayer(id))});map.getCanvas().style.cursor=h.length?'pointer':''})});
       m3dWheelButton(map);
@@ -1247,10 +1247,13 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
     (map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
   map.setPaintProperty(M3D_OWN+'tz','fill-opacity',['interpolate',['linear'],['zoom'],zA,op,zB,0]);
   try{map.setLayerZoomRange(M3D_OWN+'tz',0,Math.min(24,zB+0.3))}catch(e){}
-  lay({id:M3D_OWN+'cbh',type:'line',source:M3D_OWN+'cb',paint:{'line-color':'rgba(0,0,0,.55)','line-width':2.4}},
+  lay({id:M3D_OWN+'cbh',type:'line',source:M3D_OWN+'cb',paint:{'line-color':'rgba(255,255,255,.8)','line-width':3.2}},
     (map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
-  lay({id:M3D_OWN+'cb',type:'line',source:M3D_OWN+'cb',paint:{'line-color':'rgba(255,255,255,.8)','line-width':1}},
+  lay({id:M3D_OWN+'cb',type:'line',source:M3D_OWN+'cb',paint:{'line-color':'rgba(20,24,44,.9)','line-width':1.2}},
     (map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
+  // colours are set on every sync too, so a layer made by an earlier version of this page is brought up to date
+  map.setPaintProperty(M3D_OWN+'cbh','line-color','rgba(255,255,255,.8)');map.setPaintProperty(M3D_OWN+'cbh','line-width',3.2);
+  map.setPaintProperty(M3D_OWN+'cb','line-color','rgba(20,24,44,.9)');
   map.setPaintProperty(M3D_OWN+'cb','line-opacity',['interpolate',['linear'],['zoom'],zA,1,zB,0]);
   map.setPaintProperty(M3D_OWN+'cbh','line-opacity',['interpolate',['linear'],['zoom'],zA,1,zB,0]);
   map.setPaintProperty(M3D_OWN+'cb','line-width',['interpolate',['linear'],['zoom'],1,0.9,5,1.4]);
@@ -1282,11 +1285,24 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
   const hideBase=showNames&&showHours;
   for(const l of map.getStyle().layers)if(l.type==='symbol'&&!l.id.startsWith(M3D_OWN))try{map.setPaintProperty(l.id,'text-opacity',showNames&&!(hideBase&&l['source-layer']==='place')?1:0)}catch(e){}}
 // weather in 3D: towns and cities spread across the view, bigger places first, about 140 px apart
+// zoomed in (zoom 5 and up) the towns and villages of the base map are added, and the points get denser: as many
+// places as fit without their labels overlapping, instead of the few major airports' cities
+function wxTowns(map){const src=Object.entries(map.getStyle().sources).find(([k,v])=>v.type==='vector');if(!src)return[];
+  let fs=[];try{fs=map.querySourceFeatures(src[0],{sourceLayer:'place'})}catch(e){return[]}
+  const rank={city:3,town:2,village:1},seen=new Set(),out=[];
+  for(const f of fs){const pr=f.properties||{},cl=rank[pr.class];if(!cl||!f.geometry||f.geometry.type!=='Point')continue;
+    const name=String(pr['name:en']||pr.name||'').trim(),lon=f.geometry.coordinates[0],lat=f.geometry.coordinates[1];if(!name)continue;
+    const key=name+'|'+lat.toFixed(2)+'|'+lon.toFixed(2);if(seen.has(key))continue;seen.add(key);
+    out.push({name,lat,lon,v:vec(lon,lat),pri:cl*100-(+pr.rank||50)/100,town:true})}
+  return out}
 function m3dWx(){const map=m3d.map;if(!map||!showWeather||m3d.el.hidden)return;const c=wxCities();if(!c)return;
-  const W3=map.getContainer().clientWidth,H3=map.getContainer().clientHeight,cap=clamp(Math.round(W3*H3/60000),8,30),at=[],out=[],b=map.getBounds();
-  const pool=c.filter(p=>b.contains([p.lon,p.lat])).sort((a,b)=>b.pri-a.pri);
+  const W3=map.getContainer().clientWidth,H3=map.getContainer().clientHeight,b=map.getBounds(),dense=map.getZoom()>=5;
+  const cap=dense?clamp(Math.round(W3*H3/14000),12,80):clamp(Math.round(W3*H3/60000),8,30),at=[],out=[];
+  const pool=(dense?wxTowns(map).filter(p=>b.contains([p.lon,p.lat])):[]).concat(c.filter(p=>b.contains([p.lon,p.lat]))).sort((a,b)=>b.pri-a.pri);
   for(const p of pool){if(out.length>=cap)break;const q=map.project([p.lon,p.lat]);if(!isFinite(q.x)||q.x<40||q.y<70||q.x>W3-40||q.y>H3-30)continue;
-    if(at.some(a=>Math.hypot(a[0]-q.x,a[1]-q.y)<140))continue;at.push([q.x,q.y]);out.push(p)}
+    // each point is a name and a temperature, about 80 px wide and 28 px tall: their boxes don't overlap
+    const clash=a=>dense?Math.abs(a[0]-q.x)<78&&Math.abs(a[1]-q.y)<28:Math.hypot(a[0]-q.x,a[1]-q.y)<140;
+    if(at.some(clash))continue;at.push([q.x,q.y]);out.push(p)}
   WX.shown3d=out;m3dSync();wxFetch()}
 // clicks in 3D open the same cards as on the globe
 function m3dClick(e){const map=m3d.map,hits=map.queryRenderedFeatures(e.point,{layers:HOVER_IDS.map(x=>M3D_OWN+x).filter(id=>map.getLayer(id))});
@@ -1653,9 +1669,9 @@ async function phSearch(lat,lon,onUpdate){const seen=new Map();let radius=0,answ
   for(const r of PH_RADII){radius=r;const key='v2 '+lat.toFixed(4)+','+lon.toFixed(4)+','+r;
     let got=PH.cache.get(key)||await phIdbGet(key);
     if(got){answered++;PH.cache.set(key,got);add(got,r)}else{got=[];let ok=0;
-      await Promise.allSettled(PH_SOURCES.map(f=>phTimeout(f(lat,lon,r),PH_WAIT).then(v=>{ok++;got.push(...v);add(v,r);if(onUpdate(phRank(seen),r,false)===false)throw 0})));
-      // OpenStreetMap's photo query is the slowest, so it only runs when the quick sources come up short
-      if(phRank(seen).length<PH_WANT)await phTimeout(phOverpass(lat,lon,r),PH_WAIT).then(v=>{ok++;got.push(...v);add(v,r)}).catch(()=>{});
+      // every source starts at once and each one's photos show as soon as it answers, so the slowest source
+      // (OpenStreetMap's) no longer holds back the photos that have already arrived
+      await Promise.allSettled([...PH_SOURCES,phOverpass].map(f=>phTimeout(f(lat,lon,r),PH_WAIT).then(v=>{ok++;got.push(...v);add(v,r);if(onUpdate(phRank(seen),r,false)===false)throw 0})));
       answered+=ok;
       // a search cut short by a newer one keeps nothing, and a search where no source answered is not saved at all,
       // so a rate limit or a dropped connection never becomes "no photos" for a week

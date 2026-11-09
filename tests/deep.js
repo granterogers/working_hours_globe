@@ -167,8 +167,9 @@ const step = async (name, fn) => { try { await fn() } catch (e) { check(name + '
   await step('weather layer', async () => {
     await page.evaluate(() => { const b = document.querySelector('#lyr [data-show="weather"]'); if (!b.checked) b.click() });
     await page.waitForTimeout(3000);
-    const n = await page.evaluate(() => window.whg.weather().length);
-    check('weather layer shows points', n > 0, n + ' points');
+    // the points the layer picks for the view (2D or 3D); the readings come from the weather service, which can be rate-limited
+    const n = await page.evaluate(() => window.whg.weather().length + window.whg.wx3d().shown);
+    check('weather layer picks points for the view', n > 0, n + ' points');
     await page.evaluate(() => { const b = document.querySelector('#lyr [data-show="weather"]'); if (b.checked) b.click() });
   });
 

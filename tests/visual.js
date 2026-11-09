@@ -70,16 +70,29 @@ async function pixelStats(page, png, box) {
     await page.waitForTimeout(4000);
   });
 
-  // 4. the working-hours colours: one colour per hour, all different, running once round the day
-  await step('working-hours colours do not repeat', async () => {
-    const cols = await page.evaluate(() => {
+  // 4. the working-hours colours: the six categories each have a clearly different colour, and the legend bar
+  //    runs once through them (no wrap back to the first colour)
+  await step('six distinct working-hours colours', async () => {
+    const stops = await page.evaluate(() => {
       const bar = document.querySelector('.bgrad'); if (!bar) return null;
-      const bg = bar.style.background;
-      return [...bg.matchAll(/rgb\((\d+), (\d+), (\d+)\)/g)].map(m => [m[1], m[2], m[3]].map(v => (+v).toString(16).padStart(2, '0')).join(''))
-        .concat([...bg.matchAll(/#[0-9a-f]{6}/gi)].map(m => m[0].slice(1).toLowerCase()));
+      return [...bar.style.background.matchAll(/rgb\((\d+), (\d+), (\d+)\)/g)].map(m => [+m[1], +m[2], +m[3]]);
     });
-    const distinct = cols ? new Set(cols).size : 0;
-    check('a colour for every hour, all different', cols && cols.length >= 24 && distinct >= 20, (cols ? cols.length : 0) + ' stops, ' + distinct + ' distinct');
+    if (!stops || !stops.length) { check('legend colour bar is there', false, 'no bar'); return; }
+    const uniq = [];
+    for (const c of stops) if (!uniq.some(u => u[0] === c[0] && u[1] === c[1] && u[2] === c[2])) uniq.push(c);
+    let minD = Infinity;
+    for (let i = 0; i < uniq.length; i++) for (let j = i + 1; j < uniq.length; j++) {
+      const d = Math.hypot(uniq[i][0] - uniq[j][0], uniq[i][1] - uniq[j][1], uniq[i][2] - uniq[j][2]); if (d < minD) minD = d;
+    }
+    check('six categories, six colours', uniq.length === 6, uniq.length + ' colours');
+    check('the six colours are clearly different', uniq.length === 6 && minD >= 90, 'closest pair ' + Math.round(minD) + ' apart (need 90+)');
+    const first = stops[0], last = stops[stops.length - 1];
+    check('the bar does not end in the first colour (no wrap back to red)', !(first[0] === last[0] && first[1] === last[1] && first[2] === last[2]), 'start rgb(' + first + ') end rgb(' + last + ')');
+  });
+
+  await step('satellite is the default base map', async () => {
+    const b = await page.evaluate(() => window.whg.basemap());
+    check('default base map is satellite', b === 'satellite', b);
   });
 
   // 5. the night is a graduated shade: its alpha takes many values, not one flat step
