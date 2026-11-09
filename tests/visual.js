@@ -33,7 +33,8 @@ async function pixelStats(page, png, box) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   const errors = [];
   page.on('pageerror', e => errors.push(e.message.slice(0, 160)));
-  const MAP = { x0: 0.3, x1: 0.99, y0: 0.05, y1: 0.97 };   // the map area, without the panels along the left and the top right
+  const GLOBE = { x0: 0.33, x1: 0.67, y0: 0.25, y1: 0.75 };   // the middle of the globe, well inside its edge at the opening view
+  const MAP = { x0: 0.3, x1: 0.99, y0: 0.05, y1: 0.97 };      // the map area, without the panels along the left and the top right
 
   // 1. startup: the map is on screen soon, the loading message goes, and the older canvas is not shown first
   const t0 = Date.now();
@@ -54,7 +55,7 @@ async function pixelStats(page, png, box) {
   // 2. the globe is solid: no pure-black see-through patches in the globe, at the opening view
   await step('globe is solid at the opening view', async () => {
     const png = await page.screenshot({ timeout: 150000 });
-    const st = await pixelStats(page, png, MAP);
+    const st = await pixelStats(page, png, GLOBE);
     check('no see-through (pure black) patches on the globe', st.blackFrac < 0.02, 'black ' + (st.blackFrac * 100).toFixed(2) + '%');
   });
 
@@ -73,7 +74,9 @@ async function pixelStats(page, png, box) {
   await step('working-hours colours do not repeat', async () => {
     const cols = await page.evaluate(() => {
       const bar = document.querySelector('.bgrad'); if (!bar) return null;
-      return [...bar.style.background.matchAll(/#[0-9a-f]{6}/gi)].map(m => m[0].toLowerCase());
+      const bg = bar.style.background;
+      return [...bg.matchAll(/rgb\((\d+), (\d+), (\d+)\)/g)].map(m => [m[1], m[2], m[3]].map(v => (+v).toString(16).padStart(2, '0')).join(''))
+        .concat([...bg.matchAll(/#[0-9a-f]{6}/gi)].map(m => m[0].slice(1).toLowerCase()));
     });
     const distinct = cols ? new Set(cols).size : 0;
     check('a colour for every hour, all different', cols && cols.length >= 24 && distinct >= 20, (cols ? cols.length : 0) + ' stops, ' + distinct + ' distinct');
