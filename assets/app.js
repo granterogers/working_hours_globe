@@ -83,8 +83,8 @@ function planetsNow(){const d=Date.now()/864e5+2440587.5-2451543.5,D=Math.PI/180
 // the night sky as seen from the place at the centre of the globe, for the time now: the zenith is the centre of the
 // screen, and the local sidereal time (Greenwich sidereal time plus the longitude) turns the sky as the globe turns.
 // It fills the whole screen with stars, with the planets marked as coloured dots.
-function stars(){const r=sc.getBoundingClientRect();sc.width=r.width*dpr;sc.height=r.height*dpr;const s=sc.getContext('2d');s.clearRect(0,0,sc.width,sc.height);
-  if(!SKYD)return;const rad=Math.PI/180,ink=dark?'226,235,255':'24,40,80';
+function stars(){const r=sc.getBoundingClientRect();sc.width=r.width*dpr;sc.height=r.height*dpr;const s=sc.getContext('2d');s.fillStyle='#03060d';s.fillRect(0,0,sc.width,sc.height);
+  if(!SKYD)return;const rad=Math.PI/180,ink='240,244,255';
   const{lon:olon,lat:olat}=skyObs(),jd=Date.now()/864e5+2440587.5,lst=((280.46061837+360.98564736629*(jd-2451545.0)+olon)%360+360)%360;
   const ra0=lst*rad,de0=olat*rad,f=[Math.cos(de0)*Math.cos(ra0),Math.cos(de0)*Math.sin(ra0),Math.sin(de0)];
   let u=[-f[2]*f[0],-f[2]*f[1],1-f[2]*f[2]];const un=Math.hypot(...u);u=u.map(x=>x/un);
@@ -1124,7 +1124,7 @@ async function openMap(){let el=m3d.el;
   const msg=el.querySelector('#m3dmsg');
   m3d.opening=(async()=>{let lib;try{lib=await m3dLoad()}catch(e){msg.textContent='The 3D view couldn’t load. Check your connection and try again.';msg.hidden=false;return}
     // start exactly where the globe was: same centre, same scale
-    const lon=-rot[0],lat=clamp(-rot[1],-85,85),zoom=k2z(k,lat);
+    const lon=-rot[0],lat=clamp(-rot[1],-85,85),zoom=fitZoom();
     try{const map=m3d.map=new lib.Map({container:'m3dmap',style:m3dStyleDef(),center:[lon,lat],zoom,pitch:0,bearing:0,maxPitch:85,attributionControl:false,hash:false,dragRotate:true,pitchWithRotate:true,maxTileCacheSize:3000,refreshExpiredTiles:false});
       map.on('rotate',northNeedle);map.on('pitch',()=>{northNeedle();setModeLabel(isTilted())});
       map.on('style.load',()=>{m3d.mode=null;m3dExtras(map);m3dSync();for(const l of map.getStyle().layers)if(l.type==='background')map.setPaintProperty(l.id,'background-color','rgba(0,0,0,0)');stars()});
@@ -1141,6 +1141,8 @@ async function openMap(){let el=m3d.el;
 function mapReady(map){if(m3d.ready)return;m3d.ready=true;syncFromMap();document.body.classList.add('in3d');setModeLabel(isTilted());m3dSync();
   requestAnimationFrame(()=>{if(m3d.el)m3d.el.style.opacity='1'});markersSync();}
 function mapOn(){return!!(m3d.ready&&m3d.map)}
+// the zoom at which the whole globe fits the screen with a margin: its radius is 42% of the shorter side
+function fitZoom(){const shorter=Math.min(innerWidth,innerHeight);return clamp(Math.log2(0.42*shorter*2*Math.PI/512),0,6)}
 function isTilted(){return!!(m3d.map&&m3d.map.getPitch()>5)}
 // the map's centre and zoom, mirrored into the globe's state, so the place and sky code keeps the same numbers
 function syncFromMap(){const map=m3d.map,c=map.getCenter(),lat=clamp(c.lat,-85,85);rot=[-c.lng,-lat,0];k=kT=z2k(map.getZoom(),lat)}
@@ -1236,7 +1238,7 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
     (map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
   map.setPaintProperty(M3D_OWN+'tz','fill-opacity',['interpolate',['linear'],['zoom'],zA,op,zB,0]);
   try{map.setLayerZoomRange(M3D_OWN+'tz',0,Math.min(24,zB+0.3))}catch(e){}
-  lay({id:M3D_OWN+'cb',type:'line',source:M3D_OWN+'cb',paint:{'line-color':pal.border,'line-width':1}},
+  lay({id:M3D_OWN+'cb',type:'line',source:M3D_OWN+'cb',paint:{'line-color':dark?'rgba(255,255,255,.5)':'rgba(20,30,55,.6)','line-width':1}},
     (map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
   map.setPaintProperty(M3D_OWN+'cb','line-opacity',['interpolate',['linear'],['zoom'],zA,1,zB,0]);
   map.setPaintProperty(M3D_OWN+'cb','line-width',['interpolate',['linear'],['zoom'],1,0.9,5,1.4]);
@@ -1248,6 +1250,7 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
   lay({id:M3D_OWN+'cln',type:'symbol',source:M3D_OWN+'cl',minzoom:9,layout:{'text-field':['get','n'],'text-font':font,'text-size':11,'text-offset':[0,-1.2],'text-anchor':'bottom','text-optional':true},paint:{'text-color':dk?'#fff':'#14213d','text-halo-color':dk?'rgba(0,0,0,.75)':'#fff','text-halo-width':1.4}});
   lay({id:M3D_OWN+'fv',type:'circle',source:M3D_OWN+'fv',paint:{'circle-color':FAVC,'circle-radius':7,'circle-stroke-color':'#fff','circle-stroke-width':2}});
   lay({id:M3D_OWN+'fvn',type:'symbol',source:M3D_OWN+'fv',layout:{'text-field':['get','n'],'text-font':font,'text-size':12,'text-offset':[0,-1.3],'text-anchor':'bottom'},paint:{'text-color':dk?'#fff':'#14213d','text-halo-color':dk?'rgba(0,0,0,.75)':'#fff','text-halo-width':1.5}});
+  try{map.moveLayer(M3D_OWN+'cb',M3D_OWN+'lab')}catch(e){}
   lay({id:M3D_OWN+'lab',type:'symbol',source:M3D_OWN+'lab',layout:{'text-field':['get','t'],'text-font':font,'text-size':['match',['get','r'],1,13,11.5],'text-line-height':1.25,'text-padding':6},
     paint:{'text-color':dk||basemap==='street'?'#ffffff':'#ffffff','text-halo-color':'rgba(10,16,30,.8)','text-halo-width':1.6}});
   for(const kd in WXI)if(!map.hasImage('wx-'+kd)){const im=new Image(52,52);im.onload=()=>{try{if(!map.hasImage('wx-'+kd)){map.addImage('wx-'+kd,im,{pixelRatio:2});clearTimeout(m3d.wxT);m3d.wxT=setTimeout(()=>{const s=map.getSource(M3D_OWN+'wx');if(s)s.setData(m3dGeo().wx)},50)}}catch(e){}};im.src='data:image/svg+xml,'+encodeURIComponent(WXI[kd].replace('<svg ','<svg width="52" height="52" '))}
