@@ -18,8 +18,8 @@ const BANDS=[
 const HOUR_ANCHORS=BANDS.map(b=>(b.lo+b.hi)/2);
 const rgbHex=a=>'#'+a.map(v=>Math.round(v).toString(16).padStart(2,'0')).join('');
 const HOT_COLD=['#d73027','#f46d43','#fdae61','#fee090','#ffffbf','#e0f3f8','#abd9e9','#74add1','#4575b4'];   // hot to cold
-// one colour for each whole hour of the start time: hottest at 13:00, coldest at 01:00, and continuous round the clock
-function hourColour(h){let d=Math.abs(((h-13)%24+24)%24);if(d>12)d=24-d;const pos=(d/12)*(HOT_COLD.length-1),i0=Math.floor(pos),i1=Math.min(HOT_COLD.length-1,i0+1),t=pos-i0;
+// one colour for each whole hour of the start time, running once from hot at 05:00 to cold at 04:00: no colour repeats
+function hourColour(h){const pos=clamp((h-5)/24,0,1)*(HOT_COLD.length-1),i0=Math.floor(pos),i1=Math.min(HOT_COLD.length-1,i0+1),t=pos-i0;
   const A=hexRgb(HOT_COLD[i0]),B=hexRgb(HOT_COLD[i1]);return rgbHex(A.map((v,k)=>v+(B[k]-v)*t))}
 const HOUR_BINS=24;   // band index = start hour minus 5, so 0 is 05:00 and 23 is 04:00
 function bandName(bin){const h=bin+5;const b=BANDS.find(q=>h>=q.lo&&h<q.hi)||BANDS[5];return b.name}
@@ -1008,7 +1008,7 @@ function m3dStyleDef(){const B=BM();
 // Day and night on the globe: the night side is an image worked out pixel by pixel from the sun, with the same darkness
 // as the canvas globe. Its rows are spaced as the Mercator map spaces them, so it lines up with the map. The image is
 // rebuilt each minute. (MapLibre's Mercator geometry stops at 85°, so nothing can be drawn over the poles themselves.)
-const NIGHT_IMG={key:'',url:'',an:0,as:0},NIGHT_A=0.2,NIGHT_EDGE_DEG=1.4,NIGHT_EDGE_A=0,NIGHT_AA_DEG=0.35;
+const NIGHT_IMG={key:'',url:'',an:0,as:0},NIGHT_MAXA=0.4,NIGHT_FULLDEG=18;
 // Day and night on the globe: the night side is one flat shade, a little darker than the day, and the line where the sun
 // sets (the terminator) is drawn as a clear band along its edge. The image is rebuilt each minute.
 // (MapLibre's Mercator geometry stops at 85°, so nothing can be drawn over the poles themselves.)
@@ -1019,12 +1019,9 @@ function nightImage(){const key=Math.floor(Date.now()/6e4)+'|'+(dark?1:0);if(key
   for(let j=0;j<H;j++){const y=YM-2*YM*(j+0.5)/H,lat=2*Math.atan(Math.exp(y))-Math.PI/2,sa=Math.sin(lat),ca=Math.cos(lat);
     for(let i=0;i<W;i++){const lon=(-180+360*(i+0.5)/W)*D;
       const sinEl=sa*ss+ca*cs*Math.cos(lon-sl*D),el=Math.asin(Math.max(-1,Math.min(1,sinEl)))/D;
-      // the night shade fades in across the edge, and the black line is antialiased on both sides
-      const nightA=NIGHT_A*clamp(0.5-el/NIGHT_AA_DEG,0,1),lineA=NIGHT_EDGE_A*clamp(0.5-(Math.abs(el)-NIGHT_EDGE_DEG/2)/NIGHT_AA_DEG,0,1);
-      const ao=lineA+nightA*(1-lineA);if(ao<=0)continue;
-      const q=(j*W+i)*4;
-      im.data[q]=(col[0]*nightA*(1-lineA))/ao;im.data[q+1]=(col[1]*nightA*(1-lineA))/ao;im.data[q+2]=(col[2]*nightA*(1-lineA))/ao;
-      im.data[q+3]=Math.round(ao*255)}}
+      // a graduated shade: nothing while the sun is up, deepening to the full shade 18 degrees below the horizon
+      const a=NIGHT_MAXA*clamp(-el/NIGHT_FULLDEG,0,1);if(a<=0)continue;
+      const q=(j*W+i)*4;im.data[q]=col[0];im.data[q+1]=col[1];im.data[q+2]=col[2];im.data[q+3]=Math.round(a*255)}}
   cx.putImageData(im,0,0);
   NIGHT_IMG.url=cv.toDataURL('image/png');NIGHT_IMG.an=nightAlpha(90,0,{sl,ss,cs});NIGHT_IMG.as=nightAlpha(-90,0,{sl,ss,cs});NIGHT_IMG.key=key;return NIGHT_IMG}
 // The polar caps. MapLibre's Mercator geometry stops at 85°, so the two caps beyond that are drawn here as a sphere mesh, in
@@ -1056,7 +1053,7 @@ function capBase(){if(basemap==='street')return dark?{n:[29,29,31],s:[7,7,7]}:{n
 // the sun's terms for the night formula, as nightImage uses them
 function sunTerms(){const D=Math.PI/180,[sl,sd]=sunNow(Date.now());return{sl:sl*D,ss:Math.sin(sd*D),cs:Math.cos(sd*D)}}
 function nightAlpha(latDeg,lonDeg,T){const D=Math.PI/180,la=latDeg*D,sinEl=Math.sin(la)*T.ss+Math.cos(la)*T.cs*Math.cos(lonDeg*D-T.sl);
-  const el=Math.asin(Math.max(-1,Math.min(1,sinEl)))/D;return el<0?NIGHT_A:0}
+  const el=Math.asin(Math.max(-1,Math.min(1,sinEl)))/D;return NIGHT_MAXA*clamp(-el/NIGHT_FULLDEG,0,1)}
 const CAP={id:'m3d-caps',type:'custom',renderingMode:'3d',
   onAdd(map,gl){this.gl=gl;const M=capMesh();
     const vs=`precision highp float;
@@ -1096,15 +1093,6 @@ void main(){vec2 m=u_tile.xy+u_tile.zw*a_pos;float sx=m.x*6.283185307+3.14159265
 function capsSync(map){if(!map.getLayer(CAP.id)){const first=(map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id;map.addLayer(CAP,first)}
   CAP.recolour();map.triggerRepaint()}
 // the night image on the map, faded out with the same zoom range as the working-hours colours, and the caps updated with it
-// the terminator: the line where the sun is on the horizon, as a dotted line along the edge of the night
-function terminatorFeature(){const T=sunTerms(),pts=[];for(let i=0;i<=720;i++){const lon=-180+i*0.5,d=lon*Math.PI/180-T.sl;
-  const lat=Math.atan(-T.cs*Math.cos(d)/T.ss)*180/Math.PI;pts.push([lon,clamp(lat,-85,85)])}
-  return{type:'Feature',properties:{},geometry:{type:'LineString',coordinates:pts}}}
-function termSync(map){const data={type:'FeatureCollection',features:[terminatorFeature()]};
-  if(map.getSource(M3D_OWN+'term'))map.getSource(M3D_OWN+'term').setData(data);else map.addSource(M3D_OWN+'term',{type:'geojson',data});
-  if(!map.getLayer(M3D_OWN+'term')){const first=(map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id;
-    map.addLayer({id:M3D_OWN+'term',type:'line',source:M3D_OWN+'term',layout:{'line-cap':'round'},paint:{'line-color':'#000000','line-width':1.6,'line-dasharray':[0.01,2.2]}},first)}
-  map.setLayoutProperty(M3D_OWN+'term','visibility',showNight?'visible':'none')}
 function nightSync(map,zA,zB){const url=nightImage().url;
   const src=map.getSource(M3D_OWN+'nightimg');
   if(src){if(src._whgUrl!==url){src.updateImage({url});src._whgUrl=url}}
@@ -1114,7 +1102,7 @@ function nightSync(map,zA,zB){const url=nightImage().url;
   // on and off is a change of opacity, which the map animates
   map.setPaintProperty(M3D_OWN+'nightimg','raster-opacity',['interpolate',['linear'],['zoom'],zA,showNight?1:0,zB,0]);
   try{capsSync(map)}catch(e){console.warn('caps',e)}
-  try{termSync(map)}catch(e){console.warn('term',e)}}
+}
 // the webcam icon: a camera in a white disc, with a red ring for the live ones
 const CAM_SVG=live=>`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="17" fill="#ffffff" stroke="${live?'#e2453c':'#1f2937'}" stroke-width="2.5"/><path d="M10 15h12a2.5 2.5 0 0 1 2.5 2.5v7a2.5 2.5 0 0 1-2.5 2.5H10a2.5 2.5 0 0 1-2.5-2.5v-7A2.5 2.5 0 0 1 10 15z" fill="#1f2937"/><path d="M25 19l5.5-3.5v9L25 21z" fill="#1f2937"/></svg>`;
 function camIcons(map){for(const live of[0,1]){const id=live?'cam-live':'cam';if(map.hasImage(id))continue;const im=new Image(40,40);
@@ -1147,10 +1135,10 @@ async function openMap(){let el=m3d.el;
     const lon=-rot[0],lat=clamp(-rot[1],-85,85),zoom=fitZoom();
     try{const map=m3d.map=new lib.Map({container:'m3dmap',style:m3dStyleDef(),center:[lon,lat],zoom,pitch:0,bearing:0,maxPitch:85,attributionControl:false,hash:false,dragRotate:true,pitchWithRotate:true,maxTileCacheSize:3000,refreshExpiredTiles:false});
       map.on('rotate',northNeedle);map.on('pitch',()=>{northNeedle();setModeLabel(isTilted())});
-      map.on('style.load',()=>{m3d.mode=null;m3dExtras(map);m3dSync();for(const l of map.getStyle().layers)if(l.type==='background')map.setPaintProperty(l.id,'background-color','rgba(0,0,0,0)');stars()});
+      map.on('style.load',()=>{m3d.mode=null;m3dExtras(map);m3dSync();for(const l of map.getStyle().layers)if(l.type==='background')map.setPaintProperty(l.id,'background-color','#9ebdff');stars()});
       map.on('move',()=>{if(mapOn())syncFromMap();if(document.body.classList.contains('in3d'))skyFrame()});
       map.on('zoomend',()=>{m3dMode(map);m3dLimit(map)});map.on('moveend',()=>{if(m3d.me&&myLoc)m3dMe()});
-      map.on('click',m3dClick);map.on('moveend',m3dWx);map.on('load',()=>{m3dWx();m3dLimit(map);setTimeout(()=>mapReady(map),5000);map.once('idle',()=>mapReady(map))});map.on('moveend',()=>m3dAboveGround(map));
+      map.on('click',m3dClick);map.on('moveend',m3dWx);map.on('load',()=>{m3dWx();m3dLimit(map);setTimeout(()=>mapReady(map),5000);map.once('render',()=>mapReady(map))});map.on('moveend',()=>m3dAboveGround(map));
       // the pointer turns into a hand over anything that can be clicked
       let hov=false;map.on('mousemove',e=>{if(hov)return;hov=true;const pt=e.point;requestAnimationFrame(()=>{hov=false;const h=map.queryRenderedFeatures(pt,{layers:HOVER_IDS.map(x=>M3D_OWN+x).filter(id=>map.getLayer(id))});map.getCanvas().style.cursor=h.length?'pointer':''})});
       m3dWheelButton(map);
