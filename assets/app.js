@@ -54,7 +54,7 @@ const proj=d3.geoOrthographic().clipAngle(90).precision(0.35),path=d3.geoPath(pr
 // how strong the working-hours colours are, from the settings slider (0 to 100)
 let HOP=(()=>{try{return Math.min(100,Math.max(0,+(localStorage.getItem('whg.hop')||100)))}catch(e){return 100}})();
 function setHOP(v){HOP=v;try{localStorage.setItem('whg.hop',v)}catch(e){}const o=document.getElementById('hopv');if(o)o.textContent=v+'%';draw();m3dSync()}
-function theme(){let saved='dark';try{saved=localStorage.getItem('whg.theme')||'dark'}catch(e){}dark=saved!=='light';
+function theme(){dark=false;document.documentElement.dataset.theme='light';
   document.documentElement.dataset.theme=dark?'dark':'light';
   pal=dark?{oceanIn:'#163a68',oceanOut:'#071630',glow:'rgba(110,170,255,',grat:'rgba(170,200,255,.07)',border:'rgba(8,14,30,.55)',pb:'rgba(8,14,30,.28)',
             land:'#2b3854',ink:'#f6f7fb',ink2:'rgba(226,232,246,.82)',halo:'rgba(5,10,24,.82)',shadeLite:'rgba(255,255,255,.10)',shadeDark:'rgba(0,4,16,.55)',coast1:'rgba(120,190,255,.07)',coast2:'rgba(140,200,255,.14)',pbTile:'rgba(40,30,80,.45)',borderTile:'rgba(30,20,70,.75)'}
@@ -62,7 +62,6 @@ function theme(){let saved='dark';try{saved=localStorage.getItem('whg.theme')||'
             land:'#e9e3d6',ink:'#111a30',ink2:'rgba(30,42,70,.85)',halo:'rgba(255,255,255,.9)',shadeLite:'rgba(255,255,255,.22)',shadeDark:'rgba(20,40,80,.22)',coast1:'rgba(255,255,255,.25)',coast2:'rgba(255,255,255,.45)',pbTile:'rgba(40,30,80,.4)',borderTile:'rgba(30,20,70,.7)'};
   for(let i=0;i<HOUR_BINS;i++)pal['b'+i]=hourColour(i+5);stars();ui();draw();if(m3d.ready)m3dStyle();}
 {const hop=document.getElementById('hop');if(hop){hop.value=HOP;document.getElementById('hopv').textContent=HOP+'%';hop.oninput=()=>setHOP(+hop.value)}}
-document.getElementById('themebtn').onclick=()=>{dark=!dark;try{localStorage.setItem('whg.theme',dark?'dark':'light')}catch(e){}theme()};
 
 // The sky behind the globe: real stars and constellation figures from data/sky.json (Yale Bright Star Catalogue,
 // d3-celestial). Seen from the sun's side of the Earth, the sky directly behind the globe is the anti-sun point, so
@@ -99,7 +98,7 @@ function planetsNow(){const d=Date.now()/864e5+2440587.5-2451543.5,D=Math.PI/180
 // screen, and the local sidereal time (Greenwich sidereal time plus the longitude) turns the sky as the globe turns.
 // It fills the whole screen with stars, with the planets marked as coloured dots.
 function stars(){const r=sc.getBoundingClientRect();sc.width=r.width*dpr;sc.height=r.height*dpr;const s=sc.getContext('2d');s.clearRect(0,0,sc.width,sc.height);
-  if(!dark)return;if(dark)s.fillStyle='#000000';if(dark)s.fillRect(0,0,sc.width,sc.height);if(!SKYD)return;const rad=Math.PI/180,ink='226,235,255';
+  s.fillStyle='#000000';s.fillRect(0,0,sc.width,sc.height);if(!SKYD)return;const rad=Math.PI/180,ink='240,244,255';
   const{lon:olon,lat:olat}=skyObs(),jd=Date.now()/864e5+2440587.5,lst=((280.46061837+360.98564736629*(jd-2451545.0)+olon)%360+360)%360;
   const ra0=lst*rad,de0=olat*rad,f=[Math.cos(de0)*Math.cos(ra0),Math.cos(de0)*Math.sin(ra0),Math.sin(de0)];
   let u=[-f[2]*f[0],-f[2]*f[1],1-f[2]*f[2]];const un=Math.hypot(...u);u=u.map(x=>x/un);
@@ -112,7 +111,7 @@ function stars(){const r=sc.getBoundingClientRect();sc.width=r.width*dpr;sc.heig
   for(const[ra,dec,mag]of SKYD.stars){const p=P(ra,dec);if(!p)continue;
     const rr=Math.max(0.35,(6.2-mag)*0.3)*dpr,a=Math.min(1,Math.max(0.3,1.05-mag*0.13));
     s.fillStyle=`rgba(${ink},${a})`;s.beginPath();s.arc(p[0],p[1],rr,0,7);s.fill()}
-  for(const pl of planetsNow()){const p=P(pl.ra,pl.dec);if(!p)continue;s.fillStyle=dark?pl.col:darkTint(pl.col);s.beginPath();s.arc(p[0],p[1],3.4*dpr,0,7);s.fill()}
+  for(const pl of planetsNow()){const p=P(pl.ra,pl.dec);if(!p)continue;s.fillStyle=pl.col;s.beginPath();s.arc(p[0],p[1],3.4*dpr,0,7);s.fill()}
 }
 
 // a planet's colour darkened for the light theme, where the pale colours would vanish
@@ -1009,7 +1008,7 @@ function m3dStyleDef(){const B=BM();
 // Day and night on the globe: the night side is an image worked out pixel by pixel from the sun, with the same darkness
 // as the canvas globe. Its rows are spaced as the Mercator map spaces them, so it lines up with the map. The image is
 // rebuilt each minute. (MapLibre's Mercator geometry stops at 85°, so nothing can be drawn over the poles themselves.)
-const NIGHT_IMG={key:'',url:'',an:0,as:0},NIGHT_A=0.2,NIGHT_EDGE_DEG=1.4,NIGHT_EDGE_A=0.95,NIGHT_AA_DEG=0.35;
+const NIGHT_IMG={key:'',url:'',an:0,as:0},NIGHT_A=0.2,NIGHT_EDGE_DEG=1.4,NIGHT_EDGE_A=0,NIGHT_AA_DEG=0.35;
 // Day and night on the globe: the night side is one flat shade, a little darker than the day, and the line where the sun
 // sets (the terminator) is drawn as a clear band along its edge. The image is rebuilt each minute.
 // (MapLibre's Mercator geometry stops at 85°, so nothing can be drawn over the poles themselves.)
@@ -1097,6 +1096,15 @@ void main(){vec2 m=u_tile.xy+u_tile.zw*a_pos;float sx=m.x*6.283185307+3.14159265
 function capsSync(map){if(!map.getLayer(CAP.id)){const first=(map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id;map.addLayer(CAP,first)}
   CAP.recolour();map.triggerRepaint()}
 // the night image on the map, faded out with the same zoom range as the working-hours colours, and the caps updated with it
+// the terminator: the line where the sun is on the horizon, as a dotted line along the edge of the night
+function terminatorFeature(){const T=sunTerms(),pts=[];for(let i=0;i<=720;i++){const lon=-180+i*0.5,d=lon*Math.PI/180-T.sl;
+  const lat=Math.atan(-T.cs*Math.cos(d)/T.ss)*180/Math.PI;pts.push([lon,clamp(lat,-85,85)])}
+  return{type:'Feature',properties:{},geometry:{type:'LineString',coordinates:pts}}}
+function termSync(map){const data={type:'FeatureCollection',features:[terminatorFeature()]};
+  if(map.getSource(M3D_OWN+'term'))map.getSource(M3D_OWN+'term').setData(data);else map.addSource(M3D_OWN+'term',{type:'geojson',data});
+  if(!map.getLayer(M3D_OWN+'term')){const first=(map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id;
+    map.addLayer({id:M3D_OWN+'term',type:'line',source:M3D_OWN+'term',layout:{'line-cap':'round'},paint:{'line-color':'#000000','line-width':1.6,'line-dasharray':[0.01,2.2]}},first)}
+  map.setLayoutProperty(M3D_OWN+'term','visibility',showNight?'visible':'none')}
 function nightSync(map,zA,zB){const url=nightImage().url;
   const src=map.getSource(M3D_OWN+'nightimg');
   if(src){if(src._whgUrl!==url){src.updateImage({url});src._whgUrl=url}}
@@ -1105,7 +1113,8 @@ function nightSync(map,zA,zB){const url=nightImage().url;
     map.addLayer({id:M3D_OWN+'nightimg',type:'raster',source:M3D_OWN+'nightimg',paint:{'raster-fade-duration':0,'raster-resampling':'linear'}},first)}
   // on and off is a change of opacity, which the map animates
   map.setPaintProperty(M3D_OWN+'nightimg','raster-opacity',['interpolate',['linear'],['zoom'],zA,showNight?1:0,zB,0]);
-  try{capsSync(map)}catch(e){console.warn('caps',e)}}
+  try{capsSync(map)}catch(e){console.warn('caps',e)}
+  try{termSync(map)}catch(e){console.warn('term',e)}}
 // the webcam icon: a camera in a white disc, with a red ring for the live ones
 const CAM_SVG=live=>`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="17" fill="#ffffff" stroke="${live?'#e2453c':'#1f2937'}" stroke-width="2.5"/><path d="M10 15h12a2.5 2.5 0 0 1 2.5 2.5v7a2.5 2.5 0 0 1-2.5 2.5H10a2.5 2.5 0 0 1-2.5-2.5v-7A2.5 2.5 0 0 1 10 15z" fill="#1f2937"/><path d="M25 19l5.5-3.5v9L25 21z" fill="#1f2937"/></svg>`;
 function camIcons(map){for(const live of[0,1]){const id=live?'cam-live':'cam';if(map.hasImage(id))continue;const im=new Image(40,40);

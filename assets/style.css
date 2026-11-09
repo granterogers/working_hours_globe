@@ -7,10 +7,10 @@
   box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
 }
 @media (prefers-color-scheme:light){:root:not([data-theme="dark"]){
-  --space1:#f7fbff; --space2:#cfdcee; --ink:#121a2e; --ink2:#4a5672; --glass:rgba(255,255,255,.67); --glass-b:rgba(20,40,80,.12);
+  --space1:#f7fbff; --space2:#cfdcee; --ink:#121a2e; --ink2:#4a5672; --glass:rgba(255,255,255,.9); --glass-b:rgba(20,40,80,.12);
   --field:rgba(20,40,80,.05); --accent:#1f3d8f; --accent-ink:#fff; --shadow:0 18px 50px rgba(30,50,90,.18); color-scheme:light;}}
 :root[data-theme="light"]{
-  --space1:#f7fbff; --space2:#cfdcee; --ink:#121a2e; --ink2:#4a5672; --glass:rgba(255,255,255,.67); --glass-b:rgba(20,40,80,.12);
+  --space1:#f7fbff; --space2:#cfdcee; --ink:#121a2e; --ink2:#4a5672; --glass:rgba(255,255,255,.9); --glass-b:rgba(20,40,80,.12);
   --field:rgba(20,40,80,.05); --accent:#1f3d8f; --accent-ink:#fff; --shadow:0 18px 50px rgba(30,50,90,.18); color-scheme:light;}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
@@ -479,7 +479,6 @@ body:has(#info.show) .tourpill{display:none}
 .hoursset .sec:first-of-type{margin-top:4px}
 .hoursset .sec h3{font-family:var(--sans);font-size:.78rem;font-weight:600;letter-spacing:.02em;margin:0 0 8px;color:var(--ink2)}
 
-.themebtn{position:fixed;left:16px;bottom:16px;z-index:40;width:44px;height:44px;display:grid;place-items:center;padding:0;cursor:pointer}
 
 /* the Layers rows: the count and the cog or filter sit in the same two columns on every row, so they line up */
 .bmtick .lslot{flex:none;display:flex;align-items:center;justify-content:flex-end;gap:4px}
