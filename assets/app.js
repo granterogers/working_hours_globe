@@ -1142,7 +1142,7 @@ async function openMap(){let el=m3d.el;
       map.on('style.load',()=>{m3d.mode=null;m3dExtras(map);m3dSync();for(const l of map.getStyle().layers)if(l.type==='background')map.setPaintProperty(l.id,'background-color','rgba(0,0,0,0)');stars()});
       map.on('move',()=>{if(mapOn())syncFromMap();if(document.body.classList.contains('in3d'))skyFrame()});
       map.on('zoomend',()=>{m3dMode(map);m3dLimit(map)});map.on('moveend',()=>{if(m3d.me&&myLoc)m3dMe()});
-      map.on('click',m3dClick);map.on('moveend',m3dWx);map.on('load',()=>{m3dWx();m3dLimit(map);mapReady(map)});map.on('moveend',()=>m3dAboveGround(map));
+      map.on('click',m3dClick);map.on('moveend',m3dWx);map.on('load',()=>{m3dWx();m3dLimit(map);setTimeout(()=>mapReady(map),20000);map.once('idle',()=>mapReady(map))});map.on('moveend',()=>m3dAboveGround(map));
       // the pointer turns into a hand over anything that can be clicked
       let hov=false;map.on('mousemove',e=>{if(hov)return;hov=true;const pt=e.point;requestAnimationFrame(()=>{hov=false;const h=map.queryRenderedFeatures(pt,{layers:HOVER_IDS.map(x=>M3D_OWN+x).filter(id=>map.getLayer(id))});map.getCanvas().style.cursor=h.length?'pointer':''})});
       m3dWheelButton(map);
@@ -1153,8 +1153,8 @@ async function openMap(){let el=m3d.el;
 function mapReady(map){if(m3d.ready)return;m3d.ready=true;syncFromMap();document.body.classList.add('in3d');setModeLabel(isTilted());m3dSync();
   requestAnimationFrame(()=>{if(m3d.el)m3d.el.style.opacity='1'});markersSync();}
 function mapOn(){return!!(m3d.ready&&m3d.map)}
-// the zoom at which the whole globe fits the screen with a margin: its radius is 42% of the shorter side
-function fitZoom(){const shorter=Math.min(innerWidth,innerHeight);return clamp(Math.log2(0.42*shorter*2*Math.PI/512),0,6)}
+// the zoom at which the globe is the same size as the canvas globe at its opening scale (its radius is 43% of the shorter side)
+function fitZoom(){const shorter=Math.min(innerWidth,innerHeight);return clamp(Math.log2(0.43*shorter*2*Math.PI/512),0,6)}
 function isTilted(){return!!(m3d.map&&m3d.map.getPitch()>5)}
 // the map's centre and zoom, mirrored into the globe's state, so the place and sky code keeps the same numbers
 function syncFromMap(){const map=m3d.map,c=map.getCenter(),lat=clamp(c.lat,-85,85);rot=[-c.lng,-lat,0];k=kT=z2k(map.getZoom(),lat)}
