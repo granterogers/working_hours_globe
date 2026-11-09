@@ -1006,34 +1006,24 @@ function m3dStyleDef(){const B=BM();
 // Day and night on the globe: the night side is an image worked out pixel by pixel from the sun, with the same darkness
 // as the canvas globe. Its rows are spaced as the Mercator map spaces them, so it lines up with the map. The image is
 // rebuilt each minute. (MapLibre's Mercator geometry stops at 85°, so nothing can be drawn over the poles themselves.)
-const NIGHT_IMG={key:'',url:'',an:0,as:0},NIGHT_MAXA=0.4,NIGHT_FULLDEG=18,LIGHT_COL=[255,214,150];
-// City lights: NASA's Black Marble at zoom 3, sampled in the night image's own Mercator rows. They show only where it's night.
-const LIGHTS={lum:null,n:0,loading:false};
-// the brightest light in the small block of the full-resolution lights under this pixel of the night image, 0..1
-function lightAt(i,j,W,H){const n=LIGHTS.n,x=Math.floor((i+0.5)*n/W),y=Math.floor((j+0.5)*n/H);let m=0;
-  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const xx=x+dx,yy=y+dy;if(xx<0||yy<0||xx>=n||yy>=n)continue;const v=LIGHTS.lum[yy*n+xx];if(v>m)m=v}
-  return clamp((m/255-0.1)*1.6,0,1)}
-function lightsLoad(){if(LIGHTS.loading||LIGHTS.lum)return;LIGHTS.loading=true;
-  const Z=3,N=2**Z,T=256,big=document.createElement('canvas');big.width=big.height=N*T;const g=big.getContext('2d');
-  const jobs=[];for(let x=0;x<N;x++)for(let y=0;y<N;y++){const url=BASEMAPS.night.url.replace('{z}',Z).replace('{x}',x).replace('{y}',y);
-    jobs.push(new Promise(ok=>{const im=new Image();im.crossOrigin='anonymous';im.onload=()=>{g.drawImage(im,x*T,y*T);ok()};im.onerror=()=>ok();im.src=url}))}
-  Promise.all(jobs).then(()=>{try{// full resolution, so the small lights keep their brightness; the night image takes the brightest nearby light
-      const d=g.getImageData(0,0,N*T,N*T).data,n=N*T,lum=new Uint8Array(n*n);for(let i=0;i<n*n;i++)lum[i]=(d[i*4]*0.3+d[i*4+1]*0.59+d[i*4+2]*0.11);
-      LIGHTS.lum=lum;LIGHTS.n=n;NIGHT_IMG.key='';if(m3d.map)m3dSync()}catch(e){LIGHTS.loading=false}})}
-function nightImage(){const key=Math.floor(Date.now()/6e4)+'|'+(dark?1:0)+'|'+(LIGHTS.lum?1:0);if(key===NIGHT_IMG.key)return NIGHT_IMG;lightsLoad();
-  const W=720,H=720,cv=document.createElement('canvas');cv.width=W;cv.height=H;const cx=cv.getContext('2d'),im=cx.createImageData(W,H);
+const NIGHT_IMG={key:'',url:'',an:0,as:0},NIGHT_A=0.2,NIGHT_EDGE_DEG=1.2,NIGHT_EDGE_A=0.6,NIGHT_EDGE_COL=[190,215,255];
+// Day and night on the globe: the night side is one flat shade, a little darker than the day, and the line where the sun
+// sets (the terminator) is drawn as a clear band along its edge. The image is rebuilt each minute.
+// (MapLibre's Mercator geometry stops at 85°, so nothing can be drawn over the poles themselves.)
+function nightImage(){const key=Math.floor(Date.now()/6e4)+'|'+(dark?1:0);if(key===NIGHT_IMG.key)return NIGHT_IMG;
+  const W=1440,H=1440,cv=document.createElement('canvas');cv.width=W;cv.height=H;const cx=cv.getContext('2d'),im=cx.createImageData(W,H);
   const D=Math.PI/180,[sl,sd]=sunNow(Date.now()),ss=Math.sin(sd*D),cs=Math.cos(sd*D),col=dark?[2,6,22]:[8,14,40];
   const YM=Math.log(Math.tan(Math.PI/4+85.0511*D/2));
   for(let j=0;j<H;j++){const y=YM-2*YM*(j+0.5)/H,lat=2*Math.atan(Math.exp(y))-Math.PI/2,sa=Math.sin(lat),ca=Math.cos(lat);
     for(let i=0;i<W;i++){const lon=(-180+360*(i+0.5)/W)*D;
-      const sinEl=sa*ss+ca*cs*Math.cos(lon-sl*D),el=Math.asin(Math.max(-1,Math.min(1,sinEl)))/D,a=NIGHT_MAXA*clamp(-el/NIGHT_FULLDEG,0,1);
-      if(a<=0)continue;const q=(j*W+i)*4;
-      // a light shows over the darkness, where the night is (the share of night in this pixel is a/NIGHT_MAXA)
-      const Lv=LIGHTS.lum?lightAt(i,j,W,H)*(a/NIGHT_MAXA)*0.9:0,al=a+(1-a)*Lv;
-      im.data[q]=(col[0]*a+LIGHT_COL[0]*Lv*(1-a))/al;im.data[q+1]=(col[1]*a+LIGHT_COL[1]*Lv*(1-a))/al;im.data[q+2]=(col[2]*a+LIGHT_COL[2]*Lv*(1-a))/al;im.data[q+3]=Math.round(al*255)}}
+      const sinEl=sa*ss+ca*cs*Math.cos(lon-sl*D),el=Math.asin(Math.max(-1,Math.min(1,sinEl)))/D;
+      let c,a;
+      if(Math.abs(el)<=NIGHT_EDGE_DEG/2){c=NIGHT_EDGE_COL;a=NIGHT_EDGE_A}
+      else if(el<0){c=col;a=NIGHT_A}
+      else continue;
+      const q=(j*W+i)*4;im.data[q]=c[0];im.data[q+1]=c[1];im.data[q+2]=c[2];im.data[q+3]=Math.round(a*255)}}
   cx.putImageData(im,0,0);
-  const at=sinEl=>NIGHT_MAXA*clamp(-Math.asin(Math.max(-1,Math.min(1,sinEl)))/D/NIGHT_FULLDEG,0,1);
-  NIGHT_IMG.url=cv.toDataURL('image/png');NIGHT_IMG.an=at(ss);NIGHT_IMG.as=at(-ss);NIGHT_IMG.key=key;return NIGHT_IMG}
+  NIGHT_IMG.url=cv.toDataURL('image/png');NIGHT_IMG.an=nightAlpha(90,0,{sl,ss,cs});NIGHT_IMG.as=nightAlpha(-90,0,{sl,ss,cs});NIGHT_IMG.key=key;return NIGHT_IMG}
 // The polar caps. MapLibre's Mercator geometry stops at 85°, so the two caps beyond that are drawn here as a sphere mesh, in
 // the globe's own projection (the custom layer gets its matrix from MapLibre). Each vertex's colour is the basemap's sea or ice
 // colour with the night darkness at that point, so the caps and the tiles at 85° meet without a seam.
@@ -1063,7 +1053,7 @@ function capBase(){if(basemap==='street')return dark?{n:[29,29,31],s:[7,7,7]}:{n
 // the sun's terms for the night formula, as nightImage uses them
 function sunTerms(){const D=Math.PI/180,[sl,sd]=sunNow(Date.now());return{sl:sl*D,ss:Math.sin(sd*D),cs:Math.cos(sd*D)}}
 function nightAlpha(latDeg,lonDeg,T){const D=Math.PI/180,la=latDeg*D,sinEl=Math.sin(la)*T.ss+Math.cos(la)*T.cs*Math.cos(lonDeg*D-T.sl);
-  const el=Math.asin(Math.max(-1,Math.min(1,sinEl)))/D;return NIGHT_MAXA*clamp(-el/NIGHT_FULLDEG,0,1)}
+  const el=Math.asin(Math.max(-1,Math.min(1,sinEl)))/D;return el<0?NIGHT_A:0}
 const CAP={id:'m3d-caps',type:'custom',renderingMode:'3d',
   onAdd(map,gl){this.gl=gl;const M=capMesh();
     const vs=`precision highp float;

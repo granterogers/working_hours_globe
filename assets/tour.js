@@ -94,7 +94,7 @@ const STEPS=[
     text:'Click Weather on any place card to see the forecast for the coming days.',
     enter:async c=>{await tap(c,'#wxbtn');await waitFor(c,()=>!!shown('#wxb .wxdays'),9000);await c.sleep(2600);await tap(c,'#wxbtn');await c.sleep(300)}},
   {title:'Day and night',target:'label:has([data-show="night"])',
-    text:'Shades the night side of the Earth, with the city lights shining through. Zoomed out to the globe, the night moves round as the Earth turns.',
+    text:'The night side of the Earth is shaded a little darker than the day, with a clear line along the edge where the sun sets. The night moves round as the Earth turns.',
     enter:async c=>{for(const k of['cams','cw','cl','weather'])await setLayer(c,k,false);await setLayer(c,'night',true);await zoomOut(c);await spin(c,180,7000)}},
   {title:'Base maps',target:'#bmbtn',
     text:'Switch between base maps. Here: satellite, then topographic, then back to the street map.',
