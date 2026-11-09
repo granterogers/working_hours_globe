@@ -288,7 +288,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .bmdot{width:12px;height:12px;border-radius:50%;border:2px solid var(--ink2);margin-top:3px;flex:none;box-sizing:border-box}
 .bmmenu [aria-checked=true] .bmdot{border-color:var(--accent);background:radial-gradient(var(--accent) 45%,transparent 50%)}
 .bmmenu .bm3d{border-top:1px solid var(--glass-b);margin-top:4px;padding-top:9px;border-radius:0 0 10px 10px}
-.m3d{position:fixed;inset:0;z-index:0;background:transparent;transition:opacity .7s ease}
+.m3d{position:fixed;inset:0;z-index:0;background:transparent;transition:opacity .7s ease;pointer-events:none}
+body.in3d .m3d{pointer-events:auto}
 .m3d.placing .maplibregl-canvas{cursor:crosshair}
 .m3d[hidden]{display:none}
 .m3dmap{position:absolute;inset:0;width:100%;height:100%}

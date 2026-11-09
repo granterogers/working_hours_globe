@@ -96,7 +96,7 @@ function planetsNow(){const d=Date.now()/864e5+2440587.5-2451543.5,D=Math.PI/180
 // screen, and the local sidereal time (Greenwich sidereal time plus the longitude) turns the sky as the globe turns.
 // It fills the whole screen with stars, with the planets marked as coloured dots.
 function stars(){const r=sc.getBoundingClientRect();sc.width=r.width*dpr;sc.height=r.height*dpr;const s=sc.getContext('2d');s.clearRect(0,0,sc.width,sc.height);
-  if(!dark||!SKYD)return;const rad=Math.PI/180,ink='226,235,255';
+  if(!dark)return;if(dark)s.fillStyle='#000000';if(dark)s.fillRect(0,0,sc.width,sc.height);if(!SKYD)return;const rad=Math.PI/180,ink='226,235,255';
   const{lon:olon,lat:olat}=skyObs(),jd=Date.now()/864e5+2440587.5,lst=((280.46061837+360.98564736629*(jd-2451545.0)+olon)%360+360)%360;
   const ra0=lst*rad,de0=olat*rad,f=[Math.cos(de0)*Math.cos(ra0),Math.cos(de0)*Math.sin(ra0),Math.sin(de0)];
   let u=[-f[2]*f[0],-f[2]*f[1],1-f[2]*f[2]];const un=Math.hypot(...u);u=u.map(x=>x/un);
@@ -1142,7 +1142,7 @@ async function openMap(){let el=m3d.el;
       map.on('style.load',()=>{m3d.mode=null;m3dExtras(map);m3dSync();for(const l of map.getStyle().layers)if(l.type==='background')map.setPaintProperty(l.id,'background-color','rgba(0,0,0,0)');stars()});
       map.on('move',()=>{if(mapOn())syncFromMap();if(document.body.classList.contains('in3d'))skyFrame()});
       map.on('zoomend',()=>{m3dMode(map);m3dLimit(map)});map.on('moveend',()=>{if(m3d.me&&myLoc)m3dMe()});
-      map.on('click',m3dClick);map.on('moveend',m3dWx);map.on('load',()=>{m3dWx();m3dLimit(map);setTimeout(()=>mapReady(map),20000);map.once('idle',()=>mapReady(map))});map.on('moveend',()=>m3dAboveGround(map));
+      map.on('click',m3dClick);map.on('moveend',m3dWx);map.on('load',()=>{m3dWx();m3dLimit(map);setTimeout(()=>mapReady(map),5000);map.once('idle',()=>mapReady(map))});map.on('moveend',()=>m3dAboveGround(map));
       // the pointer turns into a hand over anything that can be clicked
       let hov=false;map.on('mousemove',e=>{if(hov)return;hov=true;const pt=e.point;requestAnimationFrame(()=>{hov=false;const h=map.queryRenderedFeatures(pt,{layers:HOVER_IDS.map(x=>M3D_OWN+x).filter(id=>map.getLayer(id))});map.getCanvas().style.cursor=h.length?'pointer':''})});
       m3dWheelButton(map);
