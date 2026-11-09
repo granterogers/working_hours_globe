@@ -149,7 +149,7 @@ function ring(a,fill){const n=a.length/3;let pen=false;
     if(X<0){if(!fill){pen=false;continue}const h=Math.hypot(Y,Z)||1;Y/=h;Z/=h}
     const sx=cx+SC*Y,sy=cy-SC*Z;if(pen)ctx.lineTo(sx,sy);else{ctx.moveTo(sx,sy);pen=true}}
   if(fill)ctx.closePath();}
-function fillBands(fc){const g=[[],[],[],[],[],[]];
+function fillBands(fc){const g=Array.from({length:HOUR_BINS},()=>[]);
   for(const f of fc.features){if(f.rings&&inView(f))g[band(off(f.properties.z))].push(f)}
   g.forEach((arr,i)=>{if(!arr.length)return;ctx.beginPath();for(const f of arr)for(const r of f.rings)ring(r,true);ctx.fillStyle=pal['b'+i];ctx.fill('nonzero')});}
 function strokeFC(fc,style,w){ctx.beginPath();for(const f of fc.features)if(f.rings&&inView(f))for(const r of f.rings)ring(r,false);ctx.strokeStyle=style;ctx.lineWidth=w;ctx.stroke();}
