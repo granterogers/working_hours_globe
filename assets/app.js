@@ -52,6 +52,7 @@ const cv=document.getElementById('c'),ctx=cv.getContext('2d'),sc=document.getEle
 const proj=d3.geoOrthographic().clipAngle(90).precision(0.35),path=d3.geoPath(proj,ctx),grat=d3.geoGraticule10();
 
 function theme(){let saved='dark';try{saved=localStorage.getItem('whg.theme')||'dark'}catch(e){}dark=saved!=='light';
+  document.documentElement.dataset.theme=dark?'dark':'light';
   pal=dark?{oceanIn:'#163a68',oceanOut:'#071630',glow:'rgba(110,170,255,',grat:'rgba(170,200,255,.07)',border:'rgba(8,14,30,.55)',pb:'rgba(8,14,30,.28)',
             land:'#2b3854',ink:'#f6f7fb',ink2:'rgba(226,232,246,.82)',halo:'rgba(5,10,24,.82)',shadeLite:'rgba(255,255,255,.10)',shadeDark:'rgba(0,4,16,.55)',coast1:'rgba(120,190,255,.07)',coast2:'rgba(140,200,255,.14)',pbTile:'rgba(40,30,80,.45)',borderTile:'rgba(30,20,70,.75)'}
           :{oceanIn:'#d4e6f8',oceanOut:'#9dbfe2',glow:'rgba(120,170,235,',grat:'rgba(30,70,130,.08)',border:'rgba(255,255,255,.85)',pb:'rgba(255,255,255,.55)',
