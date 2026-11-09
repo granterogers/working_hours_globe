@@ -201,7 +201,8 @@ const step = async (name, fn) => { try { await fn() } catch (e) { check(name + '
     await page.evaluate(() => window.whg.map3d().easeTo({ bearing: 60, duration: 0 })); await page.waitForTimeout(500);
     await page.click('#north'); await page.waitForTimeout(2000);
     const b = await page.evaluate(() => window.whg.map3d().getBearing());
-    check('north button points north', Math.abs(b) < 2, 'bearing ' + b.toFixed(1));
+    const st = await page.evaluate(() => ({ in3d: document.body.classList.contains('in3d'), tilted: window.whg.tilted(), pitch: window.whg.map3d().getPitch() }));
+    check('north button points north', Math.abs(b) < 2, 'bearing ' + b.toFixed(1) + ' ' + JSON.stringify(st));
   });
   await step('locate button does not error', async () => {
     await page.click('#loc'); await page.waitForTimeout(1500);

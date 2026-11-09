@@ -37,8 +37,9 @@ function vec(lon,lat){const L=lon*Math.PI/180,B=lat*Math.PI/180,c=Math.cos(B);re
 const RAD=Math.PI/180;
 function pack(f){const g=f.geometry;const ps=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:g.type==='MultiLineString'?[g.coordinates]:[];f.rings=[];
   ps.forEach(p=>p.forEach(r=>{const a=new Float32Array(r.length*3);for(let i=0;i<r.length;i++){const L=r[i][0]*RAD,B=r[i][1]*RAD,cb=Math.cos(B);a[i*3]=cb*Math.cos(L);a[i*3+1]=cb*Math.sin(L);a[i*3+2]=Math.sin(B)}f.rings.push(a)}));}
-function prep(fc){fc.features.forEach(f=>{if(f.geometry){cap(f);pack(f);delete f.geometry.coordinates;f.geometry=1}});return fc}
-TZHIT.features.forEach(f=>fixGeom(f.geometry));['tz','tzL','tzM','cb','cbL','cbM','gaps'].forEach(n=>prep(D[n]));
+// the 2D globe draws from packed rings; the country borders also keep their lines (f.geo) for the 3D map's border layer
+function prep(fc,keep){fc.features.forEach(f=>{if(f.geometry){cap(f);pack(f);if(keep)f.geo=f.geometry;else delete f.geometry.coordinates;f.geometry=1}});return fc}
+TZHIT.features.forEach(f=>fixGeom(f.geometry));['tz','tzL','tzM','gaps'].forEach(n=>prep(D[n]));['cb','cbL','cbM'].forEach(n=>prep(D[n],true));
 const csize=c=>{const b=c[5];let w=b[2]-b[0];if(w>300)w=160;return Math.max(w,b[3]-b[1])};
 const cByIso={};D.countries.forEach(c=>{c.size=csize(c);c.np=0;cByIso[c[4]]=c});
 D.prov.forEach(p=>{const c=cByIso[p[4]];if(c)c.np++;p.v=vec(p[1],p[2])});D.countries.forEach(c=>c.v=vec(c[1],c[2]));
@@ -1212,7 +1213,7 @@ function m3dGeo(){
   // the two polar caps, which the basemap's tiles stop short of, in the basemap's own colours
   const pc=POLE[basemap]||POLE.street,pole={type:'FeatureCollection',features:[[85,90,pc[1]],[-90,-85,pc[0]]].map(([a,b,c])=>({type:'Feature',properties:{c},geometry:{type:'Polygon',coordinates:[[[-180,a],[180,a],[180,b],[-180,b],[-180,a]]]}}))};
   // the country borders, over the working-hours colours as on the 2D globe
-  const cb={type:'FeatureCollection',features:showHours?D.cbM.features:[]};
+  const cb={type:'FeatureCollection',features:showHours?D.cbM.features.filter(f=>f.geo).map(f=>({type:'Feature',properties:{},geometry:f.geo})):[]};
   return{tz,cb,lab,cl,fv,ov,wx,cm,cwk}}
 // the night tiers: each is the sun below an angle of the horizon, with a small share of the darkness
 // the twilight is 37 thin bands half a degree apart rather than a few wide ones, so the day-night edge fades rather than steps
