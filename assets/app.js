@@ -51,6 +51,9 @@ D.prov.forEach(p=>{const c=cByIso[p[4]];if(c)c.np++;p.v=vec(p[1],p[2])});D.count
 const cv=document.getElementById('c'),ctx=cv.getContext('2d'),sc=document.getElementById('stars');
 const proj=d3.geoOrthographic().clipAngle(90).precision(0.35),path=d3.geoPath(proj,ctx),grat=d3.geoGraticule10();
 
+// how strong the working-hours colours are, from the settings slider (0 to 100)
+let HOP=(()=>{try{return Math.min(100,Math.max(0,+(localStorage.getItem('whg.hop')||100)))}catch(e){return 100}})();
+function setHOP(v){HOP=v;try{localStorage.setItem('whg.hop',v)}catch(e){}const o=document.getElementById('hopv');if(o)o.textContent=v+'%';draw();m3dSync()}
 function theme(){let saved='dark';try{saved=localStorage.getItem('whg.theme')||'dark'}catch(e){}dark=saved!=='light';
   document.documentElement.dataset.theme=dark?'dark':'light';
   pal=dark?{oceanIn:'#163a68',oceanOut:'#071630',glow:'rgba(110,170,255,',grat:'rgba(170,200,255,.07)',border:'rgba(8,14,30,.55)',pb:'rgba(8,14,30,.28)',
@@ -58,6 +61,7 @@ function theme(){let saved='dark';try{saved=localStorage.getItem('whg.theme')||'
           :{oceanIn:'#d4e6f8',oceanOut:'#9dbfe2',glow:'rgba(120,170,235,',grat:'rgba(30,70,130,.08)',border:'rgba(255,255,255,.85)',pb:'rgba(255,255,255,.55)',
             land:'#e9e3d6',ink:'#111a30',ink2:'rgba(30,42,70,.85)',halo:'rgba(255,255,255,.9)',shadeLite:'rgba(255,255,255,.22)',shadeDark:'rgba(20,40,80,.22)',coast1:'rgba(255,255,255,.25)',coast2:'rgba(255,255,255,.45)',pbTile:'rgba(40,30,80,.4)',borderTile:'rgba(30,20,70,.7)'};
   for(let i=0;i<HOUR_BINS;i++)pal['b'+i]=hourColour(i+5);stars();ui();draw();if(m3d.ready)m3dStyle();}
+{const hop=document.getElementById('hop');if(hop){hop.value=HOP;document.getElementById('hopv').textContent=HOP+'%';hop.oninput=()=>setHOP(+hop.value)}}
 document.getElementById('themebtn').onclick=()=>{dark=!dark;try{localStorage.setItem('whg.theme',dark?'dark':'light')}catch(e){}theme()};
 
 // The sky behind the globe: real stars and constellation figures from data/sky.json (Yale Bright Star Catalogue,
@@ -175,7 +179,7 @@ function draw(){
   // the base map is drawn underneath at every zoom. With working hours on, the land is covered by the colours,
   // opaque, with the country borders on top; they fade as you zoom in towards a country, and the base map shows
   // through. The sea has no colour, so the base map shows there.
-  const hA=LAY.hours,bA=hA*(1-clamp((k-TILE_K)/4.5,0,1)),raster=basemap!=='street';
+  const hA=LAY.hours*HOP/100,bA=hA*(1-clamp((k-TILE_K)/4.5,0,1)),raster=basemap!=='street';
   const shown=drawTiles();if(shown){ctx.globalAlpha=1;ctx.drawImage(tcv,0,0,W,H);drawPoleCaps();ctx.globalAlpha=1}
   if(attrib)attrib.classList.toggle('show',shown);if(shown)attrib.textContent=raster?BM().attr:VT_ATTR;
   // the colours stop at 85° north and south: time zones have no meaning at the poles, where the caps show instead
@@ -920,7 +924,7 @@ const LYI={
   cams:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#1f2937" stroke="#fff" stroke-width="1.5"/><rect x="6.5" y="9" width="8" height="6" rx="1" fill="#fff"/><path d="M14.5 11l3.5-2v6l-3.5-2z" fill="#fff"/><circle cx="19" cy="5" r="2.6" fill="#e2453c"/></svg>'};
 function lyrRender(){const m=document.getElementById('lyrb');if(!m)return;
   const ic=k=>`<i class="lyi" aria-hidden="true">${typeof LYI[k]==='function'?LYI[k]():LYI[k]}</i>`;
-  const tick=(k,on,label,extra)=>`<label class="bmtick"><input type="checkbox" data-show="${k}" ${on?'checked':''}>${ic(k)}<span>${label}</span>${extra||''}</label>`;
+  const tick=(k,on,label,extra)=>`<label class="bmtick"><input type="checkbox" data-show="${k}" ${on?'checked':''}>${ic(k)}<span>${label}</span><span class="lslot">${extra||''}</span></label>`;
   m.innerHTML=tick('hours',showHours,'Working hours',`<small class="clcnt" id="sum"></small><button type="button" class="clfb" id="hoursgear" aria-label="Working hours settings" title="Working hours settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>`)+tick('fav',showFavs,'Favourites',`<button type="button" class="clfb" id="favgear" aria-label="Show favourites list" title="Show favourites list"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>`)+
     (CL.data.length?tick('cl',CL.on,'Colivings',`<small class="clcnt" id="clcnt"></small><button type="button" class="clfb${clActive(CL.f)?' on':''}" id="clfb" aria-label="Filter colivings" title="Filter and updates">${FUNNEL}</button>`):'')+
     tick('cw',showCw,'Coworking spaces',`<small class="clcnt" id="cwcnt" aria-live="polite"></small><button type="button" class="clfb${cwActive()?' on':''}" id="cwfb" aria-label="Filter coworking spaces" title="Filter coworking spaces">${FUNNEL}</button>`)+tick('cams',showCams,'Webcams')+tick('weather',showWeather,'Current weather','<small class="clcnt">°C</small>')+tick('night',showNight,'Day and night')+tick('names',showNames,'Place names');
@@ -1102,7 +1106,12 @@ function nightSync(map,zA,zB){const url=nightImage().url;
   // on and off is a change of opacity, which the map animates
   map.setPaintProperty(M3D_OWN+'nightimg','raster-opacity',['interpolate',['linear'],['zoom'],zA,showNight?1:0,zB,0]);
   try{capsSync(map)}catch(e){console.warn('caps',e)}}
+// the webcam icon: a camera in a white disc, with a red ring for the live ones
+const CAM_SVG=live=>`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="17" fill="#ffffff" stroke="${live?'#e2453c':'#1f2937'}" stroke-width="2.5"/><path d="M10 15h12a2.5 2.5 0 0 1 2.5 2.5v7a2.5 2.5 0 0 1-2.5 2.5H10a2.5 2.5 0 0 1-2.5-2.5v-7A2.5 2.5 0 0 1 10 15z" fill="#1f2937"/><path d="M25 19l5.5-3.5v9L25 21z" fill="#1f2937"/></svg>`;
+function camIcons(map){for(const live of[0,1]){const id=live?'cam-live':'cam';if(map.hasImage(id))continue;const im=new Image(40,40);
+  im.onload=()=>{try{if(!map.hasImage(id))map.addImage(id,im,{pixelRatio:2})}catch(e){}};im.src='data:image/svg+xml,'+encodeURIComponent(CAM_SVG(live))}}
 function m3dExtras(map){
+  camIcons(map);
   // terrain heights from Mapterhorn (the open terrain set MapLibre's own examples use); the older AWS/Mapzen
   // tiles had stray spikes, mostly along coasts and at close zoom
   if(!map.getSource('dem'))map.addSource('dem',{type:'raster-dem',url:'https://tiles.mapterhorn.com/tilejson.json'});
@@ -1192,9 +1201,9 @@ function m3dGeo(){
   const lab={type:'FeatureCollection',features:[]};
   // country and region labels carry the hours; with hours off the base map's own names are enough
   if(showHours){const seen=new Set();
-    for(const c of D.countries){const o=off(c[3]);lab.features.push({type:'Feature',properties:{t:hours(o)+(c[6]?'*':''),r:1},geometry:{type:'Point',coordinates:[c[1],c[2]]}});seen.add(c[4]+'|'+o)}
+    for(const c of D.countries){const o=off(c[3]);lab.features.push({type:'Feature',properties:{t:(showNames?c[0]+'\n':'')+hours(o)+(c[6]?'*':''),r:1},geometry:{type:'Point',coordinates:[c[1],c[2]]}});seen.add(c[4]+'|'+o)}
     for(const p of D.prov){const o=off(p[3]),key=p[4]+'|'+o;if(seen.has(key))continue;seen.add(key);
-      lab.features.push({type:'Feature',properties:{t:hours(o),r:2},geometry:{type:'Point',coordinates:[p[1],p[2]]}})}}
+      lab.features.push({type:'Feature',properties:{t:(showNames?p[0]+'\n':'')+hours(o),r:2},geometry:{type:'Point',coordinates:[p[1],p[2]]}})}}
   const cl={type:'FeatureCollection',features:CL.on?CL.vis.map(x=>({type:'Feature',properties:{id:x.id,n:x.n,c:CLT[x.t].col},geometry:{type:'Point',coordinates:[x.lon,x.lat]}})):[]};
   const fv={type:'FeatureCollection',features:showFavs?favs.map((f,i)=>({type:'Feature',properties:{i,n:f.name},geometry:{type:'Point',coordinates:[f.lon,f.lat]}})):[]};
   const ov={type:'FeatureCollection',features:[]};
@@ -1235,7 +1244,7 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
   const lay=(def,before)=>{if(!map.getLayer(def.id))map.addLayer(def,before)};
   // working-hours colours fade out as you zoom in, like on the globe
   // same fade as on the globe: full colour until the street-map zoom, gone 4.5 zoom steps later
-  const la=map.getCenter().lat,zA=k2z(TILE_K,la),zB=Math.max(zA+0.5,k2z(TILE_K+4.5,la)),op=1;
+  const la=map.getCenter().lat,zA=k2z(TILE_K,la),zB=Math.max(zA+0.5,k2z(TILE_K+4.5,la)),op=HOP/100;
   lay({id:M3D_OWN+'tz',type:'fill',source:M3D_OWN+'tz',paint:{'fill-color':['get','c'],'fill-opacity':op}},
     (map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
   map.setPaintProperty(M3D_OWN+'tz','fill-opacity',['interpolate',['linear'],['zoom'],zA,op,zB,0]);
@@ -1262,7 +1271,7 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
   lay({id:M3D_OWN+'wxt',type:'symbol',source:M3D_OWN+'wx',layout:{'icon-image':['get','ic'],'icon-size':1,'icon-anchor':'right','icon-offset':[-2,0],'text-field':['get','t'],'text-font':font,'text-size':12.5,'text-anchor':'left','text-offset':[0.3,0],
       'text-allow-overlap':true,'icon-allow-overlap':true,'icon-optional':true},
     paint:{'text-color':'#ffffff','text-halo-color':'rgba(10,16,30,.85)','text-halo-width':1.8}});
-  lay({id:M3D_OWN+'cm',type:'circle',source:M3D_OWN+'cm',paint:{'circle-color':['case',['==',['get','live'],1],'#1f2937','#ffffff'],'circle-radius':7,'circle-stroke-color':['case',['==',['get','live'],1],'#e2453c','#1f2937'],'circle-stroke-width':2}});
+  lay({id:M3D_OWN+'cm',type:'symbol',source:M3D_OWN+'cm',layout:{'icon-image':['case',['==',['get','live'],1],'cam-live','cam'],'icon-size':0.9,'icon-allow-overlap':true},paint:{}});
   lay({id:M3D_OWN+'cwk',type:'circle',source:M3D_OWN+'cwk',paint:{'circle-color':'#8b5cf6','circle-radius':4,'circle-stroke-color':'#fff','circle-stroke-width':1.4}});
   // coworking fades in from zoom 5 to 7, so the layer stays out of the way of a wide view of the globe
   for(const p of['circle-opacity','circle-stroke-opacity'])map.setPaintProperty(M3D_OWN+'cwk',p,['interpolate',['linear'],['zoom'],5,0,7,1]);
@@ -1271,7 +1280,9 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
   // names and weather fade in and out: MapLibre animates a change of opacity, so they are never switched off at once
   map.setPaintProperty(M3D_OWN+'lab','text-opacity',1);
   map.setPaintProperty(M3D_OWN+'wxt','text-opacity',showWeather?1:0);map.setPaintProperty(M3D_OWN+'wxt','icon-opacity',showWeather?1:0);
-  for(const l of map.getStyle().layers)if(l.type==='symbol'&&!l.id.startsWith(M3D_OWN))try{map.setPaintProperty(l.id,'text-opacity',showNames?1:0)}catch(e){}}
+  // with the hours on, the base map's own town and country names give way to the names in the hour labels
+  const hideBase=showNames&&showHours;
+  for(const l of map.getStyle().layers)if(l.type==='symbol'&&!l.id.startsWith(M3D_OWN))try{map.setPaintProperty(l.id,'text-opacity',showNames&&!(hideBase&&/^label_/.test(l.id))?1:0)}catch(e){}}
 // weather in 3D: towns and cities spread across the view, bigger places first, about 140 px apart
 function m3dWx(){const map=m3d.map;if(!map||!showWeather||m3d.el.hidden)return;const c=wxCities();if(!c)return;
   const W3=map.getContainer().clientWidth,H3=map.getContainer().clientHeight,cap=clamp(Math.round(W3*H3/60000),8,30),at=[],out=[],b=map.getBounds();
