@@ -1188,9 +1188,9 @@ function m3dGeo(){
   const lab={type:'FeatureCollection',features:[]};
   // country and region labels carry the hours; with hours off the base map's own names are enough
   if(showHours){const seen=new Set();
-    for(const c of D.countries){const o=off(c[3]);lab.features.push({type:'Feature',properties:{t:(showNames?c[0]:'')+(showHours?(showNames?'\n':'')+hours(o)+(c[6]?'*':''):''),r:1},geometry:{type:'Point',coordinates:[c[1],c[2]]}});seen.add(c[4]+'|'+o)}
+    for(const c of D.countries){const o=off(c[3]);lab.features.push({type:'Feature',properties:{t:hours(o)+(c[6]?'*':''),r:1},geometry:{type:'Point',coordinates:[c[1],c[2]]}});seen.add(c[4]+'|'+o)}
     for(const p of D.prov){const o=off(p[3]),key=p[4]+'|'+o;if(seen.has(key))continue;seen.add(key);
-      lab.features.push({type:'Feature',properties:{t:(showNames?p[0]:'')+(showHours?(showNames?'\n':'')+hours(o):''),r:2},geometry:{type:'Point',coordinates:[p[1],p[2]]}})}}
+      lab.features.push({type:'Feature',properties:{t:hours(o),r:2},geometry:{type:'Point',coordinates:[p[1],p[2]]}})}}
   const cl={type:'FeatureCollection',features:CL.on?CL.vis.map(x=>({type:'Feature',properties:{id:x.id,n:x.n,c:CLT[x.t].col},geometry:{type:'Point',coordinates:[x.lon,x.lat]}})):[]};
   const fv={type:'FeatureCollection',features:showFavs?favs.map((f,i)=>({type:'Feature',properties:{i,n:f.name},geometry:{type:'Point',coordinates:[f.lon,f.lat]}})):[]};
   const ov={type:'FeatureCollection',features:[]};
@@ -1236,9 +1236,10 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
     (map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
   map.setPaintProperty(M3D_OWN+'tz','fill-opacity',['interpolate',['linear'],['zoom'],zA,op,zB,0]);
   try{map.setLayerZoomRange(M3D_OWN+'tz',0,Math.min(24,zB+0.3))}catch(e){}
-  lay({id:M3D_OWN+'cb',type:'line',source:M3D_OWN+'cb',paint:{'line-color':pal.border,'line-width':0.7}},
+  lay({id:M3D_OWN+'cb',type:'line',source:M3D_OWN+'cb',paint:{'line-color':pal.border,'line-width':1}},
     (map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
   map.setPaintProperty(M3D_OWN+'cb','line-opacity',['interpolate',['linear'],['zoom'],zA,1,zB,0]);
+  map.setPaintProperty(M3D_OWN+'cb','line-width',['interpolate',['linear'],['zoom'],1,0.9,5,1.4]);
   nightSync(map,zA,zB);
   lay({id:M3D_OWN+'ovf',type:'fill',source:M3D_OWN+'ov',filter:['==',['geometry-type'],'Polygon'],paint:{'fill-color':['get','c'],'fill-opacity':0.2}});
   lay({id:M3D_OWN+'ovl',type:'line',source:M3D_OWN+'ov',filter:['in',['geometry-type'],['literal',['LineString','Polygon']]],paint:{'line-color':['get','c'],'line-width':2.5}});
@@ -1260,7 +1261,7 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
   map.setPaintProperty(M3D_OWN+'cwk','circle-radius',['interpolate',['linear'],['zoom'],2,2.5,8,3.5,14,4.5]);
   // the base map's own names follow the Place names switch
   // names and weather fade in and out: MapLibre animates a change of opacity, so they are never switched off at once
-  map.setPaintProperty(M3D_OWN+'lab','text-opacity',showNames?1:0);
+  map.setPaintProperty(M3D_OWN+'lab','text-opacity',1);
   map.setPaintProperty(M3D_OWN+'wxt','text-opacity',showWeather?1:0);map.setPaintProperty(M3D_OWN+'wxt','icon-opacity',showWeather?1:0);
   for(const l of map.getStyle().layers)if(l.type==='symbol'&&!l.id.startsWith(M3D_OWN))try{map.setPaintProperty(l.id,'text-opacity',showNames?1:0)}catch(e){}}
 // weather in 3D: towns and cities spread across the view, bigger places first, about 140 px apart

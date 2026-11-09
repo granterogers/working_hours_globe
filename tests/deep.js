@@ -30,6 +30,19 @@ const step = async (name, fn) => { try { await fn() } catch (e) { check(name + '
     check('version label matches the version in index.html', /^v1\.\d+$/.test(s.ver), s.ver);
   });
 
+  // 1b. with place names off, the working-hours labels and the country borders are still on the map
+  await step('hours labels and borders', async () => {
+    await page.waitForTimeout(1500);
+    const r = await page.evaluate(() => {
+      const m = window.whg.map3d(), lab = m.getSource('m3d-lab'), cb = m.getSource('m3d-cb');
+      const labs = lab ? lab.serialize().data.features.map(f => f.properties.t) : [];
+      return { names: document.querySelector('[data-show="names"]').checked, labelCount: labs.length, sample: labs[0] || '', labelOpacity: m.getPaintProperty('m3d-lab', 'text-opacity'), borders: cb ? cb.serialize().data.features.length : 0 };
+    });
+    check('hours labels show with place names off', !r.names && r.labelCount > 0 && r.labelOpacity === 1 && /\d\d:\d\d/.test(r.sample), JSON.stringify(r));
+    check('hour labels carry the hours only, not the place name', !/[A-Za-z]/.test(r.sample), r.sample);
+    check('country borders are on the working-hours layer', r.borders > 500, r.borders + ' border lines');
+  });
+
   // 2. layers panel: every checkbox switches its layer on and off without errors
   for (const key of ['hours', 'fav', 'cl', 'cw', 'cams', 'weather', 'night', 'names']) {
     await step('layer ' + key, async () => {
