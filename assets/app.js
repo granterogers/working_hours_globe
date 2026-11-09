@@ -17,11 +17,10 @@ const BANDS=[
 // its anchor), so the colours run smoothly through the day. The six bands keep their names for the legend.
 const HOUR_ANCHORS=BANDS.map(b=>(b.lo+b.hi)/2);
 const rgbHex=a=>'#'+a.map(v=>Math.round(v).toString(16).padStart(2,'0')).join('');
-function hourColour(h,theme){// h is the start hour in the 5..29 range
-  const A=BANDS.map(b=>hexRgb(theme==='dark'?b.dark:b.light)),n=A.length;
-  let x=h<HOUR_ANCHORS[0]?h+24:h;const i0=(()=>{let k=n-1;for(let j=0;j<n;j++)if(HOUR_ANCHORS[j]<=x)k=j;return k})();
-  const i1=(i0+1)%n,a0=HOUR_ANCHORS[i0],a1=i1===0?HOUR_ANCHORS[0]+24:HOUR_ANCHORS[i1],t=clamp((x-a0)/(a1-a0),0,1);
-  return rgbHex(A[i0].map((v,k)=>v+(A[i1][k]-v)*t))}
+const HOT_COLD=['#d73027','#f46d43','#fdae61','#fee090','#ffffbf','#e0f3f8','#abd9e9','#74add1','#4575b4'];   // hot to cold
+// one colour for each whole hour of the start time: hottest at 13:00, coldest at 01:00, and continuous round the clock
+function hourColour(h){let d=Math.abs(((h-13)%24+24)%24);if(d>12)d=24-d;const pos=(d/12)*(HOT_COLD.length-1),i0=Math.floor(pos),i1=Math.min(HOT_COLD.length-1,i0+1),t=pos-i0;
+  const A=hexRgb(HOT_COLD[i0]),B=hexRgb(HOT_COLD[i1]);return rgbHex(A.map((v,k)=>v+(B[k]-v)*t))}
 const HOUR_BINS=24;   // band index = start hour minus 5, so 0 is 05:00 and 23 is 04:00
 function bandName(bin){const h=bin+5;const b=BANDS.find(q=>h>=q.lo&&h<q.hi)||BANDS[5];return b.name}
 function bandSub(bin){const h=bin+5;return(BANDS.find(q=>h>=q.lo&&h<q.hi)||BANDS[5]).sub}
@@ -52,14 +51,13 @@ D.prov.forEach(p=>{const c=cByIso[p[4]];if(c)c.np++;p.v=vec(p[1],p[2])});D.count
 const cv=document.getElementById('c'),ctx=cv.getContext('2d'),sc=document.getElementById('stars');
 const proj=d3.geoOrthographic().clipAngle(90).precision(0.35),path=d3.geoPath(proj,ctx),grat=d3.geoGraticule10();
 
-function theme(){dark=!matchMedia('(prefers-color-scheme: light)').matches;
-  if(document.documentElement.dataset.theme)dark=document.documentElement.dataset.theme==='dark';
+function theme(){let saved='dark';try{saved=localStorage.getItem('whg.theme')||'dark'}catch(e){}dark=saved!=='light';
   pal=dark?{oceanIn:'#163a68',oceanOut:'#071630',glow:'rgba(110,170,255,',grat:'rgba(170,200,255,.07)',border:'rgba(8,14,30,.55)',pb:'rgba(8,14,30,.28)',
             land:'#2b3854',ink:'#f6f7fb',ink2:'rgba(226,232,246,.82)',halo:'rgba(5,10,24,.82)',shadeLite:'rgba(255,255,255,.10)',shadeDark:'rgba(0,4,16,.55)',coast1:'rgba(120,190,255,.07)',coast2:'rgba(140,200,255,.14)',pbTile:'rgba(40,30,80,.45)',borderTile:'rgba(30,20,70,.75)'}
           :{oceanIn:'#d4e6f8',oceanOut:'#9dbfe2',glow:'rgba(120,170,235,',grat:'rgba(30,70,130,.08)',border:'rgba(255,255,255,.85)',pb:'rgba(255,255,255,.55)',
             land:'#e9e3d6',ink:'#111a30',ink2:'rgba(30,42,70,.85)',halo:'rgba(255,255,255,.9)',shadeLite:'rgba(255,255,255,.22)',shadeDark:'rgba(20,40,80,.22)',coast1:'rgba(255,255,255,.25)',coast2:'rgba(255,255,255,.45)',pbTile:'rgba(40,30,80,.4)',borderTile:'rgba(30,20,70,.7)'};
-  for(let i=0;i<HOUR_BINS;i++)pal['b'+i]=hourColour(i+5,dark?'dark':'light');stars();ui();draw();if(m3d.ready)m3dStyle();}
-matchMedia('(prefers-color-scheme: light)').addEventListener('change',theme);
+  for(let i=0;i<HOUR_BINS;i++)pal['b'+i]=hourColour(i+5);stars();ui();draw();if(m3d.ready)m3dStyle();}
+document.getElementById('themebtn').onclick=()=>{dark=!dark;try{localStorage.setItem('whg.theme',dark?'dark':'light')}catch(e){}theme()};
 
 // The sky behind the globe: real stars and constellation figures from data/sky.json (Yale Bright Star Catalogue,
 // d3-celestial). Seen from the sun's side of the Earth, the sky directly behind the globe is the anti-sun point, so
@@ -879,7 +877,7 @@ const bw=document.getElementById('w'),bs=document.getElementById('su');
 function setSeason(v){season=v;bw.setAttribute('aria-pressed',String(v===0));bs.setAttribute('aria-pressed',String(v===1));ui();draw();hideInfo()}
 bw.onclick=()=>setSeason(0);bs.onclick=()=>setSeason(1);
 function ui(){renderFavs();renderLayers();lyrRender();if(typeof m3dSync==='function')m3dSync();document.getElementById('sum').textContent=`${hhmm(S)}–${hhmm(E)}`;
-  const bl=document.getElementById('bandlist');if(bl)bl.innerHTML=`<li class="bgrow"><div class="bgrad" style="background:linear-gradient(to right,${Array.from({length:HOUR_BINS+1},(_,i)=>pal['b'+(i%HOUR_BINS)]+' '+(i/HOUR_BINS*100).toFixed(2)+'%').join(',')})"></div><div class="bgticks"><span>05</span><span>08</span><span>11</span><span>14</span><span>17</span><span>21</span><span>05</span></div></li>`+BANDS.map(b=>{const mid=Math.floor((b.lo+b.hi)/2)-5;return `<li><i style="background:${pal['b'+mid]}"></i><span>${b.name}</span><small>${b.sub.replace('starts ','')}</small></li>`}).join('');
+  const bl=document.getElementById('bandlist');if(bl)bl.innerHTML=`<li class="bgrow"><div class="bgrad" style="background:linear-gradient(to right,${Array.from({length:HOUR_BINS+1},(_,i)=>pal['b'+(i%HOUR_BINS)]+' '+(i/HOUR_BINS*100).toFixed(2)+'%').join(',')})"></div><div class="bgticks"><span style="left:0.00%">05</span><span style="left:16.67%">09</span><span style="left:33.33%">13</span><span style="left:50.00%">17</span><span style="left:66.67%">21</span><span style="left:83.33%">01</span></div></li>`+BANDS.map(b=>{const mid=Math.floor((b.lo+b.hi)/2)-5;return `<li><i style="background:${pal['b'+mid]}"></i><span>${b.name}</span><small>${b.sub.replace('starts ','')}</small></li>`}).join('');
   document.getElementById('snote').textContent=season?'Late March to late October, while the UK is on BST.':'Late October to late March, while the UK is on GMT.';
   stripRender();}
 // colour key at the bottom: working-hours bands, then the coliving dot colours when that layer is on
@@ -1006,7 +1004,7 @@ function m3dStyleDef(){const B=BM();
 // Day and night on the globe: the night side is an image worked out pixel by pixel from the sun, with the same darkness
 // as the canvas globe. Its rows are spaced as the Mercator map spaces them, so it lines up with the map. The image is
 // rebuilt each minute. (MapLibre's Mercator geometry stops at 85°, so nothing can be drawn over the poles themselves.)
-const NIGHT_IMG={key:'',url:'',an:0,as:0},NIGHT_A=0.2,NIGHT_EDGE_DEG=1.2,NIGHT_EDGE_A=0.6,NIGHT_EDGE_COL=[190,215,255];
+const NIGHT_IMG={key:'',url:'',an:0,as:0},NIGHT_A=0.2,NIGHT_EDGE_DEG=1.4,NIGHT_EDGE_A=0.95,NIGHT_AA_DEG=0.35;
 // Day and night on the globe: the night side is one flat shade, a little darker than the day, and the line where the sun
 // sets (the terminator) is drawn as a clear band along its edge. The image is rebuilt each minute.
 // (MapLibre's Mercator geometry stops at 85°, so nothing can be drawn over the poles themselves.)
@@ -1017,11 +1015,12 @@ function nightImage(){const key=Math.floor(Date.now()/6e4)+'|'+(dark?1:0);if(key
   for(let j=0;j<H;j++){const y=YM-2*YM*(j+0.5)/H,lat=2*Math.atan(Math.exp(y))-Math.PI/2,sa=Math.sin(lat),ca=Math.cos(lat);
     for(let i=0;i<W;i++){const lon=(-180+360*(i+0.5)/W)*D;
       const sinEl=sa*ss+ca*cs*Math.cos(lon-sl*D),el=Math.asin(Math.max(-1,Math.min(1,sinEl)))/D;
-      let c,a;
-      if(Math.abs(el)<=NIGHT_EDGE_DEG/2){c=NIGHT_EDGE_COL;a=NIGHT_EDGE_A}
-      else if(el<0){c=col;a=NIGHT_A}
-      else continue;
-      const q=(j*W+i)*4;im.data[q]=c[0];im.data[q+1]=c[1];im.data[q+2]=c[2];im.data[q+3]=Math.round(a*255)}}
+      // the night shade fades in across the edge, and the black line is antialiased on both sides
+      const nightA=NIGHT_A*clamp(0.5-el/NIGHT_AA_DEG,0,1),lineA=NIGHT_EDGE_A*clamp(0.5-(Math.abs(el)-NIGHT_EDGE_DEG/2)/NIGHT_AA_DEG,0,1);
+      const ao=lineA+nightA*(1-lineA);if(ao<=0)continue;
+      const q=(j*W+i)*4;
+      im.data[q]=(col[0]*nightA*(1-lineA))/ao;im.data[q+1]=(col[1]*nightA*(1-lineA))/ao;im.data[q+2]=(col[2]*nightA*(1-lineA))/ao;
+      im.data[q+3]=Math.round(ao*255)}}
   cx.putImageData(im,0,0);
   NIGHT_IMG.url=cv.toDataURL('image/png');NIGHT_IMG.an=nightAlpha(90,0,{sl,ss,cs});NIGHT_IMG.as=nightAlpha(-90,0,{sl,ss,cs});NIGHT_IMG.key=key;return NIGHT_IMG}
 // The polar caps. MapLibre's Mercator geometry stops at 85°, so the two caps beyond that are drawn here as a sphere mesh, in
@@ -1240,9 +1239,12 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
     (map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
   map.setPaintProperty(M3D_OWN+'tz','fill-opacity',['interpolate',['linear'],['zoom'],zA,op,zB,0]);
   try{map.setLayerZoomRange(M3D_OWN+'tz',0,Math.min(24,zB+0.3))}catch(e){}
-  lay({id:M3D_OWN+'cb',type:'line',source:M3D_OWN+'cb',paint:{'line-color':dark?'rgba(255,255,255,.5)':'rgba(20,30,55,.6)','line-width':1}},
+  lay({id:M3D_OWN+'cbh',type:'line',source:M3D_OWN+'cb',paint:{'line-color':'rgba(0,0,0,.55)','line-width':2.4}},
+    (map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
+  lay({id:M3D_OWN+'cb',type:'line',source:M3D_OWN+'cb',paint:{'line-color':'rgba(255,255,255,.8)','line-width':1}},
     (map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
   map.setPaintProperty(M3D_OWN+'cb','line-opacity',['interpolate',['linear'],['zoom'],zA,1,zB,0]);
+  map.setPaintProperty(M3D_OWN+'cbh','line-opacity',['interpolate',['linear'],['zoom'],zA,1,zB,0]);
   map.setPaintProperty(M3D_OWN+'cb','line-width',['interpolate',['linear'],['zoom'],1,0.9,5,1.4]);
   nightSync(map,zA,zB);
   lay({id:M3D_OWN+'ovf',type:'fill',source:M3D_OWN+'ov',filter:['==',['geometry-type'],'Polygon'],paint:{'fill-color':['get','c'],'fill-opacity':0.2}});
@@ -1252,7 +1254,7 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
   lay({id:M3D_OWN+'cln',type:'symbol',source:M3D_OWN+'cl',minzoom:9,layout:{'text-field':['get','n'],'text-font':font,'text-size':11,'text-offset':[0,-1.2],'text-anchor':'bottom','text-optional':true},paint:{'text-color':dk?'#fff':'#14213d','text-halo-color':dk?'rgba(0,0,0,.75)':'#fff','text-halo-width':1.4}});
   lay({id:M3D_OWN+'fv',type:'circle',source:M3D_OWN+'fv',paint:{'circle-color':FAVC,'circle-radius':7,'circle-stroke-color':'#fff','circle-stroke-width':2}});
   lay({id:M3D_OWN+'fvn',type:'symbol',source:M3D_OWN+'fv',layout:{'text-field':['get','n'],'text-font':font,'text-size':12,'text-offset':[0,-1.3],'text-anchor':'bottom'},paint:{'text-color':dk?'#fff':'#14213d','text-halo-color':dk?'rgba(0,0,0,.75)':'#fff','text-halo-width':1.5}});
-  try{map.moveLayer(M3D_OWN+'cb',M3D_OWN+'lab')}catch(e){}
+  try{map.moveLayer(M3D_OWN+'cbh',M3D_OWN+'lab');map.moveLayer(M3D_OWN+'cb',M3D_OWN+'lab')}catch(e){}
   lay({id:M3D_OWN+'lab',type:'symbol',source:M3D_OWN+'lab',layout:{'text-field':['get','t'],'text-font':font,'text-size':['match',['get','r'],1,13,11.5],'text-line-height':1.25,'text-padding':6},
     paint:{'text-color':dk||basemap==='street'?'#ffffff':'#ffffff','text-halo-color':'rgba(10,16,30,.8)','text-halo-width':1.6}});
   for(const kd in WXI)if(!map.hasImage('wx-'+kd)){const im=new Image(52,52);im.onload=()=>{try{if(!map.hasImage('wx-'+kd)){map.addImage('wx-'+kd,im,{pixelRatio:2});clearTimeout(m3d.wxT);m3d.wxT=setTimeout(()=>{const s=map.getSource(M3D_OWN+'wx');if(s)s.setData(m3dGeo().wx)},50)}}catch(e){}};im.src='data:image/svg+xml,'+encodeURIComponent(WXI[kd].replace('<svg ','<svg width="52" height="52" '))}

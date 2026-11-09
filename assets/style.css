@@ -430,7 +430,9 @@ body.tilted .strip{display:none}
 .bandkey li span{flex:1;min-width:0;font-weight:600}
 .bandkey .bgrow{display:block;padding:2px 8px 8px}
 .bandkey .bgrad{height:12px;border-radius:6px}
-.bandkey .bgticks{display:flex;justify-content:space-between;font-size:.7rem;color:var(--ink2);margin-top:3px;font-variant-numeric:tabular-nums}
+.bandkey .bgticks{position:relative;height:14px;font-size:.7rem;color:var(--ink2);margin-top:3px;font-variant-numeric:tabular-nums}
+.bandkey .bgticks span{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap}
+.bandkey .bgticks span:first-child{transform:none}
 .bandkey li small{color:var(--ink2);font-size:.8rem;white-space:nowrap;font-variant-numeric:tabular-nums}
 /* the 2D globe is not drawn while the 3D view is showing; the star field behind still is */
 body.in3d #c{opacity:0;pointer-events:none}
@@ -476,3 +478,5 @@ body:has(#info.show) .tourpill{display:none}
 .hoursset .shift{gap:6px}
 .hoursset .sec:first-of-type{margin-top:4px}
 .hoursset .sec h3{font-family:var(--sans);font-size:.78rem;font-weight:600;letter-spacing:.02em;margin:0 0 8px;color:var(--ink2)}
+
+.themebtn{position:fixed;left:16px;bottom:16px;z-index:40;width:44px;height:44px;display:grid;place-items:center;padding:0;cursor:pointer}
