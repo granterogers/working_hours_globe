@@ -877,7 +877,7 @@ document.getElementById('e').oninput=e=>{if(e.target.value){E=tval(e.target.valu
 const bw=document.getElementById('w'),bs=document.getElementById('su');
 function setSeason(v){season=v;bw.setAttribute('aria-pressed',String(v===0));bs.setAttribute('aria-pressed',String(v===1));ui();draw();hideInfo()}
 bw.onclick=()=>setSeason(0);bs.onclick=()=>setSeason(1);
-function ui(){renderFavs();renderLayers();lyrRender();if(typeof m3dSync==='function')m3dSync();document.getElementById('sum').textContent=`${hhmm(S)}–${hhmm(E)}`;
+function ui(){renderFavs();renderLayers();lyrRender();if(typeof m3dSync==='function')m3dSync();const sumEl=document.getElementById('sum');if(sumEl)sumEl.textContent=`${hhmm(S)}–${hhmm(E)}`;
   const bl=document.getElementById('bandlist');if(bl)bl.innerHTML=`<li class="bgrow"><div class="bgrad" style="background:linear-gradient(to right,${BANDS.map(b=>{const c=pal['b'+(b.lo-5)],a=((b.lo-5)/HOUR_BINS*100).toFixed(2),z=((Math.min(b.hi,29)-5)/HOUR_BINS*100).toFixed(2);return c+' '+a+'%,'+c+' '+z+'%'}).join(',')})"></div><div class="bgticks"><span style="left:0.00%">05</span><span style="left:16.67%">09</span><span style="left:33.33%">13</span><span style="left:50.00%">17</span><span style="left:66.67%">21</span><span style="left:83.33%">01</span></div></li>`+BANDS.map(b=>{const mid=Math.floor((b.lo+b.hi)/2)-5;return `<li><i style="background:${pal['b'+mid]}"></i><span>${b.name}</span><small>${b.sub.replace('starts ','')}</small></li>`}).join('');
   document.getElementById('snote').textContent=season?'Late March to late October, while the UK is on BST.':'Late October to late March, while the UK is on GMT.';
   stripRender();}
@@ -921,7 +921,7 @@ const LYI={
 function lyrRender(){const m=document.getElementById('lyrb');if(!m)return;
   const ic=k=>`<i class="lyi" aria-hidden="true">${typeof LYI[k]==='function'?LYI[k]():LYI[k]}</i>`;
   const tick=(k,on,label,extra)=>`<label class="bmtick"><input type="checkbox" data-show="${k}" ${on?'checked':''}>${ic(k)}<span>${label}</span><span class="lslot">${extra||''}</span></label>`;
-  m.innerHTML=tick('hours',showHours,'Working hours',`<small class="clcnt" id="sum"></small><button type="button" class="clfb" id="hoursgear" aria-label="Working hours settings" title="Working hours settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>`)+tick('fav',showFavs,'Favourites',`<button type="button" class="clfb" id="favgear" aria-label="Show favourites list" title="Show favourites list"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>`)+
+  m.innerHTML=tick('hours',showHours,'Working hours',`<button type="button" class="clfb" id="hoursgear" aria-label="Working hours settings" title="Working hours settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>`)+tick('fav',showFavs,'Favourites',`<button type="button" class="clfb" id="favgear" aria-label="Show favourites list" title="Show favourites list"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>`)+
     (CL.data.length?tick('cl',CL.on,'Colivings',`<small class="clcnt" id="clcnt"></small><button type="button" class="clfb${clActive(CL.f)?' on':''}" id="clfb" aria-label="Filter colivings" title="Filter and updates">${FUNNEL}</button>`):'')+
     tick('cw',showCw,'Coworking spaces',`<small class="clcnt" id="cwcnt" aria-live="polite"></small><button type="button" class="clfb${cwActive()?' on':''}" id="cwfb" aria-label="Filter coworking spaces" title="Filter coworking spaces">${FUNNEL}</button>`)+tick('cams',showCams,'Webcams')+tick('weather',showWeather,'Current weather','<small class="clcnt">°C</small>')+tick('night',showNight,'Day and night')+tick('names',showNames,'Place names');
   m.querySelectorAll('[data-show]').forEach(c=>c.onchange=()=>setShow(c.dataset.show,c.checked));
@@ -929,7 +929,7 @@ function lyrRender(){const m=document.getElementById('lyrb');if(!m)return;
   const cb=m.querySelector('#cwfb');if(cb)cb.onclick=e=>{e.preventDefault();e.stopPropagation();cwToggle()};
   const gb=m.querySelector('#favgear');if(gb)gb.onclick=e=>{e.preventDefault();e.stopPropagation();favListToggle()};
   const hg=m.querySelector('#hoursgear');if(hg)hg.onclick=e=>{e.preventDefault();e.stopPropagation();hoursToggle()};
-  const hs=m.querySelector('#sum');if(hs)hs.textContent=`${hhmm(S)}–${hhmm(E)}`;clCounts();cwCounts();lyrFit()}
+  clCounts();cwCounts();lyrFit()}
 // working hours settings: the shift and the season, opened from the cog beside Working hours
 function hoursToggle(open){const el=document.getElementById('hoursset');if(!el)return;const show=open==null?el.hidden:open;el.hidden=!show;
   if(show)document.getElementById('s').focus({preventScroll:true})}
@@ -1057,11 +1057,17 @@ function capMesh(){if(CAP_MESH.verts)return CAP_MESH;const v=[],idx=[];
 // the working-hours colours where each sector reaches the caps, sampled every degree of longitude at the edge of the tiles,
 // so each sector carries on over its cap to the pole. Cached until the settings change.
 const HRS_CACHE={key:'',N:null,S:null};
+// which zone lies under each sample point on the caps never changes; only its colour does with the hours. The lookup is
+// done once, so changing the hours no longer repeats the slow point-in-polygon tests.
+let CAP_ZONES=null;
+function capZones(){if(CAP_ZONES)return CAP_ZONES;
+  const z=sg=>{const out=[];for(let i=0;i<=CAP_LON;i++){const pt=[-180+i*360/CAP_LON,sg*CAP_LAT0];
+    out.push(TZHIT.features.find(f=>d3.geoContains(f,pt))||D.gaps.features.find(f=>d3.geoContains(f,pt))||null)}return out};
+  CAP_ZONES={N:z(1),S:z(-1)};return CAP_ZONES}
+setTimeout(()=>{try{capZones()}catch(e){}},4000);
 const hexRgb=c=>[parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16)];
 function capHours(){if(!showHours)return null;const key=[S,E,season,dark].join('|');if(HRS_CACHE.key===key)return HRS_CACHE;
-  const samp=sg=>{const out=[];for(let i=0;i<=CAP_LON;i++){const pt=[-180+i*360/CAP_LON,sg*CAP_LAT0];
-    const f=TZHIT.features.find(z=>d3.geoContains(z,pt))||D.gaps.features.find(z=>d3.geoContains(z,pt));
-    out.push(f?hexRgb(pal['b'+band(off(f.properties.z))]):null)}return out};
+  const samp=sg=>(sg>0?capZones().N:capZones().S).map(f=>f?hexRgb(pal['b'+band(off(f.properties.z))]):null);
   HRS_CACHE.key=key;HRS_CACHE.N=samp(1);HRS_CACHE.S=samp(-1);return HRS_CACHE}
 // the basemap's colours at the caps: sea or ice, for the street style in each theme and for the other base maps
 // sampled from the street style at the caps: the Arctic is sea, Antarctica is land (dark) or ice (light)
