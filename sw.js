@@ -10,7 +10,7 @@ const THUMB_HOSTS=['upload.wikimedia.org','commons.wikimedia.org','api.panoramax
 
 self.addEventListener('install',()=>self.skipWaiting());
 self.addEventListener('activate',e=>e.waitUntil((async()=>{
-  for(const k of await caches.keys())if(k.startsWith('whg-tiles-')&&k!==CACHE)await caches.delete(k);
+  for(const k of await caches.keys())if((k.startsWith('whg-tiles-')&&k!==CACHE)||(k.startsWith('whg-app-')&&k!==APP))await caches.delete(k);
   await self.clients.claim()})()));
 
 let puts=0;
@@ -22,7 +22,14 @@ async function thumb(req){try{const c=await caches.open(THUMBS),hit=await c.matc
   catch(err){return fetch(req)}}
 async function thumbTrim(c){const keys=await c.keys();for(const k of keys.slice(0,Math.max(0,keys.length-MAX_THUMBS)))await c.delete(k)}
 
+// the app's own files and data (script, styles, the big JSON files) are served from the device at once, and refreshed
+// from the network in the background, so a repeat visit starts straight away
+const APP='whg-app-v1';
+async function appFile(req){const c=await caches.open(APP);const hit=await c.match(req);
+  const net=fetch(req).then(res=>{if(res.ok)c.put(req,res.clone()).catch(()=>{});return res}).catch(()=>null);
+  if(hit)return hit;const res=await net;return res||fetch(req)}
 self.addEventListener('fetch',e=>{const req=e.request;if(req.method!=='GET')return;let u;try{u=new URL(req.url)}catch(err){return}
+  if(u.origin===self.location.origin&&/\/(assets|data)\/|\/$|\/index\.html$/.test(u.pathname)){e.respondWith(appFile(req));return}
   if(THUMB_HOSTS.includes(u.hostname)&&req.destination==='image'){e.respondWith(thumb(req));return}
   if(!HOSTS.includes(u.hostname))return;
   // the TileJSON (which says where this week's tiles are) always comes from the network when it can

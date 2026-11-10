@@ -8,7 +8,7 @@ document.body.classList.add('booting');
 const TZHIT={type:'FeatureCollection',features:D.tzM.features.map(f=>({type:'Feature',properties:f.properties,geometry:JSON.parse(JSON.stringify(f.geometry))}))};
 const BANDS=[
   {lo:5,hi:8,name:"Early bird",sub:"starts 05:00–08:00",dark:"#e63946",light:"#e63946"},
-  {lo:8,hi:11,name:"Classic day",sub:"starts 08:00–11:00",dark:"#f4a261",light:"#f4a261"},
+  {lo:8,hi:11,name:"Classic day",sub:"starts 08:00–11:00",dark:"#f77f00",light:"#f77f00"},
   {lo:11,hi:14,name:"Late start",sub:"starts 11:00–14:00",dark:"#f2cc4b",light:"#f2cc4b"},
   {lo:14,hi:17,name:"Afternoon into evening",sub:"starts 14:00–17:00",dark:"#6cc070",light:"#6cc070"},
   {lo:17,hi:21,name:"Evening into night",sub:"starts 17:00–21:00",dark:"#3a86ff",light:"#3a86ff"},
@@ -1002,8 +1002,19 @@ function m3dStyleDef(){const B=BM();
     layers:[{id:'base',type:'raster',source:'base'}].concat(B.labels?[
       {id:'water-names',type:'symbol',source:'ofm','source-layer':'water_name',layout:{'text-field':NAME_EN,'text-font':['Noto Sans Italic'],'text-size':13},paint:{'text-color':B.dark?'#cfe8ff':'#2c66a3','text-halo-color':B.dark?'rgba(0,0,0,.7)':'#fff','text-halo-width':1.4}},
       {id:'peaks',type:'symbol',source:'ofm','source-layer':'mountain_peak',minzoom:10,filter:['has','ele'],layout:{'text-field':['concat',NAME_EN,'\n',['to-string',['get','ele']],' m'],'text-font':['Noto Sans Regular'],'text-size':11},paint:{'text-color':'#fff','text-halo-color':'rgba(0,0,0,.75)','text-halo-width':1.3}},
-      {id:'places',type:'symbol',source:'ofm','source-layer':'place',filter:['in',['get','class'],['literal',['city','town','village','suburb','hamlet','island']]],
-        layout:{'text-field':NAME_EN,'text-font':['Noto Sans Bold'],'text-size':['match',['get','class'],'city',16,'town',14,12]},paint:{'text-color':B.dark?'#fff':'#111','text-halo-color':B.dark?'rgba(0,0,0,.8)':'#fff','text-halo-width':1.5}}]:[])}}
+      // the place names are split by kind, so the zoom can show each kind from its own zoom level (see placeZoom)
+      ...['country','state','city','town','village'].map(k=>({id:k+'-names',type:'symbol',source:'ofm','source-layer':'place',
+        filter:['in',['get','class'],['literal',k==='village'?['village','suburb','hamlet','island']:[k]]],
+        layout:{'text-field':NAME_EN,'text-font':['Noto Sans Bold'],'text-size':k==='country'?15:k==='state'?13:k==='city'?16:k==='town'?14:12,'text-transform':k==='country'?'uppercase':'none'},
+        paint:{'text-color':B.dark?'#fff':'#111','text-halo-color':B.dark?'rgba(0,0,0,.8)':'#fff','text-halo-width':1.5}}))]:[])}}
+// the place names come in by kind: countries first, then states, cities, towns and villages as you zoom in, so the map is
+// never covered with small towns. Each layer keeps its own largest zoom and only its smallest is raised.
+const PLACE_ZOOM=[['country',0],['state',3],['city',4],['town',7],['village',9.5],['hamlet',9.5],['suburb',9.5],['other',9.5],['island',9.5],['neighbourhood',10]];
+function placeZoom(map){const st=map.getStyle();if(!st)return;
+  for(const l of st.layers){if(l.type!=='symbol'||l['source-layer']!=='place')continue;const k=PLACE_ZOOM.find(([w])=>l.id.includes(w));if(!k)continue;
+    if(!PLACE_MIN.has(l.id))PLACE_MIN.set(l.id,l.minzoom||0);
+    try{map.setLayerZoomRange(l.id,Math.max(PLACE_MIN.get(l.id),k[1]),l.maxzoom==null?24:l.maxzoom)}catch(e){}}}
+const PLACE_MIN=new Map();
 // Day and night on the globe: the night side is an image worked out pixel by pixel from the sun, with the same darkness
 // as the canvas globe. Its rows are spaced as the Mercator map spaces them, so it lines up with the map. The image is
 // rebuilt each minute. (MapLibre's Mercator geometry stops at 85°, so nothing can be drawn over the poles themselves.)
@@ -1106,8 +1117,12 @@ function nightSync(map,zA,zB){const url=nightImage().url;
 const CAM_SVG=live=>`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="17" fill="#ffffff" stroke="${live?'#e2453c':'#1f2937'}" stroke-width="2.5"/><path d="M10 15h12a2.5 2.5 0 0 1 2.5 2.5v7a2.5 2.5 0 0 1-2.5 2.5H10a2.5 2.5 0 0 1-2.5-2.5v-7A2.5 2.5 0 0 1 10 15z" fill="#1f2937"/><path d="M25 19l5.5-3.5v9L25 21z" fill="#1f2937"/></svg>`;
 function camIcons(map){for(const live of[0,1]){const id=live?'cam-live':'cam';if(map.hasImage(id))continue;const im=new Image(40,40);
   im.onload=()=>{try{if(!map.hasImage(id))map.addImage(id,im,{pixelRatio:2})}catch(e){}};im.src='data:image/svg+xml,'+encodeURIComponent(CAM_SVG(live))}}
+// the favourites are drawn as hearts on the 3D map, the same heart as on the 2D globe
+const HEART_SVG='<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-9.5-9.1C1 9 2.6 5.5 6 5.5c2.2 0 3.6 1.3 4.5 2.6.9-1.3 2.3-2.6 4.5-2.6 3.4 0 5 3.5 3.5 6.4C19.5 16.4 12 21 12 21z" fill="'+FAVC+'" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+function heartIcon(map){if(map.hasImage('fav-heart'))return;const im=new Image(40,40);
+  im.onload=()=>{try{if(!map.hasImage('fav-heart'))map.addImage('fav-heart',im,{pixelRatio:2})}catch(e){}};im.src='data:image/svg+xml,'+encodeURIComponent(HEART_SVG)}
 function m3dExtras(map){
-  camIcons(map);
+  camIcons(map);heartIcon(map);
   // terrain heights from Mapterhorn (the open terrain set MapLibre's own examples use); the older AWS/Mapzen
   // tiles had stray spikes, mostly along coasts and at close zoom
   if(!map.getSource('dem'))map.addSource('dem',{type:'raster-dem',url:'https://tiles.mapterhorn.com/tilejson.json'});
@@ -1119,7 +1134,8 @@ function m3dExtras(map){
   // street style: every name label in English where OpenStreetMap has one (road numbers and house numbers left alone)
   if(basemap==='street')for(const l of map.getStyle().layers)if(l.type==='symbol'&&l.layout&&/"name|\{name/.test(JSON.stringify(l.layout['text-field']||'')))try{map.setLayoutProperty(l.id,'text-field',NAME_EN)}catch(e){}}
 // a new base map replaces the style, which MapLibre can't do while the camera is still moving: the camera stops first
-function m3dStyle(){const map=m3d.map;if(map){map.stop();map.setStyle(m3dStyleDef(),{diff:false})}}
+// the layers are not touched while a new base style is loading: the sync runs again on its style.load
+function m3dStyle(){const map=m3d.map;if(map){map.stop();m3d.styleBusy=true;map.setStyle(m3dStyleDef(),{diff:false})}}
 // 2D zoom k <-> MapLibre zoom: same on-screen scale at the centre of the view
 const k2z=(kk,lat)=>clamp(Math.log2(2*Math.PI*base*kk*Math.cos(lat*RAD)/512),0,20);
 const z2k=(z,lat)=>clamp(512*2**z/(2*Math.PI*base*Math.cos(lat*RAD)),MINK,MAXK);
@@ -1134,7 +1150,7 @@ async function openMap(){let el=m3d.el;
     const lon=-rot[0],lat=clamp(-rot[1],-85,85),zoom=fitZoom();
     try{const map=m3d.map=new lib.Map({container:'m3dmap',style:m3dStyleDef(),center:[lon,lat],zoom,pitch:0,bearing:0,maxPitch:85,attributionControl:false,hash:false,dragRotate:true,pitchWithRotate:true,maxTileCacheSize:3000,refreshExpiredTiles:false});
       map.on('rotate',northNeedle);map.on('pitch',()=>{northNeedle();setModeLabel(isTilted())});
-      map.on('style.load',()=>{m3d.mode=null;m3dExtras(map);m3dSync();for(const l of map.getStyle().layers)if(l.type==='background')map.setPaintProperty(l.id,'background-color','#9ebdff');stars()});
+      map.on('style.load',()=>{m3d.styleBusy=false;m3d.mode=null;m3dExtras(map);m3dSync();for(const l of map.getStyle().layers)if(l.type==='background')map.setPaintProperty(l.id,'background-color','#9ebdff');stars()});
       map.on('move',()=>{if(mapOn())syncFromMap();if(document.body.classList.contains('in3d'))skyFrame()});
       map.on('zoomend',()=>{m3dMode(map);m3dLimit(map)});map.on('moveend',()=>{if(m3d.me&&myLoc)m3dMe()});
       map.on('click',m3dClick);map.on('moveend',m3dWx);
@@ -1213,7 +1229,7 @@ function m3dGeo(){
   // the two polar caps, which the basemap's tiles stop short of, in the basemap's own colours
   const pc=POLE[basemap]||POLE.street,pole={type:'FeatureCollection',features:[[85,90,pc[1]],[-90,-85,pc[0]]].map(([a,b,c])=>({type:'Feature',properties:{c},geometry:{type:'Polygon',coordinates:[[[-180,a],[180,a],[180,b],[-180,b],[-180,a]]]}}))};
   // the country borders, over the working-hours colours as on the 2D globe
-  const cb={type:'FeatureCollection',features:showHours?D.cbM.features.filter(f=>f.geo).map(f=>({type:'Feature',properties:{},geometry:f.geo})):[]};
+  const cb={type:'FeatureCollection',features:(showHours||showNames)?D.cbM.features.filter(f=>f.geo).map(f=>({type:'Feature',properties:{},geometry:f.geo})):[]};
   return{tz,cb,lab,cl,fv,ov,wx,cm,cwk}}
 // the night tiers: each is the sun below an angle of the horizon, with a small share of the darkness
 // the twilight is 37 thin bands half a degree apart rather than a few wide ones, so the day-night edge fades rather than steps
@@ -1236,11 +1252,12 @@ function nightFeaturesGeo(){if(NIGHT3D.f&&Date.now()-NIGHT3D.t<60000)return NIGH
   NIGHT3D={t:Date.now(),f:{type:'FeatureCollection',features:feats}};return NIGHT3D.f}
 setInterval(()=>{if(showNight&&m3d&&m3d.map&&!m3d.el.hidden)m3dSync()},60000);
 function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.getStyle())return}catch(e){return}
-  try{g=m3dGeo()}catch(e){return}
+  if(m3d.styleBusy)return;
+  try{g=m3dGeo()}catch(e){console.warn('3D layers paused:',e&&e.message);return}
   const src=(id,data)=>{const s=map.getSource(M3D_OWN+id);if(s)s.setData(data);else map.addSource(M3D_OWN+id,{type:'geojson',data})};
-  try{src('tz',g.tz);src('cb',g.cb);src('lab',g.lab);src('cl',g.cl);src('fv',g.fv);src('ov',g.ov);src('wx',g.wx);src('cm',g.cm);src('cwk',g.cwk)}catch(e){return}
+  try{src('tz',g.tz);src('cb',g.cb);src('lab',g.lab);src('cl',g.cl);src('fv',g.fv);src('ov',g.ov);src('wx',g.wx);src('cm',g.cm);src('cwk',g.cwk)}catch(e){console.warn('3D sources paused:',e&&e.message);return}
   const font=['Noto Sans Bold'],dk=BM().dark||false;
-  const lay=(def,before)=>{if(!map.getLayer(def.id))map.addLayer(def,before)};
+  const lay=(def,before)=>{if(!map.getLayer(def.id))try{map.addLayer(def,before)}catch(e){console.warn('3D layer not added:',def.id,e&&e.message)}};
   // working-hours colours fade out as you zoom in, like on the globe
   // same fade as on the globe: full colour until the street-map zoom, gone 4.5 zoom steps later
   const la=map.getCenter().lat,zA=k2z(TILE_K,la),zB=Math.max(zA+0.5,k2z(TILE_K+4.5,la)),op=HOP/100;
@@ -1248,25 +1265,19 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
     (map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
   map.setPaintProperty(M3D_OWN+'tz','fill-opacity',['interpolate',['linear'],['zoom'],zA,op,zB,0]);
   try{map.setLayerZoomRange(M3D_OWN+'tz',0,Math.min(24,zB+0.3))}catch(e){}
-  lay({id:M3D_OWN+'cbh',type:'line',source:M3D_OWN+'cb',paint:{'line-color':'rgba(255,255,255,.8)','line-width':3.2}},
-    (map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
-  lay({id:M3D_OWN+'cb',type:'line',source:M3D_OWN+'cb',paint:{'line-color':'rgba(20,24,44,.9)','line-width':1.2}},
-    (map.getStyle().layers.find(l=>l.type==='symbol'&&!l.id.startsWith(M3D_OWN))||{}).id);
+  lay({id:M3D_OWN+'cb',type:'line',source:M3D_OWN+'cb',paint:{'line-color':'rgba(20,24,44,.75)','line-width':0.8}});
   // colours are set on every sync too, so a layer made by an earlier version of this page is brought up to date
-  map.setPaintProperty(M3D_OWN+'cbh','line-color','rgba(255,255,255,.8)');map.setPaintProperty(M3D_OWN+'cbh','line-width',3.2);
-  map.setPaintProperty(M3D_OWN+'cb','line-color','rgba(20,24,44,.9)');
+  map.setPaintProperty(M3D_OWN+'cb','line-color','rgba(20,24,44,.75)');
   map.setPaintProperty(M3D_OWN+'cb','line-opacity',['interpolate',['linear'],['zoom'],zA,1,zB,0]);
-  map.setPaintProperty(M3D_OWN+'cbh','line-opacity',['interpolate',['linear'],['zoom'],zA,1,zB,0]);
-  map.setPaintProperty(M3D_OWN+'cb','line-width',['interpolate',['linear'],['zoom'],1,0.9,5,1.4]);
+  map.setPaintProperty(M3D_OWN+'cb','line-width',['interpolate',['linear'],['zoom'],1,0.5,5,0.8]);
   nightSync(map,zA,zB);
   lay({id:M3D_OWN+'ovf',type:'fill',source:M3D_OWN+'ov',filter:['==',['geometry-type'],'Polygon'],paint:{'fill-color':['get','c'],'fill-opacity':0.2}});
   lay({id:M3D_OWN+'ovl',type:'line',source:M3D_OWN+'ov',filter:['in',['geometry-type'],['literal',['LineString','Polygon']]],paint:{'line-color':['get','c'],'line-width':2.5}});
   lay({id:M3D_OWN+'ovp',type:'circle',source:M3D_OWN+'ov',filter:['==',['geometry-type'],'Point'],paint:{'circle-color':['get','c'],'circle-radius':5,'circle-stroke-color':'#fff','circle-stroke-width':1.5}});
   lay({id:M3D_OWN+'cl',type:'circle',source:M3D_OWN+'cl',paint:{'circle-color':['get','c'],'circle-radius':['interpolate',['linear'],['zoom'],2,3,8,5,14,7],'circle-stroke-color':'#fff','circle-stroke-width':1.3}});
   lay({id:M3D_OWN+'cln',type:'symbol',source:M3D_OWN+'cl',minzoom:9,layout:{'text-field':['get','n'],'text-font':font,'text-size':11,'text-offset':[0,-1.2],'text-anchor':'bottom','text-optional':true},paint:{'text-color':dk?'#fff':'#14213d','text-halo-color':dk?'rgba(0,0,0,.75)':'#fff','text-halo-width':1.4}});
-  lay({id:M3D_OWN+'fv',type:'circle',source:M3D_OWN+'fv',paint:{'circle-color':FAVC,'circle-radius':7,'circle-stroke-color':'#fff','circle-stroke-width':2}});
+  lay({id:M3D_OWN+'fv',type:'symbol',source:M3D_OWN+'fv',layout:{'icon-image':'fav-heart','icon-size':0.8,'icon-allow-overlap':true,'icon-anchor':'bottom'}});
   lay({id:M3D_OWN+'fvn',type:'symbol',source:M3D_OWN+'fv',layout:{'text-field':['get','n'],'text-font':font,'text-size':12,'text-offset':[0,-1.3],'text-anchor':'bottom'},paint:{'text-color':dk?'#fff':'#14213d','text-halo-color':dk?'rgba(0,0,0,.75)':'#fff','text-halo-width':1.5}});
-  try{map.moveLayer(M3D_OWN+'cbh',M3D_OWN+'lab');map.moveLayer(M3D_OWN+'cb',M3D_OWN+'lab')}catch(e){}
   lay({id:M3D_OWN+'lab',type:'symbol',source:M3D_OWN+'lab',layout:{'text-field':['get','t'],'text-font':font,'text-size':['match',['get','r'],1,13,11.5],'text-line-height':1.25,'text-padding':6},
     paint:{'text-color':dk||basemap==='street'?'#ffffff':'#ffffff','text-halo-color':'rgba(10,16,30,.8)','text-halo-width':1.6}});
   for(const kd in WXI)if(!map.hasImage('wx-'+kd)){const im=new Image(52,52);im.onload=()=>{try{if(!map.hasImage('wx-'+kd)){map.addImage('wx-'+kd,im,{pixelRatio:2});clearTimeout(m3d.wxT);m3d.wxT=setTimeout(()=>{const s=map.getSource(M3D_OWN+'wx');if(s)s.setData(m3dGeo().wx)},50)}}catch(e){}};im.src='data:image/svg+xml,'+encodeURIComponent(WXI[kd].replace('<svg ','<svg width="52" height="52" '))}
@@ -1284,7 +1295,8 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
   map.setPaintProperty(M3D_OWN+'wxt','text-opacity',showWeather?1:0);map.setPaintProperty(M3D_OWN+'wxt','icon-opacity',showWeather?1:0);
   // with the hours on, the base map's own town and country names give way to the names in the hour labels
   const hideBase=showNames&&showHours;
-  for(const l of map.getStyle().layers)if(l.type==='symbol'&&!l.id.startsWith(M3D_OWN))try{map.setPaintProperty(l.id,'text-opacity',showNames&&!(hideBase&&l['source-layer']==='place')?1:0)}catch(e){}}
+  for(const l of map.getStyle().layers)if(l.type==='symbol'&&!l.id.startsWith(M3D_OWN))try{map.setPaintProperty(l.id,'text-opacity',showNames&&!(hideBase&&l['source-layer']==='place')?1:0)}catch(e){}
+  placeZoom(map);}
 // weather in 3D: towns and cities spread across the view, bigger places first, about 140 px apart
 // zoomed in (zoom 5 and up) the towns and villages of the base map are added, and the points get denser: as many
 // places as fit without their labels overlapping, instead of the few major airports' cities
@@ -1298,11 +1310,11 @@ function wxTowns(map){const src=Object.entries(map.getStyle().sources).find(([k,
   return out}
 function m3dWx(){const map=m3d.map;if(!map||!showWeather||m3d.el.hidden)return;const c=wxCities();if(!c)return;
   const W3=map.getContainer().clientWidth,H3=map.getContainer().clientHeight,b=map.getBounds(),dense=map.getZoom()>=5;
-  const cap=dense?clamp(Math.round(W3*H3/14000),12,80):clamp(Math.round(W3*H3/60000),8,30),at=[],out=[];
+  const cap=dense?clamp(Math.round(W3*H3/(map.getZoom()>=8?30000:50000)),6,28):clamp(Math.round(W3*H3/60000),8,30),at=[],out=[];
   const pool=(dense?wxTowns(map).filter(p=>b.contains([p.lon,p.lat])):[]).concat(c.filter(p=>b.contains([p.lon,p.lat]))).sort((a,b)=>b.pri-a.pri);
   for(const p of pool){if(out.length>=cap)break;const q=map.project([p.lon,p.lat]);if(!isFinite(q.x)||q.x<40||q.y<70||q.x>W3-40||q.y>H3-30)continue;
-    // each point is a name and a temperature, about 80 px wide and 28 px tall: their boxes don't overlap
-    const clash=a=>dense?Math.abs(a[0]-q.x)<78&&Math.abs(a[1]-q.y)<28:Math.hypot(a[0]-q.x,a[1]-q.y)<140;
+    // each point is a name and a temperature, about 120 px wide and 40 px tall: their boxes don't overlap, and the number is kept modest
+    const clash=a=>dense?Math.abs(a[0]-q.x)<120&&Math.abs(a[1]-q.y)<40:Math.hypot(a[0]-q.x,a[1]-q.y)<140;
     if(at.some(clash))continue;at.push([q.x,q.y]);out.push(p)}
   WX.shown3d=out;m3dSync();wxFetch()}
 // clicks in 3D open the same cards as on the globe
