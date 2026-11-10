@@ -965,7 +965,11 @@ document.getElementById('loc').onclick=locate;
 // the needle shows which way north is. The globe view always has north up, so there it just levels the view.
 function northNeedle(){const sv=document.querySelector('#north svg');if(!sv)return;const b=m3d.map&&m3d.el&&!m3d.el.hidden?m3d.map.getBearing():0;sv.style.transform=`rotate(${-b}deg)`}
 document.getElementById('north').onclick=()=>{const map=m3d.map;
-  if(map&&m3d.el&&!m3d.el.hidden){if(Math.abs(map.getBearing())>0.5)map.easeTo({bearing:0,duration:600});else map.easeTo({pitch:0,duration:600});return}
+  if(map&&m3d.el&&!m3d.el.hidden){
+    // the turn is eased, and if the easing does not finish (the map is busy or its animation has stalled), the view is set at once
+    if(Math.abs(map.getBearing())>0.5){const want={bearing:0};map.easeTo({...want,duration:600});setTimeout(()=>{if(Math.abs(map.getBearing())>0.5)map.jumpTo(want)},900)}
+    else{map.easeTo({pitch:0,duration:600});setTimeout(()=>{if(map.getPitch()>0.5)map.jumpTo({pitch:0})},900)}
+    return}
   rot[2]=0;vel=[0,0];draw()};
 
 // 3D view: MapLibre GL with terrain, opened over the globe at the same spot; left-drag pans, right-drag (or
@@ -1690,7 +1694,7 @@ async function phSearch(lat,lon,onUpdate){const seen=new Map();let radius=0,answ
       answered+=ok;
       // a search cut short by a newer one keeps nothing, and a search where no source answered is not saved at all,
       // so a rate limit or a dropped connection never becomes "no photos" for a week
-      if(!PH.ac.signal.aborted&&ok){PH.cache.set(key,got);phIdbSet(key,got);if(PH.cache.size>60)PH.cache.delete(PH.cache.keys().next().value)}}
+      if((!PH.ac||!PH.ac.signal.aborted)&&ok){PH.cache.set(key,got);phIdbSet(key,got);if(PH.cache.size>60)PH.cache.delete(PH.cache.keys().next().value)}}
     if(onUpdate(phRank(seen),r,false)===false)return;
     if(phRank(seen).length>=PH_WANT)break;}
   PH.failed=!answered&&!seen.size;
