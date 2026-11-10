@@ -182,7 +182,9 @@ function draw(){
   // the working-hours part of the key fades with the colours; the coliving part stays while colivings show
   const stripEl=document.getElementById('strip');if(stripEl){const o=showHours?bA:0;if(stripEl._o!==o){stripEl._o=o;stripKey(o)}}
   // the country borders are fine and soft, so the colours sit under them rather than being cut up by them
-  if(bA>0.02){ctx.globalAlpha=bA*0.5;strokeFC(CB,pal.border,k>4?0.9:0.6);ctx.globalAlpha=1}
+  // the country borders are drawn on every base map: light over dark imagery, dark over the colours and pale maps
+  if(basemap!=='street'){ctx.globalAlpha=0.9;strokeFC(CB,BM().dark&&LAY.hours<0.5?'rgba(255,255,255,.85)':'rgba(20,24,44,.8)',k>4?1:0.7);ctx.globalAlpha=1}
+  else if(bA>0.02){ctx.globalAlpha=bA*0.5;strokeFC(CB,pal.border,k>4?0.9:0.6);ctx.globalAlpha=1}
   // sphere shading for depth
   ctx.save();ctx.beginPath();path({type:'Sphere'});ctx.clip();
   const sg=ctx.createRadialGradient(cx-s*.42,cy-s*.48,0,cx,cy,s*1.02);sg.addColorStop(0,pal.shadeLite);sg.addColorStop(.55,'rgba(0,0,0,0)');sg.addColorStop(1,pal.shadeDark);
@@ -893,7 +895,9 @@ function layOn(k){return{hours:showHours,fav:showFavs,cl:CL.on,cw:showCw,cams:sh
 function layInit(){for(const k of ['hours','fav','cl','cw','cams','weather','night','names'])LAY[k]=layOn(k)}
 let layRaf=0,layT=0;
 function layFade(){if(layRaf)return;layT=performance.now();const step=t=>{const dt=Math.min(250,t-layT);layT=t;let moving=false;
-    for(const k in LAY){const g=layOn(k),d=g-LAY[k];if(Math.abs(d)<0.005){LAY[k]=g;continue}LAY[k]+=Math.sign(d)*Math.min(Math.abs(d),dt/320);moving=true}
+    // an exponential ease towards the target: it starts and ends softly, and its speed does not depend on the frame rate
+    const f=1-Math.exp(-dt/95);
+    for(const k in LAY){const g=layOn(k),d=g-LAY[k];if(Math.abs(d)<0.004){LAY[k]=g;continue}LAY[k]+=d*f;moving=true}
     layApply(moving);layRaf=moving?requestAnimationFrame(step):0};layRaf=requestAnimationFrame(step)}
 // the working-hours key and the 3D layers follow the fade values; when the fade ends the 3D layers are rebuilt, so the
 // layers that are off leave the map and take no room from the others
@@ -1063,11 +1067,14 @@ const HRS_CACHE={key:'',N:null,S:null};
 // which zone lies under each sample point on the caps never changes; only its colour does with the hours. The lookup is
 // done once, so changing the hours no longer repeats the slow point-in-polygon tests.
 let CAP_ZONES=null;
+// each zone's box, worked out once, so a point is only tested against the zones whose box holds it
+function zoneBox(f){if(f._bb)return f._bb;const c=f.geometry&&f.geometry.coordinates;if(!c)return null;let x0=180,y0=90,x1=-180,y1=-90;
+  const w=q=>{if(typeof q[0]==='number'){if(q[0]<x0)x0=q[0];if(q[0]>x1)x1=q[0];if(q[1]<y0)y0=q[1];if(q[1]>y1)y1=q[1]}else q.forEach(w)};w(c);return f._bb=[x0,y0,x1,y1]}
+function zoneAt(fs,pt){for(const f of fs){const b=zoneBox(f);if(!b||pt[0]<b[0]||pt[0]>b[2]||pt[1]<b[1]||pt[1]>b[3])continue;if(d3.geoContains(f,pt))return f}return null}
 function capZones(){if(CAP_ZONES)return CAP_ZONES;
   const z=sg=>{const out=[];for(let i=0;i<=CAP_LON;i++){const pt=[-180+i*360/CAP_LON,sg*CAP_LAT0];
-    out.push(TZHIT.features.find(f=>d3.geoContains(f,pt))||D.gaps.features.find(f=>d3.geoContains(f,pt))||null)}return out};
+    out.push(zoneAt(TZHIT.features,pt)||zoneAt(D.gaps.features,pt))}return out};
   CAP_ZONES={N:z(1),S:z(-1)};return CAP_ZONES}
-setTimeout(()=>{try{capZones()}catch(e){}},4000);
 const hexRgb=c=>[parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16)];
 function capHours(){if(!showHours)return null;const key=[S,E,season,dark].join('|');if(HRS_CACHE.key===key)return HRS_CACHE;
   const samp=sg=>(sg>0?capZones().N:capZones().S).map(f=>f?hexRgb(pal['b'+band(off(f.properties.z))]):null);
@@ -1239,7 +1246,7 @@ function m3dGeo(){
     for(const c of D.countries){const o=off(c[3]);lab.features.push({type:'Feature',properties:{t:(showNames?c[0]+'\n':'')+hours(o)+(c[6]?'*':''),r:1},geometry:{type:'Point',coordinates:[c[1],c[2]]}});seen.add(c[4]+'|'+o)}
     for(const p of D.prov){const o=off(p[3]),key=p[4]+'|'+o;if(seen.has(key))continue;seen.add(key);
       lab.features.push({type:'Feature',properties:{t:(showNames?p[0]+'\n':'')+hours(o),r:2},geometry:{type:'Point',coordinates:[p[1],p[2]]}})}}
-  const cl={type:'FeatureCollection',features:on('cl')?CL.vis.map(x=>({type:'Feature',properties:{id:x.id,n:x.n,c:CLT[x.t].col},geometry:{type:'Point',coordinates:[x.lon,x.lat]}})):[]};
+  const cl={type:'FeatureCollection',features:on('cl')?CL.vis.map(x=>({type:'Feature',properties:{id:x.id,n:x.n,ic:'cl-house-'+x.t},geometry:{type:'Point',coordinates:[x.lon,x.lat]}})):[]};
   const fv={type:'FeatureCollection',features:on('fav')?favs.map((f,i)=>({type:'Feature',properties:{i,n:f.name},geometry:{type:'Point',coordinates:[f.lon,f.lat]}})):[]};
   const ov={type:'FeatureCollection',features:[]};
   overlays.forEach((L,li)=>{if(L.on)L.fc.features.forEach((f,fi)=>{if(f.geometry)ov.features.push({type:'Feature',properties:{li,fi,c:L.color,n:(f.properties&&f.properties.name)||''},geometry:f.geometry})})});
@@ -1249,7 +1256,7 @@ function m3dGeo(){
   // the two polar caps, which the basemap's tiles stop short of, in the basemap's own colours
   const pc=POLE[basemap]||POLE.street,pole={type:'FeatureCollection',features:[[85,90,pc[1]],[-90,-85,pc[0]]].map(([a,b,c])=>({type:'Feature',properties:{c},geometry:{type:'Polygon',coordinates:[[[-180,a],[180,a],[180,b],[-180,b],[-180,a]]]}}))};
   // the country borders, over the working-hours colours as on the 2D globe
-  const cb={type:'FeatureCollection',features:(showHours||showNames)?D.cbM.features.filter(f=>f.geo).map(f=>({type:'Feature',properties:{},geometry:f.geo})):[]};
+  const cb={type:'FeatureCollection',features:D.cbM.features.filter(f=>f.geo).map(f=>({type:'Feature',properties:{},geometry:f.geo}))};
   return{tz,cb,lab,cl,fv,ov,wx,cm,cwk}}
 // the night tiers: each is the sun below an angle of the horizon, with a small share of the darkness
 // the twilight is 37 thin bands half a degree apart rather than a few wide ones, so the day-night edge fades rather than steps
@@ -1294,8 +1301,10 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
   lay({id:M3D_OWN+'ovf',type:'fill',source:M3D_OWN+'ov',filter:['==',['geometry-type'],'Polygon'],paint:{'fill-color':['get','c'],'fill-opacity':0.2}});
   lay({id:M3D_OWN+'ovl',type:'line',source:M3D_OWN+'ov',filter:['in',['geometry-type'],['literal',['LineString','Polygon']]],paint:{'line-color':['get','c'],'line-width':2.5}});
   lay({id:M3D_OWN+'ovp',type:'circle',source:M3D_OWN+'ov',filter:['==',['geometry-type'],'Point'],paint:{'circle-color':['get','c'],'circle-radius':5,'circle-stroke-color':'#fff','circle-stroke-width':1.5}});
-  lay({id:M3D_OWN+'cl',type:'circle',source:M3D_OWN+'cl',paint:{'circle-color':['get','c'],'circle-radius':['interpolate',['linear'],['zoom'],2,3,8,5,14,7],'circle-stroke-color':'#fff','circle-stroke-width':1.3}});
-  lay({id:M3D_OWN+'cln',type:'symbol',source:M3D_OWN+'cl',minzoom:9,layout:{'text-field':['get','n'],'text-font':font,'text-size':11,'text-offset':[0,-1.2],'text-anchor':'bottom','text-optional':true},paint:{'text-color':dk?'#fff':'#14213d','text-halo-color':dk?'rgba(0,0,0,.75)':'#fff','text-halo-width':1.4}});
+  if(map.getLayer(M3D_OWN+'cl')&&map.getLayer(M3D_OWN+'cl').type!=='symbol')try{map.removeLayer(M3D_OWN+'cl')}catch(e){}
+  for(const t of['p','u','f'])if(!map.hasImage('cl-house-'+t))map.addImage('cl-house-'+t,imgData(badge('house',CLT[t].col)),{pixelRatio:2});
+  lay({id:M3D_OWN+'cl',type:'symbol',source:M3D_OWN+'cl',layout:{'icon-image':['get','ic'],'icon-size':['interpolate',['linear'],['zoom'],2,0.5,8,0.75,14,0.95],'icon-allow-overlap':true}});
+  lay({id:M3D_OWN+'cln',type:'symbol',source:M3D_OWN+'cl',minzoom:9,layout:{'text-field':['get','n'],'text-font':font,'text-size':11,'text-offset':[0,-1.6],'text-anchor':'bottom','text-optional':true},paint:{'text-color':dk?'#fff':'#14213d','text-halo-color':dk?'rgba(0,0,0,.75)':'#fff','text-halo-width':1.4}});
   lay({id:M3D_OWN+'fv',type:'symbol',source:M3D_OWN+'fv',layout:{'icon-image':'fav-heart','icon-size':0.8,'icon-allow-overlap':true,'icon-anchor':'bottom'}});
   lay({id:M3D_OWN+'fvn',type:'symbol',source:M3D_OWN+'fv',layout:{'text-field':['get','n'],'text-font':font,'text-size':12,'text-offset':[0,-1.3],'text-anchor':'bottom'},paint:{'text-color':dk?'#fff':'#14213d','text-halo-color':dk?'rgba(0,0,0,.75)':'#fff','text-halo-width':1.5}});
   lay({id:M3D_OWN+'lab',type:'symbol',source:M3D_OWN+'lab',layout:{'text-field':['get','t'],'text-font':font,'text-size':['match',['get','r'],1,13,11.5],'text-line-height':1.25,'text-padding':6},
@@ -1306,10 +1315,9 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
     paint:{'text-color':'#ffffff','text-halo-color':'rgba(10,16,30,.85)','text-halo-width':1.8}});
   lay({id:M3D_OWN+'cm',type:'symbol',source:M3D_OWN+'cm',layout:{'icon-image':['case',['==',['get','live'],1],'cam-live','cam'],'icon-size':0.9,'icon-allow-overlap':false,'icon-padding':['interpolate',['linear'],['zoom'],2,30,6,16,10,8],'symbol-sort-key':['case',['==',['get','live'],1],0,1]},paint:{}});
   if(map.getLayer(M3D_OWN+'cwk'))try{map.removeLayer(M3D_OWN+'cwk')}catch(e){}
-  if(!map.hasImage('cw-dot')){const c=document.createElement('canvas');c.width=c.height=30;const x=c.getContext('2d');x.beginPath();x.arc(15,15,10,0,7);x.fillStyle='#8b5cf6';x.fill();x.lineWidth=3;x.strokeStyle='#fff';x.stroke();
-    map.addImage('cw-dot',x.getImageData(0,0,30,30),{pixelRatio:2})}
+  if(!map.hasImage('cw-desk'))map.addImage('cw-desk',imgData(badge('desk','#8b5cf6')),{pixelRatio:2});
   // coworking spaces: the busiest areas first, and MapLibre keeps only those that fit without overlapping
-  lay({id:M3D_OWN+'cws',type:'symbol',source:M3D_OWN+'cwk',layout:{'icon-image':'cw-dot','icon-size':['interpolate',['linear'],['zoom'],2,0.4,8,0.7,14,0.9],'icon-allow-overlap':false,'icon-padding':['interpolate',['linear'],['zoom'],2,34,6,18,10,8],'symbol-sort-key':['get','p']}});
+  lay({id:M3D_OWN+'cws',type:'symbol',source:M3D_OWN+'cwk',layout:{'icon-image':'cw-desk','icon-size':['interpolate',['linear'],['zoom'],2,0.4,8,0.7,14,0.9],'icon-allow-overlap':false,'icon-padding':['interpolate',['linear'],['zoom'],2,34,6,18,10,8],'symbol-sort-key':['get','p']}});
   // the base map's own names follow the Place names switch
   // names and weather fade in and out: MapLibre animates a change of opacity, so they are never switched off at once
   placeZoom(map);m3dApply();}
@@ -1321,9 +1329,10 @@ function m3dApply(){if(!m3d||!m3d.map||m3d.styleBusy)return;const map=m3d.map;
   const ramp=(v,stops)=>{const a=['interpolate',['linear'],['zoom']];for(const[z,y]of stops)a.push(z,y*v);return a};
   const set=(id,p,v)=>{try{if(map.getLayer(id))map.setPaintProperty(id,p,v)}catch(e){}};
   set(M3D_OWN+'tz','fill-opacity',ramp(L.hours,[[zA,op],[zB,0]]));
-  set(M3D_OWN+'cb','line-opacity',ramp(L.hours,[[zA,1],[zB,0]]));
+  // the country borders are on every base map: light over dark imagery, dark over the colours and pale maps
+  set(M3D_OWN+'cb','line-opacity',0.9);set(M3D_OWN+'cb','line-color',BM().dark&&L.hours<0.5?'rgba(255,255,255,.85)':'rgba(20,24,44,.8)');
   set(M3D_OWN+'lab','text-opacity',L.hours);
-  set(M3D_OWN+'cl','circle-opacity',L.cl);set(M3D_OWN+'cl','circle-stroke-opacity',L.cl);
+  set(M3D_OWN+'cl','icon-opacity',L.cl);
   set(M3D_OWN+'cln','text-opacity',L.cl);
   set(M3D_OWN+'fv','icon-opacity',L.fav);set(M3D_OWN+'fvn','text-opacity',L.fav);
   set(M3D_OWN+'cm','icon-opacity',L.cams);
@@ -1500,11 +1509,20 @@ function clSetData(list,meta){CL.data=list.filter(x=>isFinite(x.lat)&&isFinite(x
 
 // drawing: dots always (cheap, no overlap test), names once zoomed in close
 function clProj(v){if(M[0]*v[0]+M[1]*v[1]+M[2]*v[2]<0.02)return null;return[cx+SC*(M[3]*v[0]+M[4]*v[1]),cy-SC*(M[6]*v[0]+M[7]*v[1]+M[8]*v[2])]}
-function clDraw(){if(!CL.vis.length)return;const r=k<2?3:k<6?3.6:k<30?4.4:5.4;ctx.lineWidth=1.4;ctx.strokeStyle=pal.halo;
-  for(const t of['p','u','f']){ctx.beginPath();let any=false;
-    for(const x of CL.vis){if(x.t!==t)continue;const s=clProj(x.v);if(!s||s[0]<-8||s[1]<-8||s[0]>W+8||s[1]>H+8)continue;ctx.moveTo(s[0]+r,s[1]);ctx.arc(s[0],s[1],r,0,7);any=true}
-    if(any){ctx.fillStyle=CLT[t].col;ctx.fill();ctx.stroke()}}
-  if(CL.sel){const s=clProj(CL.sel.v);if(s){ctx.beginPath();ctx.arc(s[0],s[1],r+5,0,7);ctx.lineWidth=5;ctx.stroke();ctx.strokeStyle=CLT[CL.sel.t].col;ctx.lineWidth=2.5;ctx.stroke()}}}
+// the symbols: a house for coliving and a desk for coworking, each white on a coloured badge. The badges are drawn once
+// per colour and reused on the globe and, through addImage, on the 3D map.
+const GLYPH={house:new Path2D('M12 3.2 21 11.2h-2.6V20h-4.9v-5.4h-2v5.4H5.6v-8.8H3z'),
+  desk:new Path2D('M8.5 2.5h7v3.9h-7zM3 6.6h18v2.6H3zM4.5 9.2h2.3V20H4.5zM17.2 9.2h2.3V20h-2.3z')};
+const BADGE={};
+function badge(kind,col){const key=kind+col;if(BADGE[key])return BADGE[key];const c=document.createElement('canvas');c.width=c.height=48;const x=c.getContext('2d');
+  x.beginPath();x.roundRect?x.roundRect(3,3,42,42,12):x.rect(3,3,42,42);x.fillStyle=col;x.fill();x.lineWidth=3;x.strokeStyle='#ffffff';x.stroke();
+  x.save();x.translate(24,24);x.scale(1.2,1.2);x.translate(-12,-12);x.fillStyle='#ffffff';x.fill(GLYPH[kind]);x.restore();
+  return BADGE[key]=c}
+function imgData(c){return c.getContext('2d').getImageData(0,0,c.width,c.height)}
+function glyph(kind,col,X,Y,s){ctx.drawImage(badge(kind,col),X-s/2,Y-s/2,s,s)}
+function clDraw(){if(!CL.vis.length)return;const s=k<2?17:k<6?19:k<30?22:25;
+  for(const x of CL.vis){const p=clProj(x.v);if(!p||p[0]<-12||p[1]<-12||p[0]>W+12||p[1]>H+12)continue;glyph('house',CLT[x.t].col,p[0],p[1],s)}
+  if(CL.sel){const q=clProj(CL.sel.v);if(q){ctx.beginPath();ctx.arc(q[0],q[1],s/2+4,0,7);ctx.lineWidth=2.5;ctx.strokeStyle=CLT[CL.sel.t].col;ctx.stroke()}}}
 function clLabels(cand){if(!CL.on||k<9)return;for(const x of CL.vis)cand.push({cl:x,v:x.v,lon:x.lon,lat:x.lat,name:x.n,pri:x===CL.sel?6e9:3e9+(x.rt||0),a:1})}
 function clHit(x,y){if(!CL.on)return null;const lab=placed.find(q=>q.L.cl&&x>=q.x0&&x<=q.x1&&y>=q.y0&&y<=q.y1);if(lab)return lab.L.cl;
   let best=null,bd=11;for(const it of CL.vis){const s=clProj(it.v);if(!s)continue;const d=Math.hypot(s[0]-x,s[1]-y);if(d<bd){bd=d;best=it}}return best}
@@ -2015,7 +2033,7 @@ function cwLoad(j){const f=j.fields;CW.list.clear();CW.updated=j.updated;
   CW.hasFac=[...CW.list.values()].some(x=>x.fee||x.wifi||x.wheel||x.aircon);
   cwApply()}
 fetch('data/coworking.json').then(r=>{if(!r.ok)throw 0;return r.json()}).then(cwLoad).catch(()=>{});
-function cwMark(X,Y,r,sel){ctx.beginPath();ctx.arc(X,Y,r,0,Math.PI*2);ctx.fillStyle='#8b5cf6';ctx.fill();ctx.lineWidth=sel?2.4:1.2;ctx.strokeStyle=sel?'#ffd27a':pal.halo;ctx.stroke()}
+function cwMark(X,Y,r,sel){const s=r*5.4;if(sel){ctx.beginPath();ctx.arc(X,Y,s/2+3,0,7);ctx.lineWidth=2.4;ctx.strokeStyle='#ffd27a';ctx.stroke()}glyph('desk','#8b5cf6',X,Y,s)}
 // At globe scale, places that would overlap merge into one purple dot; pressing a dot flies to it
 const CW_CLUSTER_K=18,CW_CELL=64,CW_SINGLE_K=9;  // places within a 64 px square merge into one dot
 // Zoomed out, only places that sit in a crowd show, so the globe isn't covered: a few hubs at globe scale, most
@@ -2034,7 +2052,7 @@ function cwCluster(){const cells=new Map();
 function cwClusterAt(x,y){let best=null,bd=18;for(const c of CW.shown||[]){const d=Math.hypot(c.x-x,c.y-y);if(d<bd){bd=d;best=c}}return best}
 function cwDraw(){if(!CW.vis.length)return;const r=k<CW_CLUSTER_K?3.5:4.5,at=[];ctx.save();
   if(k<CW_CLUSTER_K){CW.cl=cwCluster();CW.shown=cwPick(CW.cl);for(const c of CW.shown){if(c.n===1&&k<CW_SINGLE_K)continue;if(c.n===1){cwMark(c.x,c.y,r,c.one===CW.sel);continue}
-      ctx.beginPath();ctx.arc(c.x,c.y,4.5,0,Math.PI*2);ctx.fillStyle='#8b5cf6';ctx.fill();ctx.lineWidth=1.4;ctx.strokeStyle=pal.halo;ctx.stroke()}
+      glyph('desk','#8b5cf6',c.x,c.y,r*6)}
     ctx.restore();return}
   CW.cl=null;CW.shown=null;
   for(const x of CW.vis){const p=camProj(x.v);if(!p||p[0]<-10||p[1]<-10||p[0]>W+10||p[1]>H+10)continue;
