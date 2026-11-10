@@ -28,7 +28,10 @@ const APP='whg-app-v1';
 async function appFile(req){const c=await caches.open(APP);const hit=await c.match(req);
   const net=fetch(req).then(res=>{if(res.ok)c.put(req,res.clone()).catch(()=>{});return res}).catch(()=>null);
   if(hit)return hit;const res=await net;return res||fetch(req)}
+async function pageFile(req){const c=await caches.open(APP);try{const res=await fetch(req,{cache:'no-store'});if(res.ok)c.put(req,res.clone()).catch(()=>{});return res}catch(err){const hit=await c.match(req);if(hit)return hit;throw err}}
 self.addEventListener('fetch',e=>{const req=e.request;if(req.method!=='GET')return;let u;try{u=new URL(req.url)}catch(err){return}
+  // the page itself always comes from the network (so a new version is seen at once), the cache only when offline
+  if(u.origin===self.location.origin&&(/\/$|\/index\.html$/.test(u.pathname)||req.mode==='navigate')){e.respondWith(pageFile(req));return}
   if(u.origin===self.location.origin&&/\/(assets|data)\/|\/$|\/index\.html$/.test(u.pathname)){e.respondWith(appFile(req));return}
   if(THUMB_HOSTS.includes(u.hostname)&&req.destination==='image'){e.respondWith(thumb(req));return}
   if(!HOSTS.includes(u.hostname))return;

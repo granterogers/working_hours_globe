@@ -39,10 +39,21 @@ async function pixelStats(page, png, box) {
   // 1. startup: the map is on screen soon, the loading message goes, and the older canvas is not shown first
   const t0 = Date.now();
   await page.goto(BASE + 'index.html?t=' + Date.now(), { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await page.waitForTimeout(1500);
+  // sampled every 50 ms from the page's first moments: the old canvas must never show while the page is still starting
+  // (the map can be ready within a second or two, so a single look could miss the startup)
   await step('startup hides the canvas while the map starts', async () => {
-    const s = await page.evaluate(() => ({ booting: document.body.classList.contains('booting'), canvasOp: getComputedStyle(document.getElementById('c')).opacity }));
-    check('canvas hidden while the map starts', s.booting && s.canvasOp === '0', JSON.stringify(s));
+    const s = await page.evaluate(() => new Promise(res => {
+      let bad = null, booting = 0, n = 0;
+      const iv = setInterval(() => {
+        const b = document.body.classList.contains('booting');
+        const op = getComputedStyle(document.getElementById('c')).opacity;
+        if (b) booting++;
+        if (b && op !== '0' && bad === null) bad = op;
+        n++;
+        if (!b || n > 300) { clearInterval(iv); res({ bad, booting, n }); }
+      }, 50);
+    }));
+    check('canvas hidden while the map starts', s.bad === null, 'samples ' + s.n + ', starting ' + s.booting + ', canvas shown early: ' + (s.bad === null ? 'no' : s.bad));
   });
   await page.waitForFunction(() => window.whg && window.whg.ready(), null, { timeout: 90000 }).catch(() => {});
   const readyIn = ((Date.now() - t0) / 1000).toFixed(1);

@@ -490,4 +490,4 @@ body:has(#info.show) .tourpill{display:none}
 .lyrb .bmtick>span:not(.lslot){min-width:0;overflow:hidden;text-overflow:ellipsis}
 
 /* while the map starts, the older canvas globe is kept out of sight; the map replaces it once it is ready */
-body.booting #c{opacity:0}
+body.booting #c{opacity:0;transition:none}

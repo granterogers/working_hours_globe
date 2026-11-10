@@ -1150,12 +1150,14 @@ async function openMap(){let el=m3d.el;
     const lon=-rot[0],lat=clamp(-rot[1],-85,85),zoom=fitZoom();
     try{const map=m3d.map=new lib.Map({container:'m3dmap',style:m3dStyleDef(),center:[lon,lat],zoom,pitch:0,bearing:0,maxPitch:85,attributionControl:false,hash:false,dragRotate:true,pitchWithRotate:true,maxTileCacheSize:3000,refreshExpiredTiles:false});
       map.on('rotate',northNeedle);map.on('pitch',()=>{northNeedle();setModeLabel(isTilted())});
+      // the map is shown once its style has loaded (or after 5 s at most): a single slow tile must not keep the page on 'Loading'
+      map.once('style.load',()=>{setTimeout(()=>mapReady(map),0)});setTimeout(()=>mapReady(map),5000);
       map.on('style.load',()=>{m3d.styleBusy=false;m3d.mode=null;m3dExtras(map);m3dSync();for(const l of map.getStyle().layers)if(l.type==='background')map.setPaintProperty(l.id,'background-color','#9ebdff');stars()});
       map.on('move',()=>{if(mapOn())syncFromMap();if(document.body.classList.contains('in3d'))skyFrame()});
       map.on('zoomend',()=>{m3dMode(map);m3dLimit(map)});map.on('moveend',()=>{if(m3d.me&&myLoc)m3dMe()});
       map.on('click',m3dClick);map.on('moveend',m3dWx);
       // the towns come from the map's vector tiles, which can arrive after the view has settled: the weather points are then re-picked
-      map.on('sourcedata',e=>{if(!e.isSourceLoaded||!showWeather)return;const sd=map.getStyle().sources[e.sourceId];if(!sd||sd.type!=='vector')return;clearTimeout(m3d.wxT2);m3d.wxT2=setTimeout(m3dWx,150)});map.on('load',()=>{m3dWx();m3dLimit(map);setTimeout(()=>mapReady(map),5000);map.once('render',()=>mapReady(map))});map.on('moveend',()=>m3dAboveGround(map));
+      map.on('sourcedata',e=>{if(!e.isSourceLoaded||!showWeather)return;const sd=map.getStyle().sources[e.sourceId];if(!sd||sd.type!=='vector')return;clearTimeout(m3d.wxT2);m3d.wxT2=setTimeout(m3dWx,150)});map.on('load',()=>{m3dWx();m3dLimit(map)});map.on('moveend',()=>m3dAboveGround(map));
       // the pointer turns into a hand over anything that can be clicked
       let hov=false;map.on('mousemove',e=>{if(hov)return;hov=true;const pt=e.point;requestAnimationFrame(()=>{hov=false;const h=map.queryRenderedFeatures(pt,{layers:HOVER_IDS.map(x=>M3D_OWN+x).filter(id=>map.getLayer(id))});map.getCanvas().style.cursor=h.length?'pointer':''})});
       m3dWheelButton(map);
@@ -2131,6 +2133,18 @@ const intro=()=>{if(matchMedia('(prefers-reduced-motion: reduce)').matches){k=kT
   fly={t0,dur:2200,ir:d3.interpolate(r0,r1),ik:t=>Math.log(0.7)+(Math.log(1)-Math.log(0.7))*t};kick();};
 intro();
 openMap();
+// the page checks for a newer version every minute and reloads itself, so nobody has to refresh by hand. It waits for a
+// quiet moment (no touch or key for 15 s) or for the tab to be hidden, so a reload never lands in the middle of a use.
+(function autoUpdate(){const cur=(document.querySelector('script[src*="assets/app.js"]')||{}).src||'';const curV=(/app\.js\?v=(\d+)/.exec(cur)||[])[1];
+  let lastTouch=Date.now(),pending=false,busy=false;
+  ['pointerdown','keydown','wheel','touchstart'].forEach(t=>window.addEventListener(t,()=>{lastTouch=Date.now()},{passive:true}));
+  async function check(){if(busy||!curV)return;busy=true;
+    try{const html=await fetch('index.html?t='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.text():'');const v=(/assets\/app\.js\?v=(\d+)/.exec(html)||[])[1];
+      if(v&&v!==curV){if(document.hidden||Date.now()-lastTouch>15000)location.reload();else pending=true}}
+    catch(e){}finally{busy=false}}
+  setInterval(()=>{if(!pending||Date.now()-lastTouch>15000||document.hidden)check()},60000);
+  document.addEventListener('visibilitychange',()=>{if(document.hidden){if(pending)location.reload()}else check()});
+})();
 const fontsReady=document.fonts?Promise.all([document.fonts.load(F.cn),document.fonts.load(F.pn),document.fonts.load(F.hr)]):Promise.resolve();
 fontsReady.then(()=>{for(const x in mcache)delete mcache[x];draw()});
 setTimeout(()=>document.getElementById('toast').classList.add('hide'),4500);
