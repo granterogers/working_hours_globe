@@ -990,6 +990,9 @@ window.whg={screen(lon,lat){if(document.body.classList.contains('in3d')&&m3d.map
   select:m=>pick(m),
   setPhotos:list=>{PH.tok++;PH.list=list.slice();PH.done=true;PH.failed=false;PH.radius=10000;PH.sig='';photosRender(true)},
   favourites:()=>favs.map(f=>({lon:f.lon,lat:f.lat,name:f.name})),
+  // the saved favourites, whole, so the tour can put back exactly the list it found
+  favouriteList:()=>JSON.parse(JSON.stringify(favs)),
+  setFavourites:list=>{favs=JSON.parse(JSON.stringify(list));saveFavs();renderFavs();draw();m3dSync()},
   coliving:()=>CL.vis.map(x=>({lon:x.lon,lat:x.lat})),
   cowork:()=>CW.vis.map(x=>({lon:x.lon,lat:x.lat})),
   weather:()=>(WX.shown||[]).map(p=>{const q=WX.pts.get(wxKey(p.lat,p.lon));return{lon:p.lon,lat:p.lat,temp:q?q.temp:null}}),
