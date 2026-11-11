@@ -189,7 +189,7 @@ function draw(){
   const stripEl=document.getElementById('strip');if(stripEl){const o=showHours?bA:0;if(stripEl._o!==o){stripEl._o=o;stripKey(o)}}
   // the country borders are fine and soft, so the colours sit under them rather than being cut up by them
   // the country borders are drawn on every base map: light over dark imagery, dark over the colours and pale maps
-  if(basemap!=='street'){const col=BM().dark&&LAY.hours<0.5?'rgba(255,255,255,.85)':'rgba(20,24,44,.8)';
+  if(basemap!=='street'){const col='#000000';
     // on the map types with vector tiles, the borders come from those tiles, so they are as fine as the map at every zoom
     const fine=(BM().labels||BM().fine)&&shown?drawFineBorders(col):0;
     if(!fine){ctx.globalAlpha=0.9;strokeFC(CB,col,k>4?1:0.7);ctx.globalAlpha=1}}
@@ -1043,7 +1043,7 @@ function m3dStyleDef(){const B=BM();
   return{version:8,glyphs:'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
     sources:{base:{type:'raster',tiles:[B.url],tileSize:256,maxzoom:B.max,attribution:B.attr},
       ofm:{type:'vector',url:'https://tiles.openfreemap.org/planet',attribution:'OpenFreeMap © OpenMapTiles · © OpenStreetMap contributors'}},
-    layers:[{id:'base',type:'raster',source:'base'}].concat(B.labels||B.fine?[{id:'fine-borders',type:'line',source:'ofm','source-layer':'boundary',filter:['all',['<=',['get','admin_level'],2],['!=',['get','maritime'],1]],paint:{'line-color':'#ffffff','line-opacity':0.85,'line-width':['interpolate',['linear'],['zoom'],2,0.7,7,1.2,12,2]}}]:[]).concat(B.labels?[
+    layers:[{id:'base',type:'raster',source:'base'}].concat(B.labels||B.fine?[{id:'fine-borders',type:'line',source:'ofm','source-layer':'boundary',filter:['all',['<=',['get','admin_level'],2],['!=',['get','maritime'],1]],paint:{'line-color':'#000000','line-opacity':0.85,'line-width':['interpolate',['linear'],['zoom'],2,0.7,7,1.2,12,2]}}]:[]).concat(B.labels?[
       {id:'water-names',type:'symbol',source:'ofm','source-layer':'water_name',layout:{'text-field':NAME_EN,'text-font':['Noto Sans Italic'],'text-size':13},paint:{'text-color':B.dark?'#cfe8ff':'#2c66a3','text-halo-color':B.dark?'rgba(0,0,0,.7)':'#fff','text-halo-width':1.4}},
       {id:'peaks',type:'symbol',source:'ofm','source-layer':'mountain_peak',minzoom:10,filter:['has','ele'],layout:{'text-field':['concat',NAME_EN,'\n',['to-string',['get','ele']],' m'],'text-font':['Noto Sans Regular'],'text-size':11},paint:{'text-color':'#fff','text-halo-color':'rgba(0,0,0,.75)','text-halo-width':1.3}},
       // the place names are split by kind, so the zoom can show each kind from its own zoom level (see placeZoom)
@@ -1368,7 +1368,7 @@ function m3dApply(){if(!m3d||!m3d.map||m3d.styleBusy)return;const map=m3d.map;
   set(M3D_OWN+'tz','fill-opacity',ramp(L.hours,[[zA,op],[zB,0]]));
   // the country borders are on every base map: light over dark imagery, dark over the colours and pale maps
   // on the satellite-type maps the borders are the vector tiles' own lines ('fine-borders'), so the coarser set steps aside
-  const vecB=!!(BM().labels||BM().fine)&&basemap!=='street',bcol=BM().dark&&L.hours<0.5?'#ffffff':'#141a2c';
+  const vecB=!!(BM().labels||BM().fine)&&basemap!=='street',bcol='#000000';
   set(M3D_OWN+'cb','line-opacity',vecB?0:0.9);set(M3D_OWN+'coast','line-opacity',vecB?0.9:0);set(M3D_OWN+'coast','line-color',bcol);set(M3D_OWN+'cb','line-color',bcol);set('fine-borders','line-color',bcol);
   set(M3D_OWN+'lab','text-opacity',L.hours);
   set(M3D_OWN+'cl','icon-opacity',L.cl);
@@ -1419,7 +1419,7 @@ function coastFeed(map){if(!map||!map.getStyle())return;const B=BM();
   COAST.key=key;
   const data={type:'FeatureCollection',features:feats};
   try{if(map.getSource(M3D_OWN+'coast'))map.getSource(M3D_OWN+'coast').setData(data);else map.addSource(M3D_OWN+'coast',{type:'geojson',data})}catch(e){return}
-  if(!map.getLayer(M3D_OWN+'coast'))try{map.addLayer({id:M3D_OWN+'coast',type:'line',source:M3D_OWN+'coast',layout:{'line-join':'round','line-cap':'round'},paint:{'line-color':'#ffffff','line-width':['interpolate',['linear'],['zoom'],4,0.6,9,1,14,1.4],'line-opacity':0.9}})}catch(e){}
+  if(!map.getLayer(M3D_OWN+'coast'))try{map.addLayer({id:M3D_OWN+'coast',type:'line',source:M3D_OWN+'coast',layout:{'line-join':'round','line-cap':'round'},paint:{'line-color':'#000000','line-width':['interpolate',['linear'],['zoom'],4,0.6,9,1,14,1.4],'line-opacity':0.9}})}catch(e){}
   // tiles still loading: look again shortly, a few times
   if(missing&&COAST.retry<8){COAST.retry++;COAST.key='';setTimeout(()=>coastFeed(map),1200)}else COAST.retry=0}
 function prefetchTiles(map){const B=BM();if(!B.url||basemap==='street'||map.getZoom()<2.5)return;
