@@ -83,6 +83,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .info .big i{width:12px;height:12px;border-radius:50%}
 .info .bandname{font-size:.84rem;color:var(--ink2);margin:2px 0 10px}
 .info dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0;font-size:.86rem}
+.info .meta{gap:11px 18px;margin:14px 0 6px}
+.info h2+.meta{margin-top:14px}
 .info dt{color:var(--ink2)} .info dd{margin:0;font-variant-numeric:tabular-nums}
 .info .x{all:unset;position:absolute;right:14px;top:12px;cursor:pointer;color:var(--ink2);font-size:1.2rem}
 

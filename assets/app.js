@@ -917,8 +917,8 @@ function setShow(k,v){if(k==='hours'){showHours=v;try{localStorage.setItem('whg.
 const LYI={
   hours:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
   fav:'<svg viewBox="0 0 24 24"><path d="M12 20.5c-4.6-3.1-8-6.4-8-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 8 2.7c0 3.8-3.4 7.1-8 10.2z" fill="#ff4f87" stroke="#fff" stroke-width="1.5"/></svg>',
-  cl:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="#2fb36a" stroke="#fff" stroke-width="2"/></svg>',
-  cw:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="#8b5cf6" stroke="#fff" stroke-width="1.5"/></svg>',
+  cl:'<svg viewBox="0 0 24 24"><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="#2fb36a" stroke="#fff" stroke-width="1.5"/><path transform="translate(12 12) scale(.66) translate(-12 -12)" d="M12 3.2 21 11.2h-2.6V20h-4.9v-5.4h-2v5.4H5.6v-8.8H3z" fill="#fff"/></svg>',
+  cw:'<svg viewBox="0 0 24 24"><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="#8b5cf6" stroke="#fff" stroke-width="1.5"/><path transform="translate(12 12) scale(.66) translate(-12 -12)" d="M8.5 2.5h7v3.9h-7zM3 6.6h18v2.6H3zM4.5 9.2h2.3V20H4.5zM17.2 9.2h2.3V20h-2.3z" fill="#fff"/></svg>',
   names:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12.5V5a2 2 0 0 1 2-2h7.5l8.5 8.5-9.5 9.5z"/><circle cx="8" cy="8" r="1.6" fill="currentColor"/></svg>',
   weather:()=>`<img src="data:image/svg+xml,${encodeURIComponent(WXI.psun)}" alt="">`,
   night:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#ffc83d"/><path d="M12 3a9 9 0 0 1 0 18z" fill="#24305a"/><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
@@ -1177,7 +1177,7 @@ async function openMap(){let el=m3d.el;
       map.once('style.load',()=>{setTimeout(()=>mapReady(map),0)});setTimeout(()=>mapReady(map),5000);
       map.on('style.load',()=>{m3d.styleBusy=false;m3d.mode=null;m3dExtras(map);m3dSync();for(const l of map.getStyle().layers)if(l.type==='background')map.setPaintProperty(l.id,'background-color','#9ebdff');stars()});
       map.on('move',()=>{if(mapOn())syncFromMap();if(document.body.classList.contains('in3d'))skyFrame()});
-      map.on('zoomend',()=>{m3dMode(map);m3dLimit(map)});map.on('moveend',()=>{if(m3d.me&&myLoc)m3dMe()});
+      map.on('zoomend',()=>{m3dMode(map);m3dLimit(map)});map.on('moveend',()=>{if(m3d.me&&myLoc)m3dMe();prefetchTiles(map)});
       map.on('click',m3dClick);map.on('moveend',m3dWx);
       // the towns come from the map's vector tiles, which can arrive after the view has settled: the weather points are then re-picked
       map.on('sourcedata',e=>{if(!e.isSourceLoaded||!showWeather)return;const sd=map.getStyle().sources[e.sourceId];if(!sd||sd.type!=='vector')return;clearTimeout(m3d.wxT2);m3d.wxT2=setTimeout(m3dWx,150)});map.on('load',()=>{m3dWx();m3dLimit(map)});map.on('moveend',()=>m3dAboveGround(map));
@@ -1278,11 +1278,13 @@ function nightFeaturesGeo(){if(NIGHT3D.f&&Date.now()-NIGHT3D.t<60000)return NIGH
       feats.push({type:'Feature',properties:{a:alpha},geometry:{type:'Polygon',coordinates:[ring]}})}}
   NIGHT3D={t:Date.now(),f:{type:'FeatureCollection',features:feats}};return NIGHT3D.f}
 setInterval(()=>{if(showNight&&m3d&&m3d.map&&!m3d.el.hidden)m3dSync()},60000);
+const SRC_KEY={};
 function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.getStyle())return}catch(e){return}
   if(m3d.styleBusy)return;
   try{g=m3dGeo()}catch(e){console.warn('3D layers paused:',e&&e.message);return}
-  const src=(id,data)=>{const s=map.getSource(M3D_OWN+id);if(s)s.setData(data);else map.addSource(M3D_OWN+id,{type:'geojson',data})};
-  try{src('tz',g.tz);src('cb',g.cb);src('lab',g.lab);src('cl',g.cl);src('fv',g.fv);src('ov',g.ov);src('wx',g.wx);src('cm',g.cm);src('cwk',g.cwk)}catch(e){console.warn('3D sources paused:',e&&e.message);return}
+  // a source is only sent again when its data has changed, so the big shapes are not rebuilt at every move
+  const src=(id,data,key)=>{const s=map.getSource(M3D_OWN+id);if(s&&key!==undefined&&SRC_KEY[id]===key)return;SRC_KEY[id]=key;if(s)s.setData(data);else map.addSource(M3D_OWN+id,{type:'geojson',data})};
+  try{src('tz',g.tz,[on('hours'),season,S,E,dark].join());src('cb',g.cb,'static');src('lab',g.lab,[on('hours'),showNames,season,S,E].join());src('cl',g.cl);src('fv',g.fv);src('ov',g.ov);src('wx',g.wx);src('cm',g.cm);src('cwk',g.cwk)}catch(e){console.warn('3D sources paused:',e&&e.message);return}
   const font=['Noto Sans Bold'],dk=BM().dark||false;
   const lay=(def,before)=>{if(!map.getLayer(def.id))try{map.addLayer(def,before)}catch(e){console.warn('3D layer not added:',def.id,e&&e.message)}};
   // working-hours colours fade out as you zoom in, like on the globe
@@ -1304,7 +1306,6 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
   if(map.getLayer(M3D_OWN+'cl')&&map.getLayer(M3D_OWN+'cl').type!=='symbol')try{map.removeLayer(M3D_OWN+'cl')}catch(e){}
   for(const t of['p','u','f'])if(!map.hasImage('cl-house-'+t))map.addImage('cl-house-'+t,imgData(badge('house',CLT[t].col)),{pixelRatio:2});
   lay({id:M3D_OWN+'cl',type:'symbol',source:M3D_OWN+'cl',layout:{'icon-image':['get','ic'],'icon-size':['interpolate',['linear'],['zoom'],2,0.5,8,0.75,14,0.95],'icon-allow-overlap':true}});
-  lay({id:M3D_OWN+'cln',type:'symbol',source:M3D_OWN+'cl',minzoom:9,layout:{'text-field':['get','n'],'text-font':font,'text-size':11,'text-offset':[0,-1.6],'text-anchor':'bottom','text-optional':true},paint:{'text-color':dk?'#fff':'#14213d','text-halo-color':dk?'rgba(0,0,0,.75)':'#fff','text-halo-width':1.4}});
   lay({id:M3D_OWN+'fv',type:'symbol',source:M3D_OWN+'fv',layout:{'icon-image':'fav-heart','icon-size':0.8,'icon-allow-overlap':true,'icon-anchor':'bottom'}});
   lay({id:M3D_OWN+'fvn',type:'symbol',source:M3D_OWN+'fv',layout:{'text-field':['get','n'],'text-font':font,'text-size':12,'text-offset':[0,-1.3],'text-anchor':'bottom'},paint:{'text-color':dk?'#fff':'#14213d','text-halo-color':dk?'rgba(0,0,0,.75)':'#fff','text-halo-width':1.5}});
   lay({id:M3D_OWN+'lab',type:'symbol',source:M3D_OWN+'lab',layout:{'text-field':['get','t'],'text-font':font,'text-size':['match',['get','r'],1,13,11.5],'text-line-height':1.25,'text-padding':6},
@@ -1333,7 +1334,6 @@ function m3dApply(){if(!m3d||!m3d.map||m3d.styleBusy)return;const map=m3d.map;
   set(M3D_OWN+'cb','line-opacity',0.9);set(M3D_OWN+'cb','line-color',BM().dark&&L.hours<0.5?'rgba(255,255,255,.85)':'rgba(20,24,44,.8)');
   set(M3D_OWN+'lab','text-opacity',L.hours);
   set(M3D_OWN+'cl','icon-opacity',L.cl);
-  set(M3D_OWN+'cln','text-opacity',L.cl);
   set(M3D_OWN+'fv','icon-opacity',L.fav);set(M3D_OWN+'fvn','text-opacity',L.fav);
   set(M3D_OWN+'cm','icon-opacity',L.cams);
   set(M3D_OWN+'cws','icon-opacity',L.cw);
@@ -1353,10 +1353,28 @@ function wxTowns(map){const src=Object.entries(map.getStyle().sources).find(([k,
     const key=name+'|'+lat.toFixed(2)+'|'+lon.toFixed(2);if(seen.has(key))continue;seen.add(key);
     out.push({name,lat,lon,v:vec(lon,lat),pri:cl*100-(+pr.rank||50)/100,town:true})}
   return out}
+// the raster tiles around the view are fetched ahead of a pan, so they are already there when the map needs them. The
+// service worker keeps every tile it fetches, so the map gets them at once instead of flickering in as you move.
+const PF={seen:new Set(),q:[],busy:0};
+function prefetchTiles(map){const B=BM();if(!B.url||basemap==='street'||map.getZoom()<2.5)return;
+  const z0=Math.min(B.max,Math.floor(map.getZoom())),n=2**z0,b=map.getBounds();
+  const tx=lng=>Math.floor((lng+180)/360*n),ty=lat=>{const r=lat*Math.PI/180;return Math.floor((1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*n)};
+  const x0=tx(b.getWest()),x1=tx(b.getEast()),y0=Math.max(0,ty(b.getNorth())),y1=Math.min(n-1,ty(b.getSouth()));
+  const add=(z,x,y)=>{const u=B.url.replace('{z}',z).replace('{x}',x).replace('{y}',y);if(PF.seen.has(u))return;PF.seen.add(u);PF.q.push(u)};
+  if(PF.seen.size>6000)PF.seen.clear();
+  // two tiles all round the view at this zoom, and the view itself one zoom in
+  for(let x=x0-2;x<=x1+2;x++)for(let y=y0-2;y<=y1+2;y++)if(y>=0&&y<n)add(z0,((x%n)+n)%n,y);
+  if(z0+1<=B.max&&(x1-x0+1)*(y1-y0+1)<=40)for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++){add(z0+1,2*x,2*y);add(z0+1,2*x+1,2*y);add(z0+1,2*x,2*y+1);add(z0+1,2*x+1,2*y+1)}
+  pumpPrefetch()}
+function pumpPrefetch(){while(PF.busy<4&&PF.q.length){const u=PF.q.shift();PF.busy++;
+  fetch(u,{mode:'cors'}).then(r=>{if(r.body&&r.body.cancel)r.body.cancel()}).catch(()=>{}).finally(()=>{PF.busy--;pumpPrefetch()})}}
 function m3dWx(){const map=m3d.map;if(!map||!showWeather||m3d.el.hidden)return;const c=wxCities();if(!c)return;
   const W3=map.getContainer().clientWidth,H3=map.getContainer().clientHeight,b=map.getBounds(),dense=map.getZoom()>=5;
   const cap=dense?clamp(Math.round(W3*H3/(map.getZoom()>=8?30000:50000)),6,28):clamp(Math.round(W3*H3/60000),8,30),at=[],out=[];
-  const pool=(dense?wxTowns(map).filter(p=>b.contains([p.lon,p.lat])):[]).concat(c.filter(p=>b.contains([p.lon,p.lat]))).sort((a,b)=>b.pri-a.pri);
+  const pk=p=>p.name+'|'+p.lat.toFixed(2)+'|'+p.lon.toFixed(2),old=new Set((WX.shown3d||[]).map(pk));
+  const all=(dense?wxTowns(map).filter(p=>b.contains([p.lon,p.lat])):[]).concat(c.filter(p=>b.contains([p.lon,p.lat]))).sort((a,b)=>b.pri-a.pri);
+  // the points already on show come first, so they stay put while you pan instead of blinking in and out
+  const pool=all.filter(p=>old.has(pk(p))).concat(all.filter(p=>!old.has(pk(p))));
   for(const p of pool){if(out.length>=cap)break;const q=map.project([p.lon,p.lat]);if(!isFinite(q.x)||q.x<40||q.y<70||q.x>W3-40||q.y>H3-30)continue;
     // each point is a name and a temperature, about 120 px wide and 40 px tall: their boxes don't overlap, and the number is kept modest
     const clash=a=>dense?Math.abs(a[0]-q.x)<120&&Math.abs(a[1]-q.y)<40:Math.hypot(a[0]-q.x,a[1]-q.y)<140;
