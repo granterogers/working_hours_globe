@@ -1210,7 +1210,7 @@ async function openMap(){let el=m3d.el;
       map.on('rotate',northNeedle);map.on('pitch',()=>{northNeedle();setModeLabel(isTilted())});
       // the map is shown once its style has loaded (or after 5 s at most): a single slow tile must not keep the page on 'Loading'
       map.once('style.load',()=>{setTimeout(()=>mapReady(map),0)});setTimeout(()=>mapReady(map),5000);
-      map.on('style.load',()=>{m3d.styleBusy=false;m3d.mode=null;m3dExtras(map);m3dSync();for(const l of map.getStyle().layers)if(l.type==='background')map.setPaintProperty(l.id,'background-color','#9ebdff');stars()});
+      map.on('style.load',()=>{m3d.styleBusy=false;m3d.mode=null;m3dExtras(map);m3dSync();if(basemap!=='street')for(const l of map.getStyle().layers)if(l.type==='background')map.setPaintProperty(l.id,'background-color','#9ebdff');stars()});
       map.on('move',()=>{if(mapOn())syncFromMap();if(document.body.classList.contains('in3d'))skyFrame()});
       map.on('zoomend',()=>{m3dMode(map);m3dLimit(map)});map.on('moveend',()=>{if(m3d.me&&myLoc)m3dMe();prefetchTiles(map);coastFeed(map)});
       map.on('click',m3dClick);map.on('moveend',m3dWx);
