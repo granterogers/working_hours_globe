@@ -95,7 +95,7 @@ for f in json.load(open_utf8('ne50.geojson'))['features']:
 for f in json.load(open_utf8('ne10.geojson'))['features']:
     g=shape(f['geometry'])
     if g.is_empty: continue
-    s=clean(g,0.006,0.00002)
+    s=clean(g,0.0008,0.000002)
     if s: cfeat.append({"type":"Feature","properties":{"z":tz_at(*g.representative_point().coords[0])},"geometry":rnd(s,3)})
 prov=[];pfeat=[];ctz={}
 for f in json.load(open_utf8('adm1.geojson'))['features']:
@@ -124,7 +124,7 @@ for f in feats:
     g=clean(shape(f['geometry']),0.07,0.004)
     if g: tzM.append({"type":"Feature","properties":f['properties'],"geometry":rnd(g,2)})
 for f in cfeat:
-    g=clean(shape(f['geometry']),0.015,0.0005)
+    g=clean(shape(f['geometry']),0.02,0.0005)
     if g: cbM.append({"type":"Feature","properties":f['properties'],"geometry":rnd(g,3)})
 for f in pfeat:
     g=clean(shape(f['geometry']),0.08,0.01)
@@ -166,16 +166,21 @@ def lines(fc,n=60,p=2):
                     out.append({"type":"Feature","properties":{},"geometry":{"type":"MultiLineString","coordinates":[c[i:i+n+1]]}})
     return out
 feats=tile(feats,5);tzM=tile(tzM,10);tzL=tile(tzL,10);gaps=tile(gaps,10)
-cfeat=lines(cfeat,60,3);cbM=lines(cbM,60,3);cbL=lines(cbL,200,2)
+cfeat=lines(cfeat,80,4);cbM=lines(cbM,60,2);cbL=lines(cbL,200,2)
 pfeat=lines(pfeat,80,2);pbM=lines(pbM,80)
 print("tiles",len(feats),len(tzM),"lines",len(cfeat),len(pfeat))
 data={"zones":zoneinfo,"tzM":{"type":"FeatureCollection","features":tzM},"cbM":{"type":"FeatureCollection","features":cbM},
       "gaps":{"type":"FeatureCollection","features":gaps},"tzL":{"type":"FeatureCollection","features":tzL},"cbL":{"type":"FeatureCollection","features":cbL},"tz":{"type":"FeatureCollection","features":feats},
-      "countries":countries,"cb":{"type":"FeatureCollection","features":cfeat},
+      "countries":countries,
       "prov":prov}
 s=json.dumps(data,separators=(',',':'),ensure_ascii=False)
 open(OUT,'w',encoding='utf-8').write(s)
 print('Wrote',os.path.normpath(OUT))
+# the fine country borders are a separate file, fetched the first time the map is zoomed in
+HI_OUT=os.path.join(HERE,'..','data','borders-hi.json')
+hs=json.dumps({"type":"FeatureCollection","features":cfeat},separators=(',',':'),ensure_ascii=False)
+open(HI_OUT,'w',encoding='utf-8').write(hs)
+print('Wrote',os.path.normpath(HI_OUT),len(hs.encode())//1024,'KB')
 for k in data: print(k, len(json.dumps(data[k],separators=(',',':')))//1024,"KB")
 print("total",len(s.encode())//1024,"KB")
 

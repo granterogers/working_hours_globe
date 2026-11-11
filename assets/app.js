@@ -19,7 +19,7 @@ function hourColour(h){const b=BANDS.find(q=>h>=q.lo&&h<q.hi)||BANDS[5];return b
 const HOUR_BINS=24;   // band index = start hour minus 5, so 0 is 05:00 and 23 is 04:00
 function bandName(bin){const h=bin+5;const b=BANDS.find(q=>h>=q.lo&&h<q.hi)||BANDS[5];return b.name}
 function bandSub(bin){const h=bin+5;return(BANDS.find(q=>h>=q.lo&&h<q.hi)||BANDS[5]).sub}
-const DEG=180/Math.PI, MINK=0.85, MAXK=9000;
+const DEG=180/Math.PI, MINK=0.93, MAXK=9000;
 let S=12,E=20,season=0,W=0,H=0,dpr=1,base=300,cx=0,cy=0;
 // the layers start in the same state on every launch: working hours, favourites and day and night on, the rest off
 let showNight=true,showFavs=true,showCw=false,showCams=false,showWeather=false,showNames=false,showHours=true;
@@ -39,7 +39,7 @@ function pack(f){const g=f.geometry;const ps=g.type==='Polygon'?[g.coordinates]:
   ps.forEach(p=>p.forEach(r=>{const a=new Float32Array(r.length*3);for(let i=0;i<r.length;i++){const L=r[i][0]*RAD,B=r[i][1]*RAD,cb=Math.cos(B);a[i*3]=cb*Math.cos(L);a[i*3+1]=cb*Math.sin(L);a[i*3+2]=Math.sin(B)}f.rings.push(a)}));}
 // the 2D globe draws from packed rings; the country borders also keep their lines (f.geo) for the 3D map's border layer
 function prep(fc,keep){fc.features.forEach(f=>{if(f.geometry){cap(f);pack(f);if(keep)f.geo=f.geometry;else delete f.geometry.coordinates;f.geometry=1}});return fc}
-TZHIT.features.forEach(f=>fixGeom(f.geometry));['tz','tzL','tzM','gaps'].forEach(n=>prep(D[n]));['cb','cbL','cbM'].forEach(n=>prep(D[n],true));
+TZHIT.features.forEach(f=>fixGeom(f.geometry));['tz','tzL','tzM','gaps'].forEach(n=>prep(D[n]));['cbL','cbM'].forEach(n=>prep(D[n],true));
 const csize=c=>{const b=c[5];let w=b[2]-b[0];if(w>300)w=160;return Math.max(w,b[3]-b[1])};
 const cByIso={};D.countries.forEach(c=>{c.size=csize(c);c.np=0;cByIso[c[4]]=c});
 D.prov.forEach(p=>{const c=cByIso[p[4]];if(c)c.np++;p.v=vec(p[1],p[2])});D.countries.forEach(c=>c.v=vec(c[1],c[2]));
@@ -124,11 +124,16 @@ const utc=o=>{const u=o+(season?1:0),a=Math.abs(u),h=Math.floor(a),m=Math.round(
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 // sizing
-function resize(){dpr=Math.min(window.devicePixelRatio||1,2);const r=cv.getBoundingClientRect();W=r.width;H=r.height;cv.width=W*dpr;cv.height=H*dpr;
+function resize(){try{if(m3d&&m3d.map)m3d.map.setMinZoom(m3dMinZoom())}catch(e){}dpr=Math.min(window.devicePixelRatio||1,2);const r=cv.getBoundingClientRect();W=r.width;H=r.height;cv.width=W*dpr;cv.height=H*dpr;
   base=Math.min(W,H)/2*0.86;cx=W/2;cy=H/2+(W<=700?-20:0);proj.translate([cx,cy]).clipExtent([[0,0],[W,H]]);stars();draw();}
 
 // visibility cap of the viewport for culling
 let viewCap=null;
+// the fine country borders are a separate file, fetched the first time the map is zoomed in close
+let hiP=null;function loadHi(){if(D.cbHi||hiP)return hiP;
+  hiP=fetch('data/borders-hi.json').then(r=>{if(!r.ok)throw new Error(r.status);return r.json()}).then(j=>{D.cbHi=prep(j,true);draw();if(mapOn())m3dSync()}).catch(()=>{hiP=null});return hiP}
+// the smallest the globe may be: its radius is 40% of the shorter side of the window, on the 2D globe and the 3D map alike
+function m3dMinZoom(){const r=0.4*Math.min(innerWidth,innerHeight);return Math.max(0,Math.log2(r/81.49))}
 function computeView(){const s=base*k;const far=Math.max(Math.hypot(cx,cy),Math.hypot(W-cx,cy),Math.hypot(cx,H-cy),Math.hypot(W-cx,H-cy));
   const rho=(far>=s?Math.PI/2:Math.asin(far/s))+0.02;viewCap=[[-rot[0],-rot[1]],rho];VC=vec(-rot[0],-rot[1]);VR=rho;CR=Math.cos(rho);SR=Math.sin(rho);}
 let VC=[1,0,0],VR=1,CR=0,SR=1;
@@ -170,7 +175,8 @@ function draw(){
   // drawn, and the finer one once it comes to rest, which keeps spinning and zooming smooth
   const moving=viewMoving=dragging||!!fly||vel[0]!==0||vel[1]!==0||Math.abs(Math.log(kT/k))>0.002;
   const lv=moving?0:k<2.5?0:k<5?1:2;
-  const TZ=[D.tzL,D.tzM,D.tz][lv],CB=[D.cbL,D.cbM,D.cb][lv];
+  if(lv===2&&!D.cbHi)loadHi();
+  const TZ=[D.tzL,D.tzM,D.tz][lv],CB=[D.cbL,D.cbM,D.cbHi||D.cbM][lv];
   // the base map is drawn underneath at every zoom. With working hours on, the land is covered by the colours,
   // opaque, with the country borders on top; they fade as you zoom in towards a country, and the base map shows
   // through. The sea has no colour, so the base map shows there.
@@ -1171,7 +1177,7 @@ async function openMap(){let el=m3d.el;
   m3d.opening=(async()=>{let lib;try{lib=await m3dLoad()}catch(e){msg.textContent='The 3D view couldn’t load. Check your connection and try again.';msg.hidden=false;showCanvasFallback();return}
     // start exactly where the globe was: same centre, same scale
     const lon=-rot[0],lat=clamp(-rot[1],-85,85),zoom=fitZoom();
-    try{const map=m3d.map=new lib.Map({container:'m3dmap',style:m3dStyleDef(),center:[lon,lat],zoom,pitch:0,bearing:0,maxPitch:85,attributionControl:false,hash:false,dragRotate:true,pitchWithRotate:true,maxTileCacheSize:3000,refreshExpiredTiles:false});
+    try{const map=m3d.map=new lib.Map({container:'m3dmap',style:m3dStyleDef(),center:[lon,lat],zoom,minZoom:m3dMinZoom(),pitch:0,bearing:0,maxPitch:85,attributionControl:false,hash:false,dragRotate:true,pitchWithRotate:true,maxTileCacheSize:3000,refreshExpiredTiles:false});
       map.on('rotate',northNeedle);map.on('pitch',()=>{northNeedle();setModeLabel(isTilted())});
       // the map is shown once its style has loaded (or after 5 s at most): a single slow tile must not keep the page on 'Loading'
       map.once('style.load',()=>{setTimeout(()=>mapReady(map),0)});setTimeout(()=>mapReady(map),5000);
@@ -1284,7 +1290,9 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
   try{g=m3dGeo()}catch(e){console.warn('3D layers paused:',e&&e.message);return}
   // a source is only sent again when its data has changed, so the big shapes are not rebuilt at every move
   const src=(id,data,key)=>{const s=map.getSource(M3D_OWN+id);if(s&&key!==undefined&&SRC_KEY[id]===key)return;SRC_KEY[id]=key;if(s)s.setData(data);else map.addSource(M3D_OWN+id,{type:'geojson',data})};
-  try{src('tz',g.tz,[on('hours'),season,S,E,dark].join());src('cb',g.cb,'static');src('lab',g.lab,[on('hours'),showNames,season,S,E].join());src('cl',g.cl);src('fv',g.fv);src('ov',g.ov);src('wx',g.wx);src('cm',g.cm);src('cwk',g.cwk)}catch(e){console.warn('3D sources paused:',e&&e.message);return}
+  // the country borders: the fine set once the map is zoomed in, the medium set further out
+  const hiB=map.getZoom()>=4;if(hiB&&!D.cbHi)loadHi();const useHi=hiB&&!!D.cbHi,cbSet=useHi?D.cbHi:D.cbM;
+  try{src('tz',g.tz,[on('hours'),season,S,E,dark].join());src('cb',{type:'FeatureCollection',features:cbSet.features.filter(f=>f.geo).map(f=>({type:'Feature',properties:{},geometry:f.geo}))},useHi?'hi':'mid');src('lab',g.lab,[on('hours'),showNames,season,S,E].join());src('cl',g.cl);src('fv',g.fv);src('ov',g.ov);src('wx',g.wx);src('cm',g.cm);src('cwk',g.cwk)}catch(e){console.warn('3D sources paused:',e&&e.message);return}
   const font=['Noto Sans Bold'],dk=BM().dark||false;
   const lay=(def,before)=>{if(!map.getLayer(def.id))try{map.addLayer(def,before)}catch(e){console.warn('3D layer not added:',def.id,e&&e.message)}};
   // working-hours colours fade out as you zoom in, like on the globe
