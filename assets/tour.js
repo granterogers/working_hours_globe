@@ -9,7 +9,7 @@ const $=s=>document.querySelector(s);
 // the first element matching `sel` that is actually on screen (panels and galleries stay in the page while hidden)
 const shown=sel=>[...document.querySelectorAll(sel)].find(e=>{const r=e.getBoundingClientRect();return r.width>1&&r.height>1})||null;
 const ABORT={};
-const PAD=10,GAP=18,EDGE=12;
+const PAD=3,GAP=18,EDGE=12;
 // sample photos for the tour, from Wikimedia Commons (CC BY-SA 4.0), used only when the live services have none nearby
 const SAMPLES=[['photo-1.jpg','Forte da Esquerda','FortSimplicio1.jpg',1900],['photo-2.jpg','Fort of Carvalha','FortofCarvalha1.jpg',2400],
   ['photo-3.jpg','Forte da Retaguarda','ForteNovo1.jpg',2000],['photo-4.jpg','Fort of Alqueidão','FortAlqueid%C3%A3o4.jpg',2000]]
@@ -37,7 +37,7 @@ async function untilP(test,ms){const end=Date.now()+ms;for(;;){let ok=false;try{
 // the cursor glides to a point, makes a ripple, and then the element is clicked (found again at the moment of the click)
 async function moveTo(x,y){cursor.classList.add('on');cursor.style.transform=`translate(${x-4}px,${y-3}px)`;await wait(700)}
 function ripple(){cursor.classList.remove('tap');void cursor.offsetWidth;cursor.classList.add('tap')}
-async function tap(sel){const el=shown(sel);if(!el){console.warn('Tour could not find:',sel);return false}
+async function tap(sel){const el=shown(sel);if(!el){console.warn('Tour could not find:',sel);const hidden=document.querySelector(sel);if(hidden)hidden.click();return false}
   const r=el.getBoundingClientRect();await moveTo(r.left+r.width/2,r.top+r.height/2);ripple();await wait(220);
   (shown(sel)||el).click();await wait(140);return true}
 // the cursor points at a place on the map (the map itself is not clicked)
@@ -57,11 +57,14 @@ async function switchBase(id){await bmOpen(true);await tap(`#bmmenu [data-id="${
 // the shift start time is changed through its input, one hour at a time, so the colours visibly move
 async function setShift(times){const s=$('#s');if(!s)return;for(const t of times){s.value=t;s.dispatchEvent(new Event('input',{bubbles:true}));await wait(500)}}
 // type a place into the search box letter by letter, choose the first match, then fly on to the city
+// a city the tour names is chosen from its own entry, so the search never lands on a different place of the same name
 async function searchPlace(text){await tap('#q');const q=$('#q');q.value='';q.dispatchEvent(new Event('input'));
   for(const ch of text){q.value+=ch;q.dispatchEvent(new Event('input',{bubbles:true}));await wait(90)}
-  await wait(500);await tap('#res li button');await until(()=>{const i=$('#info');return!!i&&i.classList.contains('show')},6000);
-  await wait(900);
-  if(CITIES[text]){window.whg.select(CITIES[text]);await until(()=>{const i=$('#info');return!!i&&i.classList.contains('show')},6000);await wait(1600)}}
+  await wait(600);
+  if(CITIES[text]){
+    // the city is picked the way a search result is: the globe flies to it and its card opens
+    window.whg.select(CITIES[text]);await until(()=>{const i=$('#info');return!!i&&i.classList.contains('show')},6000);await wait(1600);return}
+  await tap('#res li button');await until(()=>{const i=$('#info');return!!i&&i.classList.contains('show')},6000);await wait(1200)}
 async function zoomOut(){window.whg.zoomTo(1);await wait(1200)}
 // turn the globe a number of degrees over a number of milliseconds
 async function spin(deg,ms){const t0=performance.now();let last=t0;
@@ -74,8 +77,7 @@ async function orbitCity([lon,lat],halfway){const map=window.whg.map3d();if(!map
   map.easeTo({bearing:b0+180,duration:6000,easing:t=>t});await wait(3000);if(halfway)await halfway();
   await wait(1200);map.easeTo({bearing:map.getBearing()+120,duration:3000,easing:t=>t});await wait(3200)}
 // the photo gallery is closed by its own ×, and by Escape if that doesn't work, so it can't cover the rest of the tour
-async function closeGallery(){for(let n=0;n<3;n++){const box=$('.phbox');if(!box||box.hidden)return;const x=$('.phbox .phx');if(x)x.click();await wait(350)}
-  const box=$('.phbox');if(box&&!box.hidden)document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await wait(250)}
+async function closeGallery(){for(let n=0;n<4;n++){const box=$('.phbox');if(!box||box.hidden)return;const x=$('.phbox .phx');if(x)x.click();await wait(350)}}
 
 // ---- the steps --------------------------------------------------------------------------------------------------------
 // Each step: title, text, target (a selector that is on screen while the step shows, or null), and enter() which sets the
@@ -151,7 +153,7 @@ const STEPS=[
     text:'The current temperature at each place shown. The glowing point reads the temperature right now.',
     enter:async()=>{await searchPlace('Madrid');await setLayer('weather',true);
       await until(()=>window.whg.weather().some(p=>p.temp!=null),9000);
-      const p=nearest(window.whg.weather().filter(p=>p.temp!=null),{lon:MADRID[0],lat:MADRID[1]});
+      const p=nearest(window.whg.weather().filter(p=>p.temp!=null),MADRID);
       if(p)glow(p.lon,p.lat,Math.round(p.temp)+'°C');await wait(1100)}},
   {title:'The forecast',target:'#wx',
     text:'Click Weather on any place card to see the forecast for the coming days.',
@@ -169,7 +171,7 @@ const STEPS=[
     text:'Point north, or go to your own location.',
     enter:async()=>{await ensure2D();await zoomOut()}},
   {title:'That is the tour',target:null,
-    text:'Your layers, panels, favourites and base map are back as they were. The Start the tour button stays at the bottom of the screen until you hide it with its ×.',
+    text:'Your layers, panels, favourites and base map are back as they were. The Get started button stays at the bottom of the screen, so you can take the tour again.',
     enter:ensure2D}
 ];
 
@@ -187,11 +189,13 @@ function place(){if(!run)return;const W=innerWidth,H=innerHeight,root=getCompute
   const hole=r?[Math.max(0,r.left-PAD),Math.max(0,r.top-PAD),Math.min(W,r.right+PAD),Math.min(H,r.bottom+PAD)]:[W/2,H/2,W/2,H/2];
   const[x1,y1,x2,y2]=hole;
   veil.style.clipPath=`polygon(evenodd,0px 0px,${W}px 0px,${W}px ${H}px,0px ${H}px,0px 0px,${x1}px ${y1}px,${x2}px ${y1}px,${x2}px ${y2}px,${x1}px ${y2}px,${x1}px ${y1}px)`;
-  if(r){Object.assign(ring.style,{left:x1+'px',top:y1+'px',width:(x2-x1)+'px',height:(y2-y1)+'px'});ring.classList.add('on')}
+  // while the photo gallery is open it covers the window, so the ring and the map glow step aside until it closes
+  const gal=$('.phbox');const galOpen=!!gal&&!gal.hidden;
+  if(r&&!galOpen){Object.assign(ring.style,{left:x1+'px',top:y1+'px',width:(x2-x1)+'px',height:(y2-y1)+'px'});ring.classList.add('on')}
   else ring.classList.remove('on');
   // the glowing point on the map
   const g=run.glow,p=g&&window.whg.screen(g.lon,g.lat);
-  if(p&&p.x>0&&p.y>0&&p.x<W&&p.y<H){glowEl.style.transform=`translate(${p.x-17}px,${p.y-17}px)`;glowEl.classList.add('on');glowEl.firstChild.textContent=g.label||'';glowEl.classList.toggle('lab',!!g.label)}
+  if(p&&!galOpen&&p.x>0&&p.y>0&&p.x<W&&p.y<H){glowEl.style.transform=`translate(${p.x-17}px,${p.y-17}px)`;glowEl.classList.add('on');glowEl.firstChild.textContent=g.label||'';glowEl.classList.toggle('lab',!!g.label)}
   else glowEl.classList.remove('on');
   let x,y;
   if(W<1000){x=(W-cw)/2;y=H-ch-24}
@@ -260,7 +264,8 @@ addEventListener('resize',place);
 window.whgTour={busy:()=>busy,step:()=>run?run.i:-1,steps:()=>STEPS.length,running:()=>!!run,
   targetShown:()=>{if(!run)return false;const t=run.steps[run.i].target;return!t||!!shown(t)},
   title:()=>{const h=card.querySelector('h3');return h?h.textContent:''}};
-document.addEventListener('keydown',e=>{if(!run)return;
+// only the reader's own keys act on the tour; the tour's own clicks and synthetic keys never end it
+document.addEventListener('keydown',e=>{if(!run||!e.isTrusted)return;
   if(e.key==='Escape')end();
   else if(e.target.matches('input'))return;
   else if(e.key==='ArrowRight'||e.key==='Enter'){if(run.i===run.steps.length-1)end();else go(run.i+1);e.preventDefault()}

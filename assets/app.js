@@ -1719,7 +1719,7 @@ const phFmtD=m=>m<10?'<10 m':m<1000?Math.round(m/10)*10+' m':m<10000?(m/1000).to
 const phStrip=h=>{const d=document.createElement('div');d.innerHTML=String(h||'');return d.textContent.replace(/\s+/g,' ').trim()};
 const phJSON=(u,o)=>fetch(u,o).then(r=>{if(!r.ok)throw new Error(r.status);return r.json()});
 // photo requests carry the signal of the current search, so a search for a place you've left stops downloading
-const phPJ=(u,o)=>phJSON(u,Object.assign({signal:PH.ac&&PH.ac.signal},o));
+const phPJ=(u,o)=>phJSON(u,Object.assign({signal:PH.ac?.signal},o));
 // the search results per place and radius are kept in IndexedDB for a week, so a place you've looked at opens at once
 const PH_IDB={name:'whg',store:'photos',ttl:7*864e5};
 const phDbP=()=>PH.dbP||(PH.dbP=new Promise((res,rej)=>{const r=indexedDB.open(PH_IDB.name,1);r.onupgradeneeded=()=>r.result.createObjectStore(PH_IDB.store);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}));
@@ -1826,7 +1826,7 @@ async function phSearch(lat,lon,onUpdate){const seen=new Map();let radius=0,answ
       answered+=ok;
       // a search cut short by a newer one keeps nothing, and a search where no source answered is not saved at all,
       // so a rate limit or a dropped connection never becomes "no photos" for a week
-      if((!PH.ac||!PH.ac.signal.aborted)&&ok){PH.cache.set(key,got);phIdbSet(key,got);if(PH.cache.size>60)PH.cache.delete(PH.cache.keys().next().value)}}
+      if(!PH.ac?.signal?.aborted&&ok){PH.cache.set(key,got);phIdbSet(key,got);if(PH.cache.size>60)PH.cache.delete(PH.cache.keys().next().value)}}
     if(onUpdate(phRank(seen),r,false)===false)return;
     if(phRank(seen).length>=PH_WANT)break;}
   PH.failed=!answered&&!seen.size;

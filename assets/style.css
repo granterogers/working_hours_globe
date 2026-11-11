@@ -177,7 +177,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 
 /* colivings layer */
 .layers .clcnt{color:var(--ink2);font-size:.74rem;font-variant-numeric:tabular-nums}
-.layers .clfb{opacity:.85;border-radius:7px;padding:4px 5px;position:relative}
+.layers .clfb{opacity:1;color:#000;border-radius:7px;padding:4px 5px;position:relative}
 .layers .clfb.on{color:var(--accent);opacity:1}
 .layers .clfb.on::after{content:"";position:absolute;top:1px;right:1px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
 .clf{position:absolute;left:calc(var(--col) + 28px);top:16px;width:var(--col);max-height:calc(100% - 32px);overflow:auto;border-radius:16px;padding:14px 16px 16px;z-index:47;font-size:.88rem}
@@ -311,8 +311,11 @@ body.in3d .m3d{pointer-events:auto}
 .bmtick input{accent-color:var(--accent);width:15px;height:15px;margin:0}
 .bmtick span{flex:1;white-space:nowrap}
 .bmtick .clcnt{color:var(--ink2);font-size:.74rem;font-weight:400;font-variant-numeric:tabular-nums}
-.bmtick .clfb{all:unset;cursor:pointer;color:var(--ink2);padding:3px 4px;border-radius:7px;display:flex;position:relative}
+.bmtick .clfb{all:unset;cursor:pointer;color:#000;padding:3px 4px;border-radius:7px;display:flex;position:relative}
 .bmtick .clfb:hover,.bmtick .clfb.on{color:var(--accent)}
+/* the layer icons: the clock is blue and the place-name tag yellow, so they stand out */
+.lyrb .bmtick input[data-show="hours"]~.lyi{color:#1e6bff}
+.lyrb .bmtick input[data-show="names"]~.lyi{color:#f5b400}
 .bmtick .clfb.on::after{content:"";position:absolute;top:0;right:0;width:6px;height:6px;border-radius:50%;background:var(--accent)}
 .bmh2{border-top:1px solid var(--glass-b);margin-top:4px;padding-top:9px}
 .info,.clf{z-index:47}
@@ -350,9 +353,9 @@ body.tilted .strip{display:none}
 .camimg:focus-visible{outline:2px solid var(--accent)}
 
 /* Layers panel, top left */
-.lyr{position:absolute;left:16px;top:16px;width:var(--col);border-radius:16px;padding:4px 6px 6px;z-index:4}
-.lyrh{all:unset;box-sizing:border-box;width:100%;display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:700;font-size:.9rem;padding:7px 8px}
-.lyrh .phchev{font-style:normal;margin-left:auto;color:var(--ink2);transform:rotate(90deg);transition:transform .2s}
+.lyr{position:absolute;left:16px;top:16px;width:252px;border-radius:16px;padding:4px 6px 6px;z-index:4}
+.lyrh{all:unset;box-sizing:border-box;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;position:relative;cursor:pointer;font-weight:700;font-size:.9rem;padding:7px 8px}
+.lyrh .phchev{font-style:normal;position:absolute;right:10px;color:var(--ink2);transform:rotate(90deg);transition:transform .2s}
 .lyr.folded .lyrh .phchev{transform:none}
 .lyrh:focus-visible{outline:2px solid var(--accent);border-radius:8px}
 .lyr.folded{width:auto}.lyr.folded .lyrb{display:none}
@@ -445,12 +448,11 @@ body.in3d #c{opacity:0;pointer-events:none}
 
 /* guided tour (assets/tour.js): a light veil with a hole over the step's target, a ring around it, a glow on the
    map point being talked about, a cursor that clicks the real controls, and the card */
-.tveil{position:fixed;inset:0;z-index:80;background:color-mix(in srgb,var(--space1) 22%,transparent);opacity:0;pointer-events:none;transition:opacity .5s,clip-path .6s cubic-bezier(.2,.7,.2,1)}
-body.touring .tveil{opacity:1;pointer-events:auto}
-.tring{position:fixed;z-index:81;border-radius:18px;border:2px solid var(--accent);pointer-events:none;opacity:0;box-shadow:0 0 0 6px color-mix(in srgb,var(--accent) 16%,transparent),0 0 34px 6px color-mix(in srgb,var(--accent) 45%,transparent);transition:left .6s cubic-bezier(.2,.7,.2,1),top .6s cubic-bezier(.2,.7,.2,1),width .6s cubic-bezier(.2,.7,.2,1),height .6s cubic-bezier(.2,.7,.2,1),opacity .4s;animation:tpulse 2.6s ease-in-out infinite}
+/* no veil over the map during the tour: the windows carry a white glow instead, so the map stays as it is */
+.tveil{display:none}
+.tring{position:fixed;z-index:81;border-radius:12px;border:2px solid #fff;pointer-events:none;opacity:0;box-shadow:0 0 0 1px rgba(255,255,255,.5),0 0 18px 4px rgba(255,255,255,.85);transition:left .6s cubic-bezier(.2,.7,.2,1),top .6s cubic-bezier(.2,.7,.2,1),width .6s cubic-bezier(.2,.7,.2,1),height .6s cubic-bezier(.2,.7,.2,1),opacity .4s}
 .tring.on{opacity:1}
-@keyframes tpulse{50%{box-shadow:0 0 0 10px color-mix(in srgb,var(--accent) 10%,transparent),0 0 46px 10px color-mix(in srgb,var(--accent) 55%,transparent)}}
-.tglow{position:fixed;left:0;top:0;width:34px;height:34px;border-radius:50%;z-index:81;pointer-events:none;opacity:0;border:2px solid var(--accent);box-shadow:0 0 22px 6px color-mix(in srgb,var(--accent) 55%,transparent);transition:opacity .4s,transform .35s linear;animation:tpulse 2s ease-in-out infinite}
+.tglow{position:fixed;left:0;top:0;width:34px;height:34px;border-radius:50%;z-index:81;pointer-events:none;opacity:0;border:2px solid #fff;box-shadow:0 0 0 1px rgba(255,255,255,.5),0 0 18px 5px rgba(255,255,255,.85);transition:opacity .4s,transform .35s linear}
 .tglow.on{opacity:1}
 .tglow span{position:absolute;left:50%;top:100%;transform:translateX(-50%);margin-top:8px;white-space:nowrap;font:700 .8rem var(--sans);color:var(--ink);background:var(--glass);border:1px solid var(--glass-b);border-radius:999px;padding:3px 10px;box-shadow:var(--shadow)}
 .tglow span:empty{display:none}
@@ -458,7 +460,7 @@ body.touring .tveil{opacity:1;pointer-events:auto}
 .tcursor.on{opacity:1}
 .tcursor.tap{animation:tclick .26s ease-out}
 @keyframes tclick{40%{scale:.78}}
-.tcard{position:fixed;z-index:82;width:min(340px,calc(100vw - 24px));padding:16px 18px 14px;border-radius:18px;opacity:0;pointer-events:auto;transition:left .6s cubic-bezier(.2,.7,.2,1),top .6s cubic-bezier(.2,.7,.2,1),opacity .3s}
+.tcard{position:fixed;z-index:82;width:min(340px,calc(100vw - 24px));padding:16px 18px 14px;border-radius:18px;opacity:0;pointer-events:auto;box-shadow:0 0 0 1px rgba(255,255,255,.6),0 0 22px 5px rgba(255,255,255,.8);transition:left .6s cubic-bezier(.2,.7,.2,1),top .6s cubic-bezier(.2,.7,.2,1),opacity .3s}
 body.touring .tcard{opacity:1}
 .tcard .tstep{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin:0 0 4px}
 .tcard h3{font-family:var(--serif);font-weight:500;font-size:1.2rem;margin:0 22px 6px 0;line-height:1.2}
@@ -471,10 +473,10 @@ body.touring .tcard{opacity:1}
 .tbtns button:disabled{opacity:.4;cursor:default}
 .tx{position:absolute;top:8px;right:10px;border:0;background:none;cursor:pointer;color:var(--ink2);font-size:1.25rem;line-height:1;padding:4px 6px}
 @media (max-width:700px){.tcard{left:12px!important;right:12px;width:auto}}
-.tourpill{position:fixed;right:16px;bottom:16px;z-index:40;display:flex;align-items:center;padding:4px;border-radius:999px}
+.tourpill{position:fixed;right:16px;bottom:16px;z-index:40;display:flex;align-items:center}
 body:has(#info.show) .tourpill{display:none}
 .tourpill[hidden],body.touring .tourpill{display:none}
-.tourpill #tour{border:0;cursor:pointer;background:var(--accent);color:var(--accent-ink);font:700 .92rem var(--sans);padding:9px 20px;border-radius:999px}
+.tourpill #tour{border:0;cursor:pointer;background:var(--accent);color:var(--accent-ink);font:700 .95rem var(--sans);padding:11px 24px;border-radius:999px;box-shadow:none}
 
 /* working hours settings: opened from the cog beside Working hours, to the right of the Layers panel */
 .hoursset{padding:14px 16px 16px}
