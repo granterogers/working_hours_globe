@@ -1355,7 +1355,9 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
   lay({id:M3D_OWN+'cws',type:'symbol',source:M3D_OWN+'cwk',layout:{'icon-image':'cw-desk','icon-size':['interpolate',['linear'],['zoom'],2,0.4,8,0.7,14,0.9],'icon-allow-overlap':false,'icon-padding':['interpolate',['linear'],['zoom'],2,34,6,18,10,8],'symbol-sort-key':['get','p']}});
   // the base map's own names follow the Place names switch
   // names and weather fade in and out: MapLibre animates a change of opacity, so they are never switched off at once
-  placeZoom(map);m3dApply();coastFeed(map);}
+  placeZoom(map);m3dApply();coastFeed(map);
+  // the vector-tile lines sit above the colours, so the hour colours do not cover the borders and the coast
+  for(const id of[M3D_OWN+'coast','fine-borders'])try{if(map.getLayer(id))map.moveLayer(id)}catch(e){}}
 // every layer's opacity is its fade value (LAY, 0 to 1) times its own setting, so switching a layer on or off eases
 // in and out on the 3D map just as it does on the globe. Zoom ramps keep their shape, with each stop scaled.
 function m3dApply(){if(!m3d||!m3d.map||m3d.styleBusy)return;const map=m3d.map;
