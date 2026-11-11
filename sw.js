@@ -24,7 +24,7 @@ async function thumbTrim(c){const keys=await c.keys();for(const k of keys.slice(
 
 // the app's own files and data (script, styles, the big JSON files) are served from the device at once, and refreshed
 // from the network in the background, so a repeat visit starts straight away
-const APP='whg-app-v1';
+const APP='whg-app-v2';
 async function appFile(req){const c=await caches.open(APP);const hit=await c.match(req);
   const net=fetch(req).then(res=>{if(res.ok)c.put(req,res.clone()).catch(()=>{});return res}).catch(()=>null);
   if(hit)return hit;const res=await net;return res||fetch(req)}
