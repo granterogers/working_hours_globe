@@ -2268,6 +2268,4 @@ openMap();
 })();
 const fontsReady=document.fonts?Promise.all([document.fonts.load(F.cn),document.fonts.load(F.pn),document.fonts.load(F.hr)]):Promise.resolve();
 fontsReady.then(()=>{for(const x in mcache)delete mcache[x];draw()});
-setTimeout(()=>document.getElementById('toast').classList.add('hide'),4500);
-setTimeout(()=>document.getElementById('toast').remove(),5600);
 }

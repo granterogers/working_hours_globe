@@ -89,8 +89,6 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .info dt{color:var(--ink2)} .info dd{margin:0;font-variant-numeric:tabular-nums}
 .info .x{all:unset;position:absolute;right:14px;top:12px;cursor:pointer;color:var(--ink2);font-size:1.2rem}
 
-.toast{position:absolute;left:50%;top:74px;transform:translateX(-50%);padding:9px 16px;border-radius:999px;font-size:.86rem;color:var(--ink2);transition:opacity .8s}
-.toast.hide{opacity:0}
 /* the version number: small, quiet, out of the way of the map's controls */
 .ver{position:fixed;left:50%;bottom:3px;transform:translateX(-50%);font-size:10px;letter-spacing:.04em;color:var(--ink2);opacity:.45;pointer-events:none;z-index:1}
 
@@ -100,7 +98,6 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   .strip{left:12px;right:68px;transform:none;flex-wrap:wrap;justify-content:center;border-radius:16px;max-width:none;bottom:12px}
   .strip span{padding:2px 6px}
   .info{left:12px;right:12px;width:auto;max-width:none;bottom:12px}
-  .toast{top:auto;bottom:110px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 .loading{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-family:var(--serif);font-size:1.1rem;color:var(--ink2)}
