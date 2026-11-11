@@ -130,6 +130,8 @@ function resize(){try{if(m3d&&m3d.map)m3d.map.setMinZoom(m3dMinZoom())}catch(e){
 // visibility cap of the viewport for culling
 let viewCap=null;
 // the fine country borders are a separate file, fetched the first time the map is zoomed in close
+// the 2D globe scale (k) and 3D zoom at which the country borders switch off
+const BORDER_OFF_K=5,BORDER_OFF_Z=6;
 let hiP=null;function loadHi(){if(D.cbHi||hiP)return hiP;
   hiP=fetch('data/borders-hi.json').then(r=>{if(!r.ok)throw new Error(r.status);return r.json()}).then(j=>{D.cbHi=prep(j,true);draw();if(mapOn())m3dSync()}).catch(()=>{hiP=null});return hiP}
 // the smallest the globe may be: its radius is 40% of the shorter side of the window, on the 2D globe and the 3D map alike
@@ -190,9 +192,10 @@ function draw(){
   // the country borders are fine and soft, so the colours sit under them rather than being cut up by them
   // the country borders are drawn on every base map: light over dark imagery, dark over the colours and pale maps
   if(basemap!=='street'){const col='#000000';
+    // past BORDER_OFF_K the country borders are switched off: at close range the coastlines and islands carry the map
     // on the map types with vector tiles, the borders come from those tiles, so they are as fine as the map at every zoom
-    const fine=(BM().labels||BM().fine)&&shown?drawFineBorders(col):0;
-    if(!fine){ctx.globalAlpha=0.9;strokeFC(CB,col,k>4?1:0.7);ctx.globalAlpha=1}}
+    const fine=k<BORDER_OFF_K&&(BM().labels||BM().fine)&&shown?drawFineBorders(col):0;
+    if(!fine&&k<BORDER_OFF_K){ctx.globalAlpha=0.9;strokeFC(CB,col,k>4?1:0.7);ctx.globalAlpha=1}}
   else if(bA>0.02){ctx.globalAlpha=bA*0.5;strokeFC(CB,pal.border,k>4?0.9:0.6);ctx.globalAlpha=1}
   // sphere shading for depth
   ctx.save();ctx.beginPath();path({type:'Sphere'});ctx.clip();
@@ -1369,7 +1372,8 @@ function m3dApply(){if(!m3d||!m3d.map||m3d.styleBusy)return;const map=m3d.map;
   // the country borders are on every base map: light over dark imagery, dark over the colours and pale maps
   // on the satellite-type maps the borders are the vector tiles' own lines ('fine-borders'), so the coarser set steps aside
   const vecB=!!(BM().labels||BM().fine)&&basemap!=='street',bcol='#000000';
-  set(M3D_OWN+'cb','line-opacity',vecB?0:0.9);set(M3D_OWN+'coast','line-opacity',vecB?0.9:0);set(M3D_OWN+'coast','line-color',bcol);set(M3D_OWN+'cb','line-color',bcol);set('fine-borders','line-color',bcol);
+  const cbFade=['interpolate',['linear'],['zoom'],BORDER_OFF_Z-1,0.9,BORDER_OFF_Z,0];
+  set(M3D_OWN+'cb','line-opacity',vecB?0:cbFade);set('fine-borders','line-opacity',['interpolate',['linear'],['zoom'],BORDER_OFF_Z-1,1,BORDER_OFF_Z,0]);set(M3D_OWN+'coast','line-opacity',vecB?0.9:0);set(M3D_OWN+'coast','line-color',bcol);set(M3D_OWN+'cb','line-color',bcol);set('fine-borders','line-color',bcol);
   set(M3D_OWN+'lab','text-opacity',L.hours);
   set(M3D_OWN+'cl','icon-opacity',L.cl);
   set(M3D_OWN+'fv','icon-opacity',L.fav);set(M3D_OWN+'fvn','text-opacity',L.fav);
@@ -1396,7 +1400,9 @@ function wxTowns(map){const src=Object.entries(map.getStyle().sources).find(([k,
 const PF={seen:new Set(),q:[],busy:0};
 // the coastline of the satellite-type maps in 3D: the water edges of the vector tiles in view, as the 2D globe draws them.
 // The edges that run along a tile's own boundary are left out, the neighbouring tile draws them.
-const COAST={key:'',retry:0};
+const COAST={key:'',retry:0,last:0,timer:null};
+// the coastline is rebuilt at most every 1.5 seconds, so a camera that keeps moving (an orbit, a long pan) does not rebuild it at every step
+function coastFeed(map){const now=performance.now();if(now-COAST.last<1500){if(!COAST.timer)COAST.timer=setTimeout(()=>{COAST.timer=null;coastFeed(map)},1500-(now-COAST.last));return}COAST.last=now;coastRun(map)}
 function vtLinesLL(dk,dd){if(dd.cl)return dd.cl;const out=[],L=dd.L||{},[z,x,y]=dk.split('/').map(Number),n=2**z,wt=L.water;
   if(wt){const e=wt.e,inside=p=>p[0]>=0&&p[0]<=e&&p[1]>=0&&p[1]<=e,onEdge=(p,q)=>(p[0]===q[0]&&(p[0]<=0||p[0]>=e))||(p[1]===q[1]&&(p[1]<=0||p[1]>=e));
     const ll=(px,py)=>[(x+px/e)/n*360-180,y2lat(y+py/e,n)];
@@ -1406,12 +1412,12 @@ function vtLinesLL(dk,dd){if(dd.cl)return dd.cl;const out=[],L=dd.L||{},[z,x,y]=
         else if(chain.length){out.push(chain);chain=[]}}
       if(chain.length)out.push(chain)}}}
   dd.cl=out;return out}
-function coastFeed(map){if(!map||!map.getStyle())return;const B=BM();
+function coastRun(map){if(!map||!map.getStyle())return;const B=BM();
   if(!(B.labels||B.fine)||basemap==='street'){if(COAST.key!=='off'){COAST.key='off';const s=map.getSource(M3D_OWN+'coast');if(s)s.setData({type:'FeatureCollection',features:[]})}return}
   const zz=Math.min(14,Math.floor(map.getZoom()));if(zz<4)return;
   const b=map.getBounds(),n=2**zz,lon2=lng=>Math.floor((lng+180)/360*n),lat2=lat=>{const r=lat*Math.PI/180;return Math.floor((1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*n)};
   const x0=lon2(b.getWest()),x1=lon2(b.getEast()),y0=Math.max(0,lat2(b.getNorth())),y1=Math.min(n-1,lat2(b.getSouth()));
-  if((x1-x0+1)*(y1-y0+1)>48)return;
+  if((x1-x0+1)*(y1-y0+1)>24)return;
   const key=[zz,x0,x1,y0,y1].join('|');if(COAST.key===key&&!COAST.retry)return;
   const feats=[];let missing=0;
   for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++){const xx=((x%n)+n)%n,dd=vtData(zz,xx,y,true);
