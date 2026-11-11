@@ -220,8 +220,14 @@ function vtBorders(dk,dd){if(dd.bl)return dd.bl;const bl=[],L=dd.L||{},[z,x,y]=d
         else if(chain.length){bl.push(toV(chain.flat(),e));chain=[]}}
       if(chain.length)bl.push(toV(chain.flat(),e))}}}
   dd.bl=bl;return bl}
-function drawFineBorders(col){let n=0;ctx.save();ctx.globalAlpha=0.9;ctx.lineJoin='round';ctx.lineCap='round';ctx.lineWidth=k>4?1.1:0.8;ctx.strokeStyle=col;ctx.beginPath();
-  for(const dk of vtUsed){const dd=vdata.get(dk);if(!dd||!dd.ok)continue;for(const v of vtBorders(dk,dd)){ring(v,false);n++}}
+let fineRetry=0;
+function drawFineBorders(col){let n=0,missing=0;ctx.save();ctx.globalAlpha=0.9;ctx.lineJoin='round';ctx.lineCap='round';ctx.lineWidth=k>4?1.1:0.8;ctx.strokeStyle=col;ctx.beginPath();
+  // the vector tiles covering the view are asked for, so the lines are complete (they arrive over a moment, then redraw)
+  const v=VB;if(v){const zz=Math.min(14,v.z,vt.max||14),N=2**zz,x0=Math.floor(lon2x(v.c0+v.r0,N)),x1=Math.floor(lon2x(v.c0+v.r1,N)),y0=Math.max(0,Math.floor(lat2y(v.la1,N))),y1=Math.min(N-1,Math.floor(lat2y(v.la0,N)));
+    if((x1-x0+1)*(y1-y0+1)<=64)for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++){const xx=((x%N)+N)%N,dk=zz+'/'+xx+'/'+y,dd=vtData(zz,xx,y,true);
+      if(!dd||!dd.ok){missing++;continue}for(const q of vtBorders(dk,dd)){ring(q,false);n++}}}
+  // tiles still arriving: draw again shortly, so their lines appear without a movement of the globe
+  if(missing&&fineRetry<150){fineRetry++;setTimeout(()=>{if(!running)draw()},350)}else if(!missing)fineRetry=0;
   if(n)ctx.stroke();ctx.restore();return n}
 function drawOverlays(){overlays.forEach(L=>{if(!L.on)return;L.fc.features.forEach(f=>{const g=f.geometry;if(!g||/Point/.test(g.type))return;
   ctx.beginPath();path(f);if(/Polygon/.test(g.type)){ctx.globalAlpha=.2;ctx.fillStyle=L.color;ctx.fill();ctx.globalAlpha=1}
@@ -504,7 +510,7 @@ function drawTiles(){
   let z=clamp(Math.round(Math.log2(ppd*360*Math.cos(lat*RAD)/256*(dpr>1?1.25:1))),Math.min(2,zmax),zmax),x0,x1,y0,y1,n;
   for(;;){n=2**z;x0=Math.floor(lon2x(c0+r0,n));x1=Math.floor(lon2x(c0+r1,n));y0=Math.floor(lat2y(la1,n));y1=Math.floor(lat2y(la0,n));
     if((x1-x0+1)*(y1-y0+1)<=90||z<=2)break;z--;}
-  vtZ=z;
+  vtZ=z;VB={c0,r0,r1,la0,la1,z};
   // finer pieces when tiles are large on screen (zoomed out), so the curve of the globe has no gaps
   const N=z<=3?8:z<=5?5:k<14?3:2;
   // draw one tile image (or a square part of it) over tile tx,ty of a 2^z grid of size n, split into NxN cells
@@ -567,7 +573,7 @@ const FONT='"Bricolage Grotesque", "Segoe UI", sans-serif';
 const LF={city:'700 14px '+FONT,town:'600 12.5px '+FONT,place:'500 11.5px '+FONT,small:'500 10.5px '+FONT,poi:'500 10.5px '+FONT,
   water:'italic 500 12px Fraunces, Georgia, serif',road:'500 10.5px '+FONT,peak:'500 11px '+FONT};
 const LINK={place:'#000000',small:'#333333',water:'#4d80b3',road:'#222222',peak:'#3a2a10'};
-let vtZ=0;
+let vtZ=0,VB=null;
 function drawMapLabels(alpha){
   const cand=[];for(const dk of vtUsed){const dd=vdata.get(dk);if(dd&&dd.ok)for(const L of vtLabels(dk,dd))if(vtZ>=L.minz)cand.push(L)}
   if(!cand.length)return;cand.sort((p,q)=>q.pri-p.pri);
@@ -1184,7 +1190,7 @@ function m3dExtras(map){
   if(basemap==='street')for(const l of map.getStyle().layers)if(l.type==='symbol'&&l.layout&&/"name|\{name/.test(JSON.stringify(l.layout['text-field']||'')))try{map.setLayoutProperty(l.id,'text-field',NAME_EN)}catch(e){}}
 // a new base map replaces the style, which MapLibre can't do while the camera is still moving: the camera stops first
 // the layers are not touched while a new base style is loading: the sync runs again on its style.load
-function m3dStyle(){const map=m3d.map;if(map){map.stop();m3d.styleBusy=true;map.setStyle(m3dStyleDef(),{diff:false})}}
+function m3dStyle(){const map=m3d.map;COAST.key='';if(map){map.stop();m3d.styleBusy=true;map.setStyle(m3dStyleDef(),{diff:false})}}
 // 2D zoom k <-> MapLibre zoom: same on-screen scale at the centre of the view
 const k2z=(kk,lat)=>clamp(Math.log2(2*Math.PI*base*kk*Math.cos(lat*RAD)/512),0,20);
 const z2k=(z,lat)=>clamp(512*2**z/(2*Math.PI*base*Math.cos(lat*RAD)),MINK,MAXK);
@@ -1203,7 +1209,7 @@ async function openMap(){let el=m3d.el;
       map.once('style.load',()=>{setTimeout(()=>mapReady(map),0)});setTimeout(()=>mapReady(map),5000);
       map.on('style.load',()=>{m3d.styleBusy=false;m3d.mode=null;m3dExtras(map);m3dSync();for(const l of map.getStyle().layers)if(l.type==='background')map.setPaintProperty(l.id,'background-color','#9ebdff');stars()});
       map.on('move',()=>{if(mapOn())syncFromMap();if(document.body.classList.contains('in3d'))skyFrame()});
-      map.on('zoomend',()=>{m3dMode(map);m3dLimit(map)});map.on('moveend',()=>{if(m3d.me&&myLoc)m3dMe();prefetchTiles(map)});
+      map.on('zoomend',()=>{m3dMode(map);m3dLimit(map)});map.on('moveend',()=>{if(m3d.me&&myLoc)m3dMe();prefetchTiles(map);coastFeed(map)});
       map.on('click',m3dClick);map.on('moveend',m3dWx);
       // the towns come from the map's vector tiles, which can arrive after the view has settled: the weather points are then re-picked
       map.on('sourcedata',e=>{if(!e.isSourceLoaded||!showWeather)return;const sd=map.getStyle().sources[e.sourceId];if(!sd||sd.type!=='vector')return;clearTimeout(m3d.wxT2);m3d.wxT2=setTimeout(m3dWx,150)});map.on('load',()=>{m3dWx();m3dLimit(map)});map.on('moveend',()=>m3dAboveGround(map));
@@ -1349,7 +1355,7 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
   lay({id:M3D_OWN+'cws',type:'symbol',source:M3D_OWN+'cwk',layout:{'icon-image':'cw-desk','icon-size':['interpolate',['linear'],['zoom'],2,0.4,8,0.7,14,0.9],'icon-allow-overlap':false,'icon-padding':['interpolate',['linear'],['zoom'],2,34,6,18,10,8],'symbol-sort-key':['get','p']}});
   // the base map's own names follow the Place names switch
   // names and weather fade in and out: MapLibre animates a change of opacity, so they are never switched off at once
-  placeZoom(map);m3dApply();}
+  placeZoom(map);m3dApply();coastFeed(map);}
 // every layer's opacity is its fade value (LAY, 0 to 1) times its own setting, so switching a layer on or off eases
 // in and out on the 3D map just as it does on the globe. Zoom ramps keep their shape, with each stop scaled.
 function m3dApply(){if(!m3d||!m3d.map||m3d.styleBusy)return;const map=m3d.map;
@@ -1361,7 +1367,7 @@ function m3dApply(){if(!m3d||!m3d.map||m3d.styleBusy)return;const map=m3d.map;
   // the country borders are on every base map: light over dark imagery, dark over the colours and pale maps
   // on the satellite-type maps the borders are the vector tiles' own lines ('fine-borders'), so the coarser set steps aside
   const vecB=!!(BM().labels||BM().fine)&&basemap!=='street',bcol=BM().dark&&L.hours<0.5?'#ffffff':'#141a2c';
-  set(M3D_OWN+'cb','line-opacity',vecB?0:0.9);set(M3D_OWN+'cb','line-color',bcol);set('fine-borders','line-color',bcol);
+  set(M3D_OWN+'cb','line-opacity',vecB?0:0.9);set(M3D_OWN+'coast','line-opacity',vecB?0.9:0);set(M3D_OWN+'coast','line-color',bcol);set(M3D_OWN+'cb','line-color',bcol);set('fine-borders','line-color',bcol);
   set(M3D_OWN+'lab','text-opacity',L.hours);
   set(M3D_OWN+'cl','icon-opacity',L.cl);
   set(M3D_OWN+'fv','icon-opacity',L.fav);set(M3D_OWN+'fvn','text-opacity',L.fav);
@@ -1386,6 +1392,34 @@ function wxTowns(map){const src=Object.entries(map.getStyle().sources).find(([k,
 // the raster tiles around the view are fetched ahead of a pan, so they are already there when the map needs them. The
 // service worker keeps every tile it fetches, so the map gets them at once instead of flickering in as you move.
 const PF={seen:new Set(),q:[],busy:0};
+// the coastline of the satellite-type maps in 3D: the water edges of the vector tiles in view, as the 2D globe draws them.
+// The edges that run along a tile's own boundary are left out, the neighbouring tile draws them.
+const COAST={key:'',retry:0};
+function vtLinesLL(dk,dd){if(dd.cl)return dd.cl;const out=[],L=dd.L||{},[z,x,y]=dk.split('/').map(Number),n=2**z,wt=L.water;
+  if(wt){const e=wt.e,inside=p=>p[0]>=0&&p[0]<=e&&p[1]>=0&&p[1]<=e,onEdge=(p,q)=>(p[0]===q[0]&&(p[0]<=0||p[0]>=e))||(p[1]===q[1]&&(p[1]<=0||p[1]>=e));
+    const ll=(px,py)=>[(x+px/e)/n*360-180,y2lat(y+py/e,n)];
+    for(const F of wt.f){if(F.t!==3)continue;for(const a of F.g){let chain=[];
+      for(let i=0;i+3<a.length;i+=2){const p=[a[i],a[i+1]],q=[a[i+2],a[i+3]];
+        if(inside(p)&&inside(q)&&!onEdge(p,q)){if(!chain.length)chain.push(ll(p[0],p[1]));chain.push(ll(q[0],q[1]))}
+        else if(chain.length){out.push(chain);chain=[]}}
+      if(chain.length)out.push(chain)}}}
+  dd.cl=out;return out}
+function coastFeed(map){if(!map||!map.getStyle())return;const B=BM();
+  if(!(B.labels||B.fine)||basemap==='street'){if(COAST.key!=='off'){COAST.key='off';const s=map.getSource(M3D_OWN+'coast');if(s)s.setData({type:'FeatureCollection',features:[]})}return}
+  const zz=Math.min(14,Math.floor(map.getZoom()));if(zz<4)return;
+  const b=map.getBounds(),n=2**zz,lon2=lng=>Math.floor((lng+180)/360*n),lat2=lat=>{const r=lat*Math.PI/180;return Math.floor((1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*n)};
+  const x0=lon2(b.getWest()),x1=lon2(b.getEast()),y0=Math.max(0,lat2(b.getNorth())),y1=Math.min(n-1,lat2(b.getSouth()));
+  if((x1-x0+1)*(y1-y0+1)>48)return;
+  const key=[zz,x0,x1,y0,y1].join('|');if(COAST.key===key&&!COAST.retry)return;
+  const feats=[];let missing=0;
+  for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++){const xx=((x%n)+n)%n,dd=vtData(zz,xx,y,true);
+    if(!dd||!dd.ok){missing++;continue}for(const c of vtLinesLL(zz+'/'+xx+'/'+y,dd))feats.push({type:'Feature',properties:{},geometry:{type:'LineString',coordinates:c}})}
+  COAST.key=key;
+  const data={type:'FeatureCollection',features:feats};
+  try{if(map.getSource(M3D_OWN+'coast'))map.getSource(M3D_OWN+'coast').setData(data);else map.addSource(M3D_OWN+'coast',{type:'geojson',data})}catch(e){return}
+  if(!map.getLayer(M3D_OWN+'coast'))try{map.addLayer({id:M3D_OWN+'coast',type:'line',source:M3D_OWN+'coast',layout:{'line-join':'round','line-cap':'round'},paint:{'line-color':'#ffffff','line-width':['interpolate',['linear'],['zoom'],4,0.6,9,1,14,1.4],'line-opacity':0.9}})}catch(e){}
+  // tiles still loading: look again shortly, a few times
+  if(missing&&COAST.retry<8){COAST.retry++;COAST.key='';setTimeout(()=>coastFeed(map),1200)}else COAST.retry=0}
 function prefetchTiles(map){const B=BM();if(!B.url||basemap==='street'||map.getZoom()<2.5)return;
   const z0=Math.min(B.max,Math.floor(map.getZoom())),n=2**z0,b=map.getBounds();
   const tx=lng=>Math.floor((lng+180)/360*n),ty=lat=>{const r=lat*Math.PI/180;return Math.floor((1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*n)};
