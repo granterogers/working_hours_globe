@@ -17,6 +17,7 @@ OUT = os.path.join(HERE, "..", "data", "globe-data.json")
 TZBB_RELEASE = "2026e"  # timezone-boundary-builder release; bump to pick up new zone changes
 SOURCES = {
     "ne50.geojson": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson",
+    "ne10.geojson": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_0_countries.geojson",
     "adm1.geojson": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_1_states_provinces.geojson",
     "tz.zip": f"https://github.com/evansiroky/timezone-boundary-builder/releases/download/{TZBB_RELEASE}/timezones-now.geojson.zip",
     "airports.csv": "https://raw.githubusercontent.com/davidmegginson/ourairports-data/main/airports.csv",
@@ -90,8 +91,12 @@ for f in json.load(open_utf8('ne50.geojson'))['features']:
     p=f['properties'];g=shape(f['geometry']);b=(max(g.geoms,key=lambda q:q.area) if g.geom_type=='MultiPolygon' else g).bounds
     mainland[p['ADM0_A3']]=prep(max(g.geoms,key=lambda q:q.area) if g.geom_type=='MultiPolygon' else g)
     countries.append([p.get('NAME_EN') or p['NAME'],round(p['LABEL_X'],2),round(p['LABEL_Y'],2),tz_at(p['LABEL_X'],p['LABEL_Y']),p['ADM0_A3'],[round(v,2) for v in b]])
-    s=clean(g,0.03,0.0002)
-    if s: cfeat.append({"type":"Feature","properties":{"z":tz_at(p['LABEL_X'],p['LABEL_Y'])},"geometry":rnd(s)})
+# the country borders come from the 10 m file, so they stay fine when you zoom in
+for f in json.load(open_utf8('ne10.geojson'))['features']:
+    g=shape(f['geometry'])
+    if g.is_empty: continue
+    s=clean(g,0.006,0.00002)
+    if s: cfeat.append({"type":"Feature","properties":{"z":tz_at(*g.representative_point().coords[0])},"geometry":rnd(s,3)})
 prov=[];pfeat=[];ctz={}
 for f in json.load(open_utf8('adm1.geojson'))['features']:
     p=f['properties'];g=f['geometry']
@@ -112,15 +117,15 @@ for f in feats:
     g=clean(g,0.18,0.02)
     if g: tzL.append({"type":"Feature","properties":f['properties'],"geometry":rnd(g,1)})
 for f in cfeat:
-    g=clean(shape(f['geometry']),0.15,0.01)
-    if g: cbL.append({"type":"Feature","properties":f['properties'],"geometry":rnd(g,1)})
+    g=clean(shape(f['geometry']),0.05,0.002)
+    if g: cbL.append({"type":"Feature","properties":f['properties'],"geometry":rnd(g,2)})
 tzM=[];cbM=[];pbM=[];gaps=[]
 for f in feats:
     g=clean(shape(f['geometry']),0.07,0.004)
     if g: tzM.append({"type":"Feature","properties":f['properties'],"geometry":rnd(g,2)})
 for f in cfeat:
-    g=clean(shape(f['geometry']),0.06,0.002)
-    if g: cbM.append({"type":"Feature","properties":f['properties'],"geometry":rnd(g,2)})
+    g=clean(shape(f['geometry']),0.015,0.0005)
+    if g: cbM.append({"type":"Feature","properties":f['properties'],"geometry":rnd(g,3)})
 for f in pfeat:
     g=clean(shape(f['geometry']),0.08,0.01)
     if g: pbM.append({"type":"Feature","properties":{},"geometry":rnd(g,2)})
@@ -161,7 +166,7 @@ def lines(fc,n=60,p=2):
                     out.append({"type":"Feature","properties":{},"geometry":{"type":"MultiLineString","coordinates":[c[i:i+n+1]]}})
     return out
 feats=tile(feats,5);tzM=tile(tzM,10);tzL=tile(tzL,10);gaps=tile(gaps,10)
-cfeat=lines(cfeat,60,3);cbM=lines(cbM,60);cbL=lines(cbL,200,1)
+cfeat=lines(cfeat,60,3);cbM=lines(cbM,60,3);cbL=lines(cbL,200,2)
 pfeat=lines(pfeat,80,2);pbM=lines(pbM,80)
 print("tiles",len(feats),len(tzM),"lines",len(cfeat),len(pfeat))
 data={"zones":zoneinfo,"tzM":{"type":"FeatureCollection","features":tzM},"cbM":{"type":"FeatureCollection","features":cbM},
