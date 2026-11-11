@@ -189,7 +189,10 @@ function draw(){
   const stripEl=document.getElementById('strip');if(stripEl){const o=showHours?bA:0;if(stripEl._o!==o){stripEl._o=o;stripKey(o)}}
   // the country borders are fine and soft, so the colours sit under them rather than being cut up by them
   // the country borders are drawn on every base map: light over dark imagery, dark over the colours and pale maps
-  if(basemap!=='street'){ctx.globalAlpha=0.9;strokeFC(CB,BM().dark&&LAY.hours<0.5?'rgba(255,255,255,.85)':'rgba(20,24,44,.8)',k>4?1:0.7);ctx.globalAlpha=1}
+  if(basemap!=='street'){const col=BM().dark&&LAY.hours<0.5?'rgba(255,255,255,.85)':'rgba(20,24,44,.8)';
+    // on the map types with vector tiles, the borders come from those tiles, so they are as fine as the map at every zoom
+    const fine=(BM().labels||BM().fine)&&shown?drawFineBorders(col):0;
+    if(!fine){ctx.globalAlpha=0.9;strokeFC(CB,col,k>4?1:0.7);ctx.globalAlpha=1}}
   else if(bA>0.02){ctx.globalAlpha=bA*0.5;strokeFC(CB,pal.border,k>4?0.9:0.6);ctx.globalAlpha=1}
   // sphere shading for depth
   ctx.save();ctx.beginPath();path({type:'Sphere'});ctx.clip();
@@ -203,6 +206,23 @@ function draw(){
   const mapNames=LAY.names>0&&shown&&(!raster||BM().labels);drawLabels();MAPLAB.length=0;MAPBOX.length=0;if(mapNames)drawMapLabels(LAY.names);withA(LAY.weather,()=>wxDraw(mapNames));withA(LAY.fav,drawFavs);drawPin();
 }
 
+// the lines of each vector tile in view, as unit vectors, worked out once per tile: the country borders on land, and
+// the coastline (the edges of the water shapes). A water edge that runs along the tile's own edge is left out, since the
+// neighbouring tile draws it, so the coast never gets straight tile-shaped lines.
+function vtBorders(dk,dd){if(dd.bl)return dd.bl;const bl=[],L=dd.L||{},[z,x,y]=dk.split('/').map(Number),n=2**z;
+  const toV=(a,e)=>{const v=new Float32Array(a.length/2*3);for(let i=0,j=0;i<a.length;i+=2,j+=3){const c=vec((x+a[i]/e)/n*360-180,y2lat(y+a[i+1]/e,n));v[j]=c[0];v[j+1]=c[1];v[j+2]=c[2]}return v};
+  if(L.boundary){const bd=L.boundary;for(const F of bd.f){if(F.t!==2||F.p.maritime||!(F.p.admin_level<=2))continue;for(const a of F.g)bl.push(toV(a,bd.e))}}
+  if(L.water){const wt=L.water,e=wt.e;const inside=(p)=>p[0]>=0&&p[0]<=e&&p[1]>=0&&p[1]<=e;
+    const onEdge=(p,q)=>(p[0]===q[0]&&(p[0]<=0||p[0]>=e))||(p[1]===q[1]&&(p[1]<=0||p[1]>=e));
+    for(const F of wt.f){if(F.t!==3)continue;for(const a of F.g){let chain=[];
+      for(let i=0;i+3<a.length;i+=2){const p=[a[i],a[i+1]],q=[a[i+2],a[i+3]];
+        if(inside(p)&&inside(q)&&!onEdge(p,q)){if(!chain.length)chain.push(p);chain.push(q)}
+        else if(chain.length){bl.push(toV(chain.flat(),e));chain=[]}}
+      if(chain.length)bl.push(toV(chain.flat(),e))}}}
+  dd.bl=bl;return bl}
+function drawFineBorders(col){let n=0;ctx.save();ctx.globalAlpha=0.9;ctx.lineJoin='round';ctx.lineCap='round';ctx.lineWidth=k>4?1.1:0.8;ctx.strokeStyle=col;ctx.beginPath();
+  for(const dk of vtUsed){const dd=vdata.get(dk);if(!dd||!dd.ok)continue;for(const v of vtBorders(dk,dd)){ring(v,false);n++}}
+  if(n)ctx.stroke();ctx.restore();return n}
 function drawOverlays(){overlays.forEach(L=>{if(!L.on)return;L.fc.features.forEach(f=>{const g=f.geometry;if(!g||/Point/.test(g.type))return;
   ctx.beginPath();path(f);if(/Polygon/.test(g.type)){ctx.globalAlpha=.2;ctx.fillStyle=L.color;ctx.fill();ctx.globalAlpha=1}
   ctx.strokeStyle=pal.halo;ctx.lineWidth=4;ctx.stroke();ctx.strokeStyle=L.color;ctx.lineWidth=2.2;ctx.stroke();})});
@@ -436,7 +456,7 @@ const BASEMAPS={
   street:{name:'Street map',sub:'OpenStreetMap data, names in English'},
   satellite:{name:'Satellite',sub:'Esri World Imagery, with English names',url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',max:19,labels:true,dark:true,
     attr:'Imagery © Esri, Maxar, Earthstar Geographics and the GIS User Community · Names © OpenStreetMap contributors'},
-  topo:{name:'Topographic',sub:'Contours and relief, OpenTopoMap',url:'https://tile.opentopomap.org/{z}/{x}/{y}.png',max:17,attr:'Map data © OpenStreetMap contributors, SRTM · Style © OpenTopoMap (CC BY-SA)'},
+  topo:{name:'Topographic',sub:'Contours and relief, OpenTopoMap',url:'https://tile.opentopomap.org/{z}/{x}/{y}.png',max:17,fine:true,attr:'Map data © OpenStreetMap contributors, SRTM · Style © OpenTopoMap (CC BY-SA)'},
   ocean:{name:'Ocean',sub:'Sea-floor relief and bathymetry, Esri',url:'https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}',max:13,labels:true,
     attr:'Tiles © Esri: GEBCO, NOAA, CHS, OSU, UNH, CSUMB, National Geographic, DeLorme, NAVTEQ · Names © OpenStreetMap contributors'}};
 // the default base map is satellite (stored under its own key, so an earlier choice doesn't override it)
@@ -444,7 +464,7 @@ let basemap=(()=>{try{const b=localStorage.getItem('whg.basemap2');return BASEMA
 const BM=()=>BASEMAPS[basemap];
 const rimg=new Map();
 function rtile(z,x,y,load){const B=BM(),key=basemap+z+'/'+x+'/'+y;let t=rimg.get(key);
-  if(t){rimg.delete(key);rimg.set(key,t);if(t.ok&&B.labels&&!t.dk)t.dk=vtLabelKey(z,x,y);return t}
+  if(t){rimg.delete(key);rimg.set(key,t);if(t.ok&&(B.labels||B.fine)&&!t.dk)t.dk=vtLabelKey(z,x,y);return t}
   if(!load)return null;
   t={ok:false,img:new Image()};t.img.crossOrigin='anonymous';t.img.decoding='async';
   t.img.onload=()=>{t.ok=true;tileRedraw()};t.img.onerror=()=>{t.err=true};
@@ -1017,7 +1037,7 @@ function m3dStyleDef(){const B=BM();
   return{version:8,glyphs:'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
     sources:{base:{type:'raster',tiles:[B.url],tileSize:256,maxzoom:B.max,attribution:B.attr},
       ofm:{type:'vector',url:'https://tiles.openfreemap.org/planet',attribution:'OpenFreeMap © OpenMapTiles · © OpenStreetMap contributors'}},
-    layers:[{id:'base',type:'raster',source:'base'}].concat(B.labels?[
+    layers:[{id:'base',type:'raster',source:'base'}].concat(B.labels||B.fine?[{id:'fine-borders',type:'line',source:'ofm','source-layer':'boundary',filter:['all',['<=',['get','admin_level'],2],['!=',['get','maritime'],1]],paint:{'line-color':'#ffffff','line-opacity':0.85,'line-width':['interpolate',['linear'],['zoom'],2,0.7,7,1.2,12,2]}}]:[]).concat(B.labels?[
       {id:'water-names',type:'symbol',source:'ofm','source-layer':'water_name',layout:{'text-field':NAME_EN,'text-font':['Noto Sans Italic'],'text-size':13},paint:{'text-color':B.dark?'#cfe8ff':'#2c66a3','text-halo-color':B.dark?'rgba(0,0,0,.7)':'#fff','text-halo-width':1.4}},
       {id:'peaks',type:'symbol',source:'ofm','source-layer':'mountain_peak',minzoom:10,filter:['has','ele'],layout:{'text-field':['concat',NAME_EN,'\n',['to-string',['get','ele']],' m'],'text-font':['Noto Sans Regular'],'text-size':11},paint:{'text-color':'#fff','text-halo-color':'rgba(0,0,0,.75)','text-halo-width':1.3}},
       // the place names are split by kind, so the zoom can show each kind from its own zoom level (see placeZoom)
@@ -1339,7 +1359,9 @@ function m3dApply(){if(!m3d||!m3d.map||m3d.styleBusy)return;const map=m3d.map;
   const set=(id,p,v)=>{try{if(map.getLayer(id))map.setPaintProperty(id,p,v)}catch(e){}};
   set(M3D_OWN+'tz','fill-opacity',ramp(L.hours,[[zA,op],[zB,0]]));
   // the country borders are on every base map: light over dark imagery, dark over the colours and pale maps
-  set(M3D_OWN+'cb','line-opacity',0.9);set(M3D_OWN+'cb','line-color',BM().dark&&L.hours<0.5?'rgba(255,255,255,.85)':'rgba(20,24,44,.8)');
+  // on the satellite-type maps the borders are the vector tiles' own lines ('fine-borders'), so the coarser set steps aside
+  const vecB=!!(BM().labels||BM().fine)&&basemap!=='street',bcol=BM().dark&&L.hours<0.5?'#ffffff':'#141a2c';
+  set(M3D_OWN+'cb','line-opacity',vecB?0:0.9);set(M3D_OWN+'cb','line-color',bcol);set('fine-borders','line-color',bcol);
   set(M3D_OWN+'lab','text-opacity',L.hours);
   set(M3D_OWN+'cl','icon-opacity',L.cl);
   set(M3D_OWN+'fv','icon-opacity',L.fav);set(M3D_OWN+'fvn','text-opacity',L.fav);
