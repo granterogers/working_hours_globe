@@ -24,7 +24,7 @@ const DEG=180/Math.PI, MINK=0.93, MAXK=9000;
 const M3D_MAX_PITCH=60;
 let S=12,E=20,season=0,W=0,H=0,dpr=1,base=300,cx=0,cy=0;
 // the layers start in the same state on every launch: working hours, favourites and day and night on, the rest off
-let showNight=true,showFavs=true,showCw=false,showCams=false,showWeather=false,showNames=false,showHours=true;
+let showNight=true,showFavs=true,showCw=false,showCams=false,showWeather=false,showNames=true,showHours=true;
 let rot=[-8,-36,0],k=0.7,kT=1,vel=[0,0],anchor=null,dragging=false,running=false,fly=null,overlays=[],placed=[],dark=true,pal={};
 try{if(new Date().toLocaleString('en-GB',{timeZone:'Europe/London',timeZoneName:'short'}).includes('BST'))season=1}catch(e){}
 
@@ -590,7 +590,8 @@ function drawMapLabels(alpha){
   const onDark=basemap!=='street'&&BM().dark;
   const text=(s,x,y,font,col,hw)=>{ctx.font=font;ctx.lineWidth=hw||3;ctx.strokeText(s,x,y);ctx.fillStyle=onDark?(col===LINK.water?'#cfe8ff':/^#(000000|222222|333333|3a2a10)$/.test(col)?'#ffffff':col):col;ctx.fillText(s,x,y)};
   ctx.save();ctx.globalAlpha=alpha;ctx.lineJoin='round';ctx.textAlign='center';ctx.textBaseline='middle';ctx.strokeStyle=onDark?'rgba(0,0,0,.75)':'rgba(255,255,255,.9)';let n=0;
-  const cap=clamp(Math.round(W*H/9000),40,140);
+  // fewer names when zoomed out, more as you close in
+  const cap=clamp(Math.round(W*H/(vtZ<9?30000:vtZ<11?14000:9000)),20,140);
   for(const L of cand){if(n>=cap)break;
     if(L.line){const pp=[];for(const v of L.line){const q=sp(v);if(!q){if(pp.length>1)break;pp.length=0;continue}pp.push(q)}
       if(pp.length<2)continue;const font=L.kind==='water'?LF.water:LF.road,w=tw(L.name,font)+6,h=L.kind==='water'?15:13;
@@ -1052,7 +1053,7 @@ function m3dStyleDef(){const B=BM();
       ofm:{type:'vector',url:'https://tiles.openfreemap.org/planet',attribution:'OpenFreeMap © OpenMapTiles · © OpenStreetMap contributors'}},
     layers:[{id:'base',type:'raster',source:'base'}].concat(B.labels||B.fine?[{id:'fine-borders',type:'line',source:'ofm','source-layer':'boundary',filter:['all',['<=',['get','admin_level'],2],['!=',['get','maritime'],1]],paint:{'line-color':'#000000','line-opacity':0.85,'line-width':['interpolate',['linear'],['zoom'],2,0.7,7,1.2,12,2]}}]:[]).concat(B.labels?[
       {id:'water-names',type:'symbol',source:'ofm','source-layer':'water_name',layout:{'text-field':NAME_EN,'text-font':['Noto Sans Italic'],'text-size':13},paint:{'text-color':B.dark?'#cfe8ff':'#2c66a3','text-halo-color':B.dark?'rgba(0,0,0,.7)':'#fff','text-halo-width':1.4}},
-      {id:'peaks',type:'symbol',source:'ofm','source-layer':'mountain_peak',minzoom:10,filter:['has','ele'],layout:{'text-field':['concat',NAME_EN,'\n',['to-string',['get','ele']],' m'],'text-font':['Noto Sans Regular'],'text-size':11},paint:{'text-color':'#fff','text-halo-color':'rgba(0,0,0,.75)','text-halo-width':1.3}},
+      {id:'peaks',type:'symbol',source:'ofm','source-layer':'mountain_peak',minzoom:12,filter:['has','ele'],layout:{'text-field':['concat',NAME_EN,'\n',['to-string',['get','ele']],' m'],'text-font':['Noto Sans Regular'],'text-size':11},paint:{'text-color':'#fff','text-halo-color':'rgba(0,0,0,.75)','text-halo-width':1.3}},
       // the place names are split by kind, so the zoom can show each kind from its own zoom level (see placeZoom)
       ...['country','state','city','town','village'].map(k=>({id:k+'-names',type:'symbol',source:'ofm','source-layer':'place',
         filter:['in',['get','class'],['literal',k==='village'?['village','suburb','hamlet','island']:[k]]],
@@ -1060,13 +1061,17 @@ function m3dStyleDef(){const B=BM();
         paint:{'text-color':B.dark?'#fff':'#111','text-halo-color':B.dark?'rgba(0,0,0,.8)':'#fff','text-halo-width':1.5}}))]:[])}}
 // the place names come in by kind: countries first, then states, cities, towns and villages as you zoom in, so the map is
 // never covered with small towns. Each layer keeps its own largest zoom and only its smallest is raised.
-const PLACE_ZOOM=[['country',0],['state',5.5],['city',6.5],['town',8.5],['village',10.5],['hamlet',10.5],['suburb',10.5],['other',10.5],['island',10.5],['neighbourhood',11]];
+const PLACE_ZOOM=[['country',0],['state',5.5],['city',6.5],['town',8.5],['village',11.5],['hamlet',11.5],['suburb',11.5],['other',11.5],['island',11.5],['neighbourhood',12.5]];
 function placeZoom(map){const st=map.getStyle();if(!st)return;
   for(const l of st.layers){if(l.type!=='symbol'||l['source-layer']!=='place')continue;const k=PLACE_ZOOM.find(([w])=>l.id.includes(w));if(!k)continue;
     if(!PLACE_MIN.has(l.id))PLACE_MIN.set(l.id,l.minzoom||0);
     try{map.setLayerZoomRange(l.id,Math.max(PLACE_MIN.get(l.id),k[1]),l.maxzoom==null?24:l.maxzoom)}catch(e){}
     // the most important names are placed first, so where they crowd, the smaller ones give way
-    try{map.setLayoutProperty(l.id,'symbol-sort-key',['coalesce',['get','rank'],99])}catch(e){}}}
+    try{map.setLayoutProperty(l.id,'symbol-sort-key',['coalesce',['get','rank'],99])}catch(e){}
+    try{map.setLayoutProperty(l.id,'text-padding',NAME_PAD)}catch(e){}}
+  try{map.setLayoutProperty('peaks','text-padding',NAME_PAD)}catch(e){}}
+// how much room each name keeps from its neighbours: a wide margin when zoomed out, tight when close in
+const NAME_PAD=['interpolate',['linear'],['zoom'],8,30,12,10,16,4];
 const PLACE_MIN=new Map();
 // Day and night on the globe: the night side is an image worked out pixel by pixel from the sun, with the same darkness
 // as the canvas globe. Its rows are spaced as the Mercator map spaces them, so it lines up with the map. The image is
@@ -1379,7 +1384,7 @@ function m3dApply(){if(!m3d||!m3d.map||m3d.styleBusy)return;const map=m3d.map;
   // on the satellite-type maps the borders are the vector tiles' own lines ('fine-borders'), so the coarser set steps aside
   const vecB=!!(BM().labels||BM().fine)&&basemap!=='street',bcol='#000000';
   const cbFade=['interpolate',['linear'],['zoom'],BORDER_OFF_Z-1,0.9,BORDER_OFF_Z,0];
-  set(M3D_OWN+'cb','line-opacity',vecB?0:cbFade);set('fine-borders','line-opacity',['interpolate',['linear'],['zoom'],BORDER_OFF_Z-1,1,BORDER_OFF_Z,0]);set(M3D_OWN+'coast','line-opacity',vecB?0.9:0);set(M3D_OWN+'coast','line-color',bcol);set(M3D_OWN+'cb','line-color',bcol);set('fine-borders','line-color',bcol);
+  set(M3D_OWN+'cb','line-opacity',vecB?0:cbFade);set('fine-borders','line-opacity',['interpolate',['linear'],['zoom'],BORDER_OFF_Z-1,1,BORDER_OFF_Z,0]);set(M3D_OWN+'coast','line-opacity',vecB?['interpolate',['linear'],['zoom'],BORDER_OFF_Z-1,0.9,BORDER_OFF_Z,0]:0);set(M3D_OWN+'coast','line-color',bcol);set(M3D_OWN+'cb','line-color',bcol);set('fine-borders','line-color',bcol);
   set(M3D_OWN+'lab','text-opacity',L.hours);
   set(M3D_OWN+'cl','icon-opacity',L.cl);
   set(M3D_OWN+'fv','icon-opacity',L.fav);set(M3D_OWN+'fvn','text-opacity',L.fav);
@@ -1431,7 +1436,7 @@ function coastRun(map){if(!map||!map.getStyle())return;const B=BM();
   COAST.key=key;
   const data={type:'FeatureCollection',features:feats};
   try{if(map.getSource(M3D_OWN+'coast'))map.getSource(M3D_OWN+'coast').setData(data);else map.addSource(M3D_OWN+'coast',{type:'geojson',data})}catch(e){return}
-  if(!map.getLayer(M3D_OWN+'coast'))try{map.addLayer({id:M3D_OWN+'coast',type:'line',source:M3D_OWN+'coast',layout:{'line-join':'round','line-cap':'round'},paint:{'line-color':'#000000','line-width':['interpolate',['linear'],['zoom'],4,0.6,9,1,14,1.4],'line-opacity':0.9}})}catch(e){}
+  if(!map.getLayer(M3D_OWN+'coast'))try{map.addLayer({id:M3D_OWN+'coast',type:'line',source:M3D_OWN+'coast',layout:{'line-join':'round','line-cap':'round'},paint:{'line-color':'#000000','line-width':['interpolate',['linear'],['zoom'],4,0.6,9,1,14,1.4],'line-opacity':['interpolate',['linear'],['zoom'],BORDER_OFF_Z-1,0.9,BORDER_OFF_Z,0]}})}catch(e){}
   // tiles still loading: look again shortly, a few times
   if(missing&&COAST.retry<8){COAST.retry++;COAST.key='';setTimeout(()=>coastFeed(map),1200)}else COAST.retry=0}
 function prefetchTiles(map){const B=BM();if(!B.url||basemap==='street'||map.getZoom()<2.5)return;
@@ -1455,7 +1460,9 @@ function m3dWx(){const map=m3d.map;if(!map||!showWeather||m3d.el.hidden)return;c
   const pool=all.filter(p=>old.has(pk(p))).concat(all.filter(p=>!old.has(pk(p))));
   for(const p of pool){if(out.length>=cap)break;const q=map.project([p.lon,p.lat]);if(!isFinite(q.x)||q.x<40||q.y<70||q.x>W3-40||q.y>H3-30)continue;
     // each point is a name and a temperature, about 120 px wide and 40 px tall: their boxes don't overlap, and the number is kept modest
-    const clash=a=>dense?Math.abs(a[0]-q.x)<120&&Math.abs(a[1]-q.y)<40:Math.hypot(a[0]-q.x,a[1]-q.y)<140;
+    // one reading per 50 miles: the gap is measured on the ground, so it follows the map's zoom and latitude
+    const gapPx=80467*512*2**map.getZoom()/(40075016*Math.max(0.2,Math.cos(p.lat*Math.PI/180)));
+    const clash=a=>Math.hypot(a[0]-q.x,a[1]-q.y)<gapPx||(dense&&Math.abs(a[0]-q.x)<120&&Math.abs(a[1]-q.y)<40);
     if(at.some(clash))continue;at.push([q.x,q.y]);out.push(p)}
   WX.shown3d=out;m3dSync();wxFetch()}
 // clicks in 3D open the same cards as on the globe
