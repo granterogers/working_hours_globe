@@ -2298,7 +2298,7 @@ function homeIntro(){
     navigator.geolocation.getCurrentPosition(p=>{myLoc={lon:p.coords.longitude,lat:p.coords.latitude,acc:p.coords.accuracy||50};
       if(stop)return;const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
       if(m3d.el&&!m3d.el.hidden&&m3d.map)m3dMe();
-      flyTo(myLoc.lon,myLoc.lat,0.08,reduce?0:6000,0.05);draw()},()=>{},{enableHighAccuracy:false,timeout:15000,maximumAge:600000})};
+      flyTo(myLoc.lon,myLoc.lat,0.08,reduce?0:30000,0.05);draw()},()=>{},{enableHighAccuracy:false,timeout:15000,maximumAge:600000})};
   if(navigator.permissions&&navigator.permissions.query)navigator.permissions.query({name:'geolocation'}).then(s=>{if(s.state!=='denied')go()}).catch(go);else go();
 }
 setTimeout(homeIntro,1200);
