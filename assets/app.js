@@ -875,12 +875,14 @@ function clickAt(x,y){
   else{const ll=proj.invert([x,y]);at=ll;if(!ll||d3.geoDistance(ll,viewCap[0])>1.56){hideInfo();return}
     const f=TZHIT.features.find(f=>d3.geoContains(f,ll));
     let best=null,bd=1e9;for(const p of D.prov){const d=d3.geoDistance(ll,[p[1],p[2]]);if(d<bd){bd=d;best=p}}
-    if(!f&&!(best&&bd<0.05)){hideInfo();return}
+    // open water with no place or time zone: still pinned, with its coordinates, and no hours
+    if(!f&&!(best&&bd<0.05)){clickPin=at;showInfo('Open water',`${ll[1].toFixed(4)}, ${ll[0].toFixed(4)}`,null,at);return}
     tz=f?f.properties.z:best[3];title=best&&bd<0.03?best[0]:tz.split('/').pop().replace(/_/g,' ');where=best&&bd<0.03?(best[6]||''):'';
     // until the lookup answers: the nearest town on the street map if one is close, otherwise a placeholder
     fallback=title;const mp=nearestMapPlace(ll);title=mp||'Looking up this spot…';where=mp?'':where;}
   if(hit)tz=tzAt(at)||tz;
-  clickPin=hit&&k<TILE_K?null:at;
+  // every click that opens a card drops the pin where it was clicked, labels included
+  clickPin=at;
   showInfo(title,where,tz,at);
   // a country or region label clicked on the zoomed-out globe keeps its name; anywhere else, look up
   // the actual spot clicked (nearest village, town or feature, at a detail matching the zoom)
@@ -1285,7 +1287,8 @@ function m3dGeo(){
   const fv={type:'FeatureCollection',features:on('fav')?favs.map((f,i)=>({type:'Feature',properties:{i,n:f.name},geometry:{type:'Point',coordinates:[f.lon,f.lat]}})):[]};
   const ov={type:'FeatureCollection',features:[]};
   overlays.forEach((L,li)=>{if(L.on)L.fc.features.forEach((f,fi)=>{if(f.geometry)ov.features.push({type:'Feature',properties:{li,fi,c:L.color,n:(f.properties&&f.properties.name)||''},geometry:f.geometry})})});
-  const wx={type:'FeatureCollection',features:on('weather')?(WX.shown3d||[]).map(p=>{const q=WX.pts.get(wxKey(p.lat,p.lon));return q&&{type:'Feature',properties:{t:p.name+'  '+Math.round(q.temp)+'°',c:wxTempCol(q.temp),ic:'wx-'+wxKind(q.code,q.day)},geometry:{type:'Point',coordinates:[p.lon,p.lat]}}}).filter(Boolean):[]};
+  // a place keeps its label while its reading is still on its way (a dash, and a plain cloud), so it never drops out and comes back
+const wx={type:'FeatureCollection',features:on('weather')?(WX.shown3d||[]).map(p=>{const q=WX.pts.get(wxKey(p.lat,p.lon));return{type:'Feature',properties:{t:p.name+'  '+(q?Math.round(q.temp)+'°':'…'),c:q?wxTempCol(q.temp):'#ffffff',ic:q?'wx-'+wxKind(q.code,q.day):'wx-cloud'},geometry:{type:'Point',coordinates:[p.lon,p.lat]}}}):[]};
   const cm={type:'FeatureCollection',features:on('cams')?[...CAM.list.values()].map(c=>({type:'Feature',properties:{id:c.id,live:c.src==='windy'?1:0},geometry:{type:'Point',coordinates:[c.lon,c.lat]}})):[]};
   const cwk={type:'FeatureCollection',features:on('cw')?CW.vis.map(c=>({type:'Feature',properties:{id:c.id,p:cwPriority(c)},geometry:{type:'Point',coordinates:[c.lon,c.lat]}})):[]};
   // the two polar caps, which the basemap's tiles stop short of, in the basemap's own colours
@@ -1321,7 +1324,7 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
   const src=(id,data,key)=>{const s=map.getSource(M3D_OWN+id);if(s&&key!==undefined&&SRC_KEY[id]===key)return;SRC_KEY[id]=key;if(s)s.setData(data);else map.addSource(M3D_OWN+id,{type:'geojson',data})};
   // the country borders: the fine set once the map is zoomed in, the medium set further out
   const hiB=map.getZoom()>=4;if(hiB&&!D.cbHi)loadHi();const useHi=hiB&&!!D.cbHi,cbSet=useHi?D.cbHi:D.cbM;
-  try{src('tz',g.tz,[on('hours'),season,S,E,dark].join());src('cb',{type:'FeatureCollection',features:cbSet.features.filter(f=>f.geo).map(f=>({type:'Feature',properties:{},geometry:f.geo}))},useHi?'hi':'mid');src('lab',g.lab,[on('hours'),showNames,season,S,E].join());src('cl',g.cl);src('fv',g.fv);src('ov',g.ov);src('wx',g.wx);src('cm',g.cm);src('cwk',g.cwk)}catch(e){console.warn('3D sources paused:',e&&e.message);return}
+  try{src('tz',g.tz,[on('hours'),season,S,E,dark].join());src('cb',{type:'FeatureCollection',features:cbSet.features.filter(f=>f.geo).map(f=>({type:'Feature',properties:{},geometry:f.geo}))},useHi?'hi':'mid');src('lab',g.lab,[on('hours'),showNames,season,S,E].join());src('cl',g.cl);src('fv',g.fv);src('ov',g.ov);src('cm',g.cm);src('cwk',g.cwk);src('wx',g.wx,g.wx.features.map(f=>f.properties.t+f.properties.ic+f.geometry.coordinates).join('|'))}catch(e){console.warn('3D sources paused:',e&&e.message);return}
   const font=['Noto Sans Bold'],dk=BM().dark||false;
   const lay=(def,before)=>{if(!map.getLayer(def.id))try{map.addLayer(def,before)}catch(e){console.warn('3D layer not added:',def.id,e&&e.message)}};
   // working-hours colours fade out as you zoom in, like on the globe
@@ -1465,8 +1468,10 @@ function m3dClick(e){const map=m3d.map,hits=map.queryRenderedFeatures(e.point,{l
   if(h&&h.layer.id===M3D_OWN+'fv'){const f=favs[h.properties.i];if(f){showFav(f);return}}
   if(h&&h.layer.id===M3D_OWN+'cl'){const x=CL.byId.get(h.properties.id);if(x){clShow(x);return}}
   if(h&&h.layer.id.startsWith(M3D_OWN+'ov')){const L=overlays[h.properties.li],f=L&&L.fc.features[h.properties.fi];if(f){selected={L,f};showFeature(L,f,ll);return}}
-  const tz=tzAt(ll);if(!tz){hideInfo();return}
-  clickPin=ll;
+  const tz=tzAt(ll);
+  // open water with no time zone: still pinned, with its coordinates and no hours
+  if(!tz){clickPin=ll;mapSync();showInfo('Open water',`${ll[1].toFixed(4)}, ${ll[0].toFixed(4)}`,null,ll);return}
+  clickPin=ll;mapSync();
   showInfo('Looking up this spot…',' ',tz,ll);
   const hEl=document.querySelector('#infob h2'),w=document.querySelector('#infob .where'),tok=infoTok;hEl.classList.add('pending');
   geocode({lon:ll[0],lat:ll[1]},res=>{if(tok!==infoTok)return;hEl.classList.remove('pending');hEl.textContent=res.name;w.textContent=res.where||' '})}
@@ -1963,7 +1968,7 @@ async function wxFetch(){if(!showWeather||WX.busy||Date.now()<(WX.wait||0))retur
   try{const u=`https://api.open-meteo.com/v1/forecast?latitude=${need.map(p=>p.lat.toFixed(2)).join(',')}&longitude=${need.map(p=>p.lon.toFixed(2)).join(',')}&current=temperature_2m,weather_code,is_day&timezone=auto`;
     let j=await phJSON(u);if(!Array.isArray(j))j=[j];
     j.forEach((r,i)=>{const c=r&&r.current;if(c)WX.pts.set(need[i].key,{lat:need[i].lat,lon:need[i].lon,t:now,temp:c.temperature_2m,code:c.weather_code,day:c.is_day})});
-    if(WX.pts.size>2000){let n=WX.pts.size-1600;for(const kk of WX.pts.keys()){WX.pts.delete(kk);if(--n<=0)break}}}
+    if(WX.pts.size>2000){let n=WX.pts.size-1600;const keep=new Set((WX.shown3d||[]).map(p=>wxKey(p.lat,p.lon)));for(const kk of WX.pts.keys()){if(keep.has(kk))continue;WX.pts.delete(kk);if(--n<=0)break}}}
   catch(e){WX.wait=Date.now()+30000}finally{need.forEach(p=>WX.pending.delete(p.key));WX.busy=false}
   draw();m3dSync();if(m3d.el&&!m3d.el.hidden&&(WX.shown3d||[]).some(p=>!WX.pts.has(wxKey(p.lat,p.lon))))setTimeout(wxFetch,300)}
 // badges sit just under the town's name on the street map; zoomed out they carry the city name themselves
