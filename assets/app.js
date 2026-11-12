@@ -20,6 +20,8 @@ const HOUR_BINS=24;   // band index = start hour minus 5, so 0 is 05:00 and 23 i
 function bandName(bin){const h=bin+5;const b=BANDS.find(q=>h>=q.lo&&h<q.hi)||BANDS[5];return b.name}
 function bandSub(bin){const h=bin+5;return(BANDS.find(q=>h>=q.lo&&h<q.hi)||BANDS[5]).sub}
 const DEG=180/Math.PI, MINK=0.93, MAXK=9000;
+// the most the 3D view can tilt: past this the horizon and the globe's edge start to show artifacts
+const M3D_MAX_PITCH=60;
 let S=12,E=20,season=0,W=0,H=0,dpr=1,base=300,cx=0,cy=0;
 // the layers start in the same state on every launch: working hours, favourites and day and night on, the rest off
 let showNight=true,showFavs=true,showCw=false,showCams=false,showWeather=false,showNames=false,showHours=true;
@@ -1208,7 +1210,7 @@ async function openMap(){let el=m3d.el;
   m3d.opening=(async()=>{let lib;try{lib=await m3dLoad()}catch(e){msg.textContent='The 3D view couldn’t load. Check your connection and try again.';msg.hidden=false;showCanvasFallback();return}
     // start exactly where the globe was: same centre, same scale
     const lon=-rot[0],lat=clamp(-rot[1],-85,85),zoom=fitZoom();
-    try{const map=m3d.map=new lib.Map({container:'m3dmap',style:m3dStyleDef(),center:[lon,lat],zoom,minZoom:m3dMinZoom(),pitch:0,bearing:0,maxPitch:85,attributionControl:false,hash:false,dragRotate:true,pitchWithRotate:true,maxTileCacheSize:3000,refreshExpiredTiles:false});
+    try{const map=m3d.map=new lib.Map({container:'m3dmap',style:m3dStyleDef(),center:[lon,lat],zoom,minZoom:m3dMinZoom(),pitch:0,bearing:0,maxPitch:M3D_MAX_PITCH,attributionControl:false,hash:false,dragRotate:true,pitchWithRotate:true,maxTileCacheSize:3000,refreshExpiredTiles:false});
       map.on('rotate',northNeedle);map.on('pitch',()=>{northNeedle();setModeLabel(isTilted())});
       // the map is shown once its style has loaded (or after 5 s at most): a single slow tile must not keep the page on 'Loading'
       map.once('style.load',()=>{setTimeout(()=>mapReady(map),0)});setTimeout(()=>mapReady(map),5000);
@@ -1227,7 +1229,8 @@ async function openMap(){let el=m3d.el;
 // the map is on screen: it takes over from the canvas globe, which then stops drawing
 function mapReady(map){if(m3d.ready)return;m3d.ready=true;syncFromMap();document.body.classList.add('in3d');document.body.classList.remove('booting');const ld=document.getElementById('loading');if(ld)ld.remove();setModeLabel(isTilted());m3dSync();
   requestAnimationFrame(()=>{if(m3d.el)m3d.el.style.opacity='1'});markersSync();}
-function mapOn(){return!!(m3d.ready&&m3d.map)}
+// the 3D map stays built after it is closed, so it only counts while its panel is showing
+function mapOn(){return!!(m3d.ready&&m3d.map&&m3d.el&&!m3d.el.hidden)}
 function showCanvasFallback(){document.body.classList.remove('booting');const ld=document.getElementById('loading');if(ld)ld.remove()}
 // the zoom at which the globe is the same size as the canvas globe at its opening scale (its radius is 43% of the shorter side)
 function fitZoom(){const shorter=Math.min(innerWidth,innerHeight);return clamp(Math.log2(0.43*shorter*2*Math.PI/512),0,6)}
@@ -1235,7 +1238,7 @@ function isTilted(){return!!(m3d.map&&m3d.map.getPitch()>5)}
 // the map's centre and zoom, mirrored into the globe's state, so the place and sky code keeps the same numbers
 function syncFromMap(){const map=m3d.map,c=map.getCenter(),lat=clamp(c.lat,-85,85);rot=[-c.lng,-lat,0];k=kT=z2k(map.getZoom(),lat)}
 // tilts the map to the given pitch (0 is looking straight down)
-function tiltTo(p){const map=m3d.map;if(map)map.easeTo({pitch:p,duration:900})}
+function tiltTo(p){const map=m3d.map;if(map)map.easeTo({pitch:Math.min(M3D_MAX_PITCH,p),duration:900})}
 const HOVER_IDS=['cws','cm','fv','cl','ovp','ovl','ovf'];
 // Globe projection with 3D terrain on top tore and flickered while panning, so the two never run together:
 // zoomed out it's a globe (terrain adds nothing at that scale); from zoom 5 in, a flat map with terrain.
@@ -1250,7 +1253,7 @@ function m3dWheelButton(map){const c=map.getCanvasContainer();let st=null;
     const pv=m3d.pivot,pt=pv&&map.project(pv),r=map.getContainer().getBoundingClientRect();
     const onScreen=pt&&pt.x>=0&&pt.y>=0&&pt.x<=r.width&&pt.y<=r.height;
     st={x:e.clientX,y:e.clientY,b:map.getBearing(),p:map.getPitch(),pv:onScreen?pv:null,pt:onScreen?[pt.x,pt.y]:null};c.style.cursor='grabbing'});
-  window.addEventListener('mousemove',e=>{if(!st)return;if(!(e.buttons&4)){st=null;c.style.cursor='';return}map.jumpTo({bearing:st.b-(e.clientX-st.x)*0.35,pitch:clamp(st.p-(e.clientY-st.y)*0.3,0,85)});
+  window.addEventListener('mousemove',e=>{if(!st)return;if(!(e.buttons&4)){st=null;c.style.cursor='';return}map.jumpTo({bearing:st.b-(e.clientX-st.x)*0.35,pitch:clamp(st.p-(e.clientY-st.y)*0.3,0,M3D_MAX_PITCH)});
     // move the centre so the clicked place returns to where it was on screen (two passes for terrain and the globe's curve)
     if(st.pv)for(let i=0;i<3;i++){const q=map.project(st.pv),dx=q.x-st.pt[0],dy=q.y-st.pt[1];if(!isFinite(dx)||Math.hypot(dx,dy)<0.5)break;
       const cc=map.project(map.getCenter());map.jumpTo({center:map.unproject([cc.x+dx,cc.y+dy])})}});
@@ -2279,4 +2282,16 @@ openMap();
 })();
 const fontsReady=document.fonts?Promise.all([document.fonts.load(F.cn),document.fonts.load(F.pn),document.fonts.load(F.hr)]):Promise.resolve();
 fontsReady.then(()=>{for(const x in mcache)delete mcache[x];draw()});
+// on load, glide slowly in to the visitor's own location (the same spot the location button goes to), if they've allowed it.
+// A touch, click, wheel or key press before it arrives leaves the view alone; a denied permission asks nothing.
+function homeIntro(){
+  if(!navigator.geolocation)return;
+  const go=()=>{let stop=false;const halt=()=>{stop=true};['pointerdown','wheel','keydown'].forEach(t=>window.addEventListener(t,halt,{once:true,passive:true}));
+    navigator.geolocation.getCurrentPosition(p=>{myLoc={lon:p.coords.longitude,lat:p.coords.latitude,acc:p.coords.accuracy||50};
+      if(stop)return;const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if(m3d.el&&!m3d.el.hidden&&m3d.map)m3dMe();
+      flyTo(myLoc.lon,myLoc.lat,0.08,reduce?0:6000,0.05);draw()},()=>{},{enableHighAccuracy:false,timeout:15000,maximumAge:600000})};
+  if(navigator.permissions&&navigator.permissions.query)navigator.permissions.query({name:'geolocation'}).then(s=>{if(s.state!=='denied')go()}).catch(go);else go();
+}
+setTimeout(homeIntro,1200);
 }
