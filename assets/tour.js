@@ -1,97 +1,90 @@
-// Guided tour. It works the real controls the way a person would (a cursor moves to them and clicks, typing goes into
-// the search, layers, filters, photos, the forecast, base maps and 3D are all opened from their buttons) and points at
-// real places on the map. Every step waits for the thing it shows to be ready, with a time limit, so a slow service
-// can't hold the tour up; if something cannot be found the step still shows its card and says so in the console.
-// When the tour ends, the layers, base map, 3D view, working-hours settings and favourites are put back as they were.
+// Guided tour. It works the real controls the way a person would: a cursor moves to them and clicks, typing goes into the
+// search, and the layers, their settings and filters, the place card, photos, forecast, flights, favourites, base maps,
+// 3D view and compass are all opened from their own buttons. It points at real places on the map.
+// It starts from a known state whatever the reader had switched on, so it looks the same every time. Every step waits for
+// what it shows to be ready, with a time limit, so a slow service can't hold it up. When the tour ends, the layers, base
+// map, 3D view, working-hours settings and favourites are put back as they were.
 // To change the tour, edit STEPS below. The app exposes what the tour needs on window.whg and window.whgTour.
 (function(){
 const $=s=>document.querySelector(s);
 // the first element matching `sel` that is actually on screen (panels and galleries stay in the page while hidden)
 const shown=sel=>[...document.querySelectorAll(sel)].find(e=>{const r=e.getBoundingClientRect();return r.width>1&&r.height>1})||null;
+const isOpenEl=sel=>{const e=$(sel);return!!e&&!e.hidden&&e.getBoundingClientRect().width>1};
 const ABORT={};
 const trace=(...a)=>{if(window.whgTourDebug)console.log('TRACE',...a)};
 const PAD=3,GAP=18,EDGE=12;
+
+// the layers the tour starts from, whatever the reader had on or off: the working-hours colours, saved places, night and names
+const BASE_LAYERS={hours:true,fav:true,cl:false,cw:false,cams:false,weather:false,night:true,names:true};
 // sample photos for the tour, from Wikimedia Commons (CC BY-SA 4.0), used only when the live services have none nearby
 const SAMPLES=[['photo-1.jpg','Forte da Esquerda','FortSimplicio1.jpg',1900],['photo-2.jpg','Fort of Carvalha','FortofCarvalha1.jpg',2400],
   ['photo-3.jpg','Forte da Retaguarda','ForteNovo1.jpg',2000],['photo-4.jpg','Fort of Alqueidão','FortAlqueid%C3%A3o4.jpg',2000]]
   .map(([img,title,file,d],i)=>({key:'tour'+i,thumb:'assets/tour/'+img,full:'assets/tour/'+img,lat:38.72,lon:-9.14,d,src:'Wikimedia Commons',author:'',lic:'CC BY-SA 4.0',date:'',link:'https://commons.wikimedia.org/wiki/File:'+file,title}));
-const BARCELONA=[2.1686,41.3874],BERLIN=[13.405,52.52],MADRID=[-3.7038,40.4168],LISBON=[-9.1393,38.7223];
-// city centres for the cities the tour visits: the search finds regions, so after the region is chosen the tour flies on
-// to the city itself
+const LISBON=[-9.1393,38.7223],BARCELONA=[2.1686,41.3874],BERLIN=[13.405,52.52],MADRID=[-3.7038,40.4168];
+// the cities the tour visits: the search finds a region, then the tour flies on to the city itself
 const CITIES={Lisbon:{n:'Lisbon',sub:'Portugal',lon:-9.1393,lat:38.7223,size:0.12,minDeg:0.05,tz:'Europe/London'},
   Barcelona:{n:'Barcelona',sub:'Spain',lon:2.1686,lat:41.3874,size:0.12,minDeg:0.05,tz:'Europe/Paris'},
-  Berlin:{n:'Berlin',sub:'Germany',lon:13.405,lat:52.52,size:0.12,minDeg:0.05,tz:'Europe/Paris'},
-  Madrid:{n:'Madrid',sub:'Spain',lon:-3.7038,lat:40.4168,size:0.12,minDeg:0.05,tz:'Europe/Paris'}};
+  Berlin:{n:'Berlin',sub:'Germany',lon:13.405,lat:52.52,size:0.12,minDeg:0.05,tz:'Europe/Berlin'},
+  Madrid:{n:'Madrid',sub:'Spain',lon:-3.7038,lat:40.4168,size:0.12,minDeg:0.05,tz:'Europe/Madrid'},
+  Tokyo:{n:'Tokyo',sub:'Japan',lon:139.6917,lat:35.6895,size:0.12,minDeg:0.05,tz:'Asia/Tokyo'},
+  Sydney:{n:'Sydney',sub:'Australia',lon:151.2093,lat:-33.8688,size:0.12,minDeg:0.05,tz:'Australia/Sydney'}};
 
 // the item of a list nearest to a point
 const nearest=(list,[lon,lat])=>list.reduce((best,p)=>{const d=(p.lon-lon)**2+(p.lat-lat)**2;return!best||d<best.d?{p,d}:best},null)?.p||null;
+const nearestXY=(list,ll)=>{const p=nearest(list,ll);return p?[p.lon,p.lat]:[ll[0],ll[1]]};
 
 // ---- the engine ------------------------------------------------------------------------------------------------------
-let run=null,cursorEl,veil,ring,card,glowEl,cursor,busy=false;
-// a wait stops as soon as the tour is ended or moves on, so an old step never carries on into the next one
-// a step's waits stop as soon as its tour has ended, so nothing carries on into the view being put back
-// a wait also stops when the reader has moved on to another step, so two steps never act at once
+let run=null,veil,ring,card,glowEl,cursor,busy=false,timer=null;
+// a wait stops as soon as the tour has ended or moved on, so an old step never carries on into the next one
 function wait(ms){const mine=run,st=mine&&mine.step;return new Promise((res,rej)=>setTimeout(()=>mine&&(mine.ended||mine.step!==st)?rej(ABORT):res(),ms))}
 const pause=ms=>new Promise(r=>setTimeout(r,ms));
 // wait for a test to be true, up to `ms`; resolves true or false and never throws for a timeout
 async function until(test,ms){const end=Date.now()+ms;for(;;){let ok=false;try{ok=!!test()}catch(e){}if(ok)return true;if(Date.now()>end)return false;await wait(150)}}
 async function untilP(test,ms){const end=Date.now()+ms;for(;;){let ok=false;try{ok=!!test()}catch(e){}if(ok)return true;if(Date.now()>end)return false;await pause(150)}}
-// the cursor glides to a point, makes a ripple, and then the element is clicked (found again at the moment of the click)
+// the cursor glides to a point, then makes a ripple
 async function moveTo(x,y){cursor.classList.add('on');cursor.style.transform=`translate(${x-4}px,${y-3}px)`;await wait(700)}
 function ripple(){cursor.classList.remove('tap');void cursor.offsetWidth;cursor.classList.add('tap')}
-async function tap(sel){const el=shown(sel);if(!el){console.warn('Tour could not find:',sel);const hidden=document.querySelector(sel);if(hidden)hidden.click();return false}
-  const r=el.getBoundingClientRect();await moveTo(r.left+r.width/2,r.top+r.height/2);ripple();await wait(220);
-  (shown(sel)||el).click();await wait(140);return true}
-// the cursor points at a place on the map (the map itself is not clicked)
-async function pointAt(lon,lat){const p=window.whg.screen(lon,lat);if(!p)return;await moveTo(p.x,p.y);ripple();await wait(400)}
-const panelOpen=sel=>{const e=$(sel);return!!e&&!e.hidden&&getComputedStyle(e).display!=='none'};
-
-// ---- interface actions: each one checks the state it wants, acts, and waits until the state has changed ----------------
-// a panel's open state, read from the page
-const isOpenEl=sel=>{const e=$(sel);return!!e&&!e.hidden&&e.getBoundingClientRect().width>1};
-// open or close a panel: its button is pressed, then the tour waits until the panel really shows or hides (a few tries)
-async function setPanel(panel,openBtn,closeBtn,open){
-  for(let n=0;n<3&&isOpenEl(panel)!==open;n++){const b=(open?openBtn:(closeBtn||openBtn));const el=$(b);if(!el)return false;el.click();await until(()=>isOpenEl(panel)===open,1500)}
-  await wait(250);return isOpenEl(panel)===open}
-const PANELS={hoursset:['#hoursset','#hoursgear','#hoursx'],clf:['#clf','#clfb','#clfx'],cwf:['#cwf','#cwfb','#cwfx'],favlist:['#favlist','#favgear','#favlistx'],bmmenu:['#bmmenu','#bmbtn','#bmbtn']};
-async function panel(name,open){const[p,o,c]=PANELS[name];return setPanel(p,o,c,open)}
-// wait for an element to be on screen (panels and galleries stay in the page while hidden), then move the cursor to it and click
+// wait for an element to be on screen, move the cursor to it and click it (found again at the moment of the click)
 async function tap(sel,ms=5000){const ok=await until(()=>!!shown(sel),ms);
   if(!ok){console.warn('Tour could not find:',sel);return false}
   const el=shown(sel);const r=el.getBoundingClientRect();await moveTo(r.left+r.width/2,r.top+r.height/2);ripple();await wait(220);
   (shown(sel)||el).click();await wait(160);return true}
 // the cursor points at a place on the map (the map itself is not clicked)
 async function pointAt(lon,lat){const p=window.whg.screen(lon,lat);if(!p)return;await moveTo(p.x,p.y);ripple();await wait(400)}
+const panelOpen=sel=>{const e=$(sel);return!!e&&!e.hidden&&getComputedStyle(e).display!=='none'};
 
-// ---- the tour's interface steps ----
-async function ensure2D(){if(window.whg.tilted()){await tap('#b3d');await until(()=>!window.whg.tilted(),8000);await wait(400)}}
-// the 3D view opens its map from scratch, so wait for the map's style too
-async function set3D(on){trace('set3D',on);if(window.whg.tilted()!==on){await tap('#b3d');trace('tapped 3d');await until(()=>window.whg.tilted()===on,9000);trace('tilted');
+// a panel's open state, found by its button: the button is pressed until the panel really shows or hides (a few tries)
+const PANELS={hoursset:['#hoursset','#hoursgear','#hoursx'],clf:['#clf','#clfb','#clfx'],cwf:['#cwf','#cwfb','#cwfx'],favlist:['#favlist','#favgear','#favlistx'],bmmenu:['#bmmenu','#bmbtn','#bmbtn']};
+async function setPanel(panel,openBtn,closeBtn,open){
+  for(let n=0;n<3&&isOpenEl(panel)!==open;n++){const b=(open?openBtn:(closeBtn||openBtn));const el=$(b);if(!el)return false;el.click();await until(()=>isOpenEl(panel)===open,1500)}
+  await wait(250);return isOpenEl(panel)===open}
+async function panel(name,open){const[p,o,c]=PANELS[name];return setPanel(p,o,c,open)}
+
+// ---- interface actions ----------------------------------------------------------------------------------------------
+// the 3D view opens its own map, so the tour waits for that map's style too
+async function set3D(on){trace('set3D',on);if(window.whg.tilted()!==on){await tap('#b3d');await until(()=>window.whg.tilted()===on,9000);
   if(on)await until(()=>{const m=window.whg.map3d();return!!m&&m.isStyleLoaded()},30000);await wait(900)}}
-async function setHours(open){await panel('hoursset',open)}
+// a layer is switched with its own row: the row is pressed, then the tour checks the box really changed
 async function setLayer(key,on){const cb=$(`[data-show="${key}"]`);if(!cb){console.warn('Tour: no layer',key);return}
-  if(cb.checked!==on)await tap(`label:has([data-show="${key}"])`);await until(()=>$(`[data-show="${key}"]`)?.checked===on,2000);await wait(400)}
-async function bmOpen(open){await panel('bmmenu',open)}
-async function switchBase(id){trace('switchBase',id);await bmOpen(true);trace('opened');await tap(`#bmmenu [data-id="${id}"]`);trace('tapped');await until(()=>window.whg.basemap()===id,6000);trace('basemap now',window.whg.basemap());await wait(1200);await bmOpen(false);trace('closed')}
-// the shift start time is changed through its input, one hour at a time, so the colours visibly move
-async function setShift(times){const s=$('#s');if(!s)return;for(const t of times){s.value=t;s.dispatchEvent(new Event('input',{bubbles:true}));await wait(500)}}
-// the card shows a place by name
+  if(cb.checked!==on)await tap(`label:has([data-show="${key}"])`);await until(()=>$(`[data-show="${key}"]`)?.checked===on,2000);await wait(450)}
+// the same switch, made without moving the cursor, for setting up a step's starting state
+function quietLayer(key,on){const cb=$(`[data-show="${key}"]`);if(cb&&cb.checked!==on)cb.click()}
+async function switchBase(id){trace('switchBase',id);if(window.whg.basemap()===id)return;
+  await panel('bmmenu',true);await tap(`#bmmenu [data-id="${id}"]`);await until(()=>window.whg.basemap()===id,6000);await wait(1400);await panel('bmmenu',false)}
+// the shift start time is changed through its input, one step at a time, so the colours visibly move
+async function setShift(times){const s=$('#s');if(!s)return;for(const t of times){s.value=t;s.dispatchEvent(new Event('input',{bubbles:true}));await wait(700)}}
 const cardName=()=>(document.querySelector('#info h2')||{}).textContent||'';
 // type a place into the search box letter by letter. A city the tour names is chosen from its own entry, so the search
 // never lands on a different place of the same name; any other place is chosen from the first result
-async function searchPlace(text){trace('search',text);await tap('#q');trace('focused');const q=$('#q');q.value='';q.dispatchEvent(new Event('input'));
+async function searchPlace(text){trace('search',text);await tap('#q');const q=$('#q');q.value='';q.dispatchEvent(new Event('input'));
   for(const ch of text){q.value+=ch;q.dispatchEvent(new Event('input',{bubbles:true}));await wait(70)}
   await wait(400);
-  if(CITIES[text]){
-    window.whg.select(CITIES[text]);
-    await until(()=>isOpenEl('#info')&&cardName().includes(CITIES[text].n),9000);await wait(1500);return}
+  if(CITIES[text]){window.whg.select(CITIES[text]);await until(()=>isOpenEl('#info')&&cardName().includes(CITIES[text].n),9000);await wait(1600);return}
   await tap('#res li button');await until(()=>isOpenEl('#info'),7000);await wait(1200)}
-async function zoomOut(){window.whg.zoomTo(1);await wait(1200)}
 // turn the globe a number of degrees over a number of milliseconds
 async function spin(deg,ms){const t0=performance.now();let last=t0;
   while(performance.now()-t0<ms){const now=performance.now();window.whg.rotate(deg*(now-last)/ms);last=now;await wait(40)}}
-// the camera circles a city in 3D: move there, tilt, then turn a half circle, with `halfway` run midway (a new base map
-// stops the turn, so the second half carries on from there)
+// the camera circles a city in 3D: move there, tilt, then turn a half circle, with `halfway` run midway
 async function orbitCity([lon,lat],halfway){const map=window.whg.map3d();if(!map)return;
   map.easeTo({center:[lon,lat],zoom:14.6,pitch:62,bearing:0,duration:1800});await wait(1900);
   const b0=map.getBearing();
@@ -100,118 +93,179 @@ async function orbitCity([lon,lat],halfway){const map=window.whg.map3d();if(!map
 // the photo gallery is closed by its own ×; the tour waits until it has really gone
 async function closeGallery(){for(let n=0;n<4;n++){const box=$('.phbox');if(!box||box.hidden)return;const x=$('.phbox .phx');if(x)x.click();await wait(400)}}
 async function openGallery(){await tap('#phg .pht');await until(()=>isOpenEl('.phbox'),5000);await wait(900)}
+const cardOpen=()=>isOpenEl('#info');
+
+// ---- the starting state ------------------------------------------------------------------------------------------------
+// every step's start is the same: the panels and card closed, the layers as BASE_LAYERS, the street map, 2D, the globe
+// whole and the working hours at the default shift and season
+async function baseline(){
+  for(const n of Object.keys(PANELS))await panel(n,false);
+  if(isOpenEl('.phgrid')){$('.phgrid .phx')?.click();await until(()=>!isOpenEl('.phgrid'),2500)}
+  if(isOpenEl('.phbox'))await closeGallery();
+  if(cardOpen())$('#infox')?.click();
+  for(const[k,on]of Object.entries(BASE_LAYERS))quietLayer(k,on);
+  if(window.whg.basemap()!=='street'){$('#bmbtn').click();await pause(250);$('#bmmenu [data-id="street"]')?.click();await pause(300)}
+  if(window.whg.tilted()){$('#b3d').click();await untilP(()=>!window.whg.tilted(),8000)}
+  const s=$('#s'),e=$('#e');if(s&&s.value!=='12:00'){s.value='12:00';s.dispatchEvent(new Event('input',{bubbles:true}))}
+  if(e&&e.value!=='20:00'){e.value='20:00';e.dispatchEvent(new Event('input',{bubbles:true}))}
+  if($('#w')&&$('#w').getAttribute('aria-pressed')!=='true')$('#w').click();
+  window.whg.zoomTo(1);await wait(1400)}
 
 // ---- the steps --------------------------------------------------------------------------------------------------------
-// Each step: title, text, target (a selector that is on screen while the step shows, or null), and enter() which sets the
-// interface up and acts the step out. enter() may set glow to a place on the map to light up for the step.
+// Each step: title, text, target (the element to ring while the step shows, or null), and enter(), which sets the
+// interface up and acts the step out. Glow puts a light on a place on the map for the step.
 const STEPS=[
   {title:'Plan your working life around the world',
-    text:'This map is for digital nomads. Set your working hours in UK time and see, country by country, when a working day falls, then find where to stay: co-living and coworking spaces, the weather and photos for each place. This short tour shows how. Press Esc at any time to stop.',
-    target:null,enter:ensure2D},
-  {title:'The globe',target:'.m3dmap',
-    text:'Every country and time zone is coloured by when a working day falls in UK time. The globe is drawn on your graphics card, so spinning and zooming stay smooth. Drag to spin, scroll or pinch to zoom.',
-    enter:ensure2D},
-  {title:'Working hours settings',target:'#hoursset',
-    text:'The cog beside Working hours opens its settings. Set your shift in UK time and choose winter or summer; the colours move as you change them.',
-    enter:async()=>{await setHours(true);await setShift(['09:00'])}},
-  {title:'What the colours mean',target:'#bandkey',
-    text:'Each colour is one band of UK working hours: six bands in all, each in its own colour. The key stays here while the working-hours layer is on.',
-    enter:async()=>{await setHours(false);await setLayer('hours',true)}},
-  {title:'Search any place',target:'#search',
-    text:'Search a country, state or island. The place is pinned and selected, its card opens, and the globe zooms in on it.',
-    enter:()=>searchPlace('Lisbon')},
-  {title:'The place card',target:'#info',
-    text:'The pin marks the place. The card gives its local time, working-hours band, weather, nearby photos and flights.',
-    enter:()=>until(()=>{const i=$('#info');return!!i&&i.classList.contains('show')},6000)},
-  {title:'Save a favourite',target:'label:has([data-show="fav"])',
-    text:'Click the heart to save a place. It appears on the map as a heart, and in your list.',
-    enter:async()=>{await setLayer('fav',true);
-      // a place that is already saved would show Remove instead, so the tour starts this step from a clean place
+    text:'This map shows, country by country, when a working day falls in UK time. It also shows where to stay: co-living and coworking spaces, weather, photos and flights for every place. This tour walks through each part. Press Esc at any time to stop.',
+    target:null,enter:baseline},
+
+  {title:'Moving around the globe',
+    text:'Drag to spin the globe. Scroll or pinch to zoom, double-click to zoom in on a spot, and use the + and − keys. The colours update everywhere as you move.',
+    target:null,enter:async()=>{await spin(40,2600);window.whg.zoomTo(1.8);await wait(1700);window.whg.zoomTo(1);await wait(1300)}},
+
+  {title:'Working hours',
+    text:'Working hours colours every country by when a working day falls in UK time. The cog beside it opens the settings.',
+    target:'#hoursgear',enter:async()=>{await setLayer('hours',true);await tap('#hoursgear');await until(()=>isOpenEl('#hoursset'),3000);await wait(700)}},
+
+  {title:'Your shift and season',
+    text:'Set when your working day starts in UK time. Winter and Summer follow the clocks, and the colours move with them. The opacity slider sets how strong the colours are.',
+    target:'#hoursset',enter:async()=>{await panel('hoursset',true);await setShift(['09:00','10:00','11:00']);
+      await tap('#su');await wait(1200);await tap('#w');await wait(900)}},
+
+  {title:'What the colours mean',
+    text:'Six bands, one colour each: Early bird, Classic day, Late start, Afternoon into evening, Evening into night and Overnight. The key stays here while Working hours is on.',
+    target:'#bandkey',enter:async()=>{await panel('hoursset',false);await until(()=>isOpenEl('#bandkey'),3000);await wait(500)}},
+
+  {title:'The Layers panel',
+    text:'Every layer switches on and off from this panel. The cog or the funnel beside a layer opens its settings. The arrow at the top folds the panel away, and you can bring it back the same way.',
+    target:'#lyr',enter:async()=>{await tap('#lyrh');await wait(1100);await tap('#lyrh');await wait(700)}},
+
+  {title:'Favourites',
+    text:'Places you save appear on the map as hearts. Switch the layer off and on to see them come and go.',
+    target:'label:has([data-show="fav"])',enter:async()=>{await setLayer('fav',false);await wait(800);await setLayer('fav',true)}},
+
+  {title:'Place names',
+    text:'Place names label countries, regions, cities, towns and villages. They come in gradually as you zoom in, so the map never gets crowded.',
+    target:'label:has([data-show="names"])',enter:async()=>{await setLayer('names',false);await wait(800);await setLayer('names',true);await wait(600)}},
+
+  {title:'Search any place',
+    text:'Search for a country, state, island or city. The place is pinned, its card opens and the globe flies to it. Here: Lisbon.',
+    target:'#search',enter:()=>searchPlace('Lisbon')},
+
+  {title:'The place card',
+    text:'The card gives the place, its local time and the working-hours band there, and how far its hours are from the UK. Below are its time zone, a link to Google Maps, and the weather, photos and flights for this spot.',
+    target:'#info',enter:async()=>{await until(cardOpen,4000);await wait(900)}},
+
+  {title:'Open in Google Maps',
+    text:'The Open in Google Maps link opens this spot in a new tab, for streets, transport and reviews. The map is still here when you come back.',
+    target:'#info a.gmaps',enter:()=>wait(900)},
+
+  {title:'Save a favourite',
+    text:'Click Add to favourites to save a place. It appears as a heart on the map and in your favourites list, and opens again from the heart.',
+    target:'#favadd',enter:async()=>{
+      // a place already saved would show as saved, so the tour starts this step from a clean place
       if(window.whg.favourites().some(f=>Math.abs(f.lon-LISBON[0])<0.01&&Math.abs(f.lat-LISBON[1])<0.01)){
         window.whg.setFavourites(window.whg.favouriteList().filter(f=>!(Math.abs(f.lon-LISBON[0])<0.01&&Math.abs(f.lat-LISBON[1])<0.01)));
-        // the card shows the saved state until it is drawn again, so the place is opened afresh
         window.whg.select(CITIES.Lisbon);await until(()=>!!shown('#favadd'),6000);await wait(500)}
       await until(()=>!!shown('#favadd'),3000);await tap('#favadd');
-      const f=window.whg.favourites().at(-1);if(f)glowAt(f.lon,f.lat);await wait(1100)}},
-  {title:'Photos nearby',target:'#phg',
-    text:'The first photos taken close by show straight away. Click one to open the gallery and use the arrows to move through them. All photos nearby opens every picture found.',
-    enter:async()=>{await pointAt(LISBON[0],LISBON[1]);
+      const f=window.whg.favourites().at(-1);if(f)glowAt(f.lon,f.lat);await wait(1400)}},
+
+  {title:'Your favourites list',
+    text:'The cog beside Favourites opens your list. Each entry has a name, a note and its own card. The × removes a favourite you no longer need.',
+    target:'#favgear',enter:async()=>{await tap('#favgear');await until(()=>isOpenEl('#favlist'),3000);await wait(1800)}},
+
+  {title:'Photos nearby',
+    text:'Photos taken close to the place show straight away. Click one to open the gallery and move through them with the arrows. All photos nearby opens every picture found.',
+    target:'#phg',enter:async()=>{await panel('favlist',false);await pointAt(LISBON[0],LISBON[1]);
       await until(()=>!!shown('#phg .pht'),12000);
       // the live services sometimes have nothing near a place, so the tour then shows its own credited sample photos
       if(!shown('#phg .pht')){window.whg.setPhotos(SAMPLES);await until(()=>!!shown('#phg .pht'),4000)}
       await wait(500);
-      if(shown('#phg .pht')){await openGallery();await tap('.phbox .phnext');await wait(1800);await closeGallery()}
+      if(shown('#phg .pht')){await openGallery();await tap('.phbox .phnext');await wait(1600);await closeGallery()}
       if(await tap('#phbtn')){await until(()=>isOpenEl('.phgrid'),4000);await wait(1800);$('.phgrid .phx')?.click();await until(()=>!isOpenEl('.phgrid'),3000)}}},
-  {title:'Open in Google Maps',target:'#info a.gmaps',
-    text:'Every place has an Open in Google Maps link. It opens the same spot in Google Maps in a new tab, so you can check the streets, transport and reviews, and come back to the map afterwards.'},
-  {title:'Flights from here',target:'#fltog',
-    text:'Choose a nearby airport and a date, and the route opens in Google Flights.',
-    enter:async()=>{await tap('#fltog');await wait(2400)}},
-  {title:'Your favourites list',target:'#favgear',
-    text:'The gear icon opens your list. The × removes a favourite, so tidy up after yourself.',
-    enter:async()=>{await tap('#favgear');await until(()=>!!shown('#favlist .favs .favx'),3000);await wait(1800);
-      if(shown('#favlist .favs .favx')){await tap('#favlist .favs li:last-child .favx');await wait(1200)}}},
-  {title:'Co-living spaces',target:'label:has([data-show="cl"])',
-    text:'Co-living spaces show as green house icons. Each one opens to its details when you click it.',
-    enter:async()=>{await searchPlace('Barcelona');await setLayer('cl',true);glowAt(...nearestXY(window.whg.coliving(),BARCELONA));await wait(1200)}},
-  {title:'Filter co-living spaces',target:'#clf',
-    text:'The funnel opens the filters, beside the Layers panel. Filter by type, price, rooms and rating. Here, pop-up stays are switched off and on again.',
-    enter:async()=>{await tap('#clfb');await until(()=>!!shown('#clf'),3000);await wait(500);
-      await tap('#clf .clchip[data-v="u"]');await wait(1500);await tap('#clf .clchip[data-v="u"]');await wait(2200)}},
-  {title:'Coworking spaces',target:'label:has([data-show="cw"])',
-    text:'Coworking spaces show as purple desk icons. They thin out when you zoom out, so the busiest areas show first, and open up as you zoom in.',
-    enter:async()=>{await searchPlace('Berlin');await setLayer('cw',true);glowAt(...nearestXY(window.whg.cowork(),BERLIN));await wait(1200)}},
-  {title:'Filter coworking spaces',target:'#cwf',
-    text:'Filter by type, operator, opening hours, facilities and more. Here, independent spaces only, then all of them again.',
-    enter:async()=>{await tap('#cwfb');await until(()=>!!shown('#cwf'),3000);await wait(500);
-      await tap('#cwf [data-cwk="indep"]');await wait(1500);await tap('#cwf [data-cwk="all"]');await wait(2200)}},
-  {title:'Each layer’s settings',target:'#lyr',
-    text:'The cog and the funnel beside a layer open its settings. Working hours, favourites, co-living and coworking have them. Webcams, current weather, day and night and place names simply switch on and off.',
-    enter:async()=>{await setLayer('hours',true);await wait(1000)}},
-  {title:'Webcams',target:'label:has([data-show="cams"])',
-    text:'Popular webcams in every country. Click a camera to watch its live view.',
-    enter:async()=>{await setLayer('cams',true);await wait(1000)}},
-  {title:'Current weather',target:'label:has([data-show="weather"])',
-    text:'The current temperature at each place shown. The glowing point reads the temperature right now.',
-    enter:async()=>{await searchPlace('Madrid');await setLayer('weather',true);
+
+  {title:'Weather for a place',
+    text:'The weather in the card gives the current conditions. Click it to open the forecast for the days ahead.',
+    target:'#wxbtn',enter:async()=>{await tap('#wxbtn');await until(()=>!!shown('#wxb .wxdays')||isOpenEl('#wxb'),9000);await wait(2400);await tap('#wxbtn');await wait(400)}},
+
+  {title:'Flights from here',
+    text:'Flights here finds the airports near the place. Pick one and a date, and the route opens in Google Flights.',
+    target:'#fltog',enter:async()=>{await tap('#fltog');await wait(2600);await tap('#fltog');await wait(400)}},
+
+  {title:'Co-living spaces',
+    text:'Co-living spaces show as green house icons. Turn the layer on, then click a house to see its room types, prices and community.',
+    target:'label:has([data-show="cl"])',enter:async()=>{await searchPlace('Barcelona');await setLayer('cl',true);glowAt(...nearestXY(window.whg.coliving(),BARCELONA));await wait(1300)}},
+
+  {title:'Filter co-living spaces',
+    text:'The funnel opens the filters: room type, price, length of stay, rating and community. A dot on the funnel means filters are switched on. Here, shared rooms are shown, then all types again.',
+    target:'#clfb',enter:async()=>{await tap('#clfb');await until(()=>isOpenEl('#clf'),3000);await wait(600);
+      await tap('#clf .clchip[data-v="shared"]');await wait(1700);await tap('#clf .clchip[data-v="shared"]');await wait(1700)}},
+
+  {title:'Coworking spaces',
+    text:'Coworking spaces show as purple desk icons. They thin out when you zoom out, so the busiest areas come first, and open up as you zoom in.',
+    target:'label:has([data-show="cw"])',enter:async()=>{await panel('clf',false);await searchPlace('Berlin');await setLayer('cw',true);glowAt(...nearestXY(window.whg.cowork(),BERLIN));await wait(1300)}},
+
+  {title:'Filter coworking spaces',
+    text:'Filter coworking by kind, brand, opening hours, facilities and more. Here, independent spaces only, then all of them again.',
+    target:'#cwfb',enter:async()=>{await tap('#cwfb');await until(()=>isOpenEl('#cwf'),3000);await wait(600);
+      await tap('#cwf [data-cwk="indep"]');await wait(1700);await tap('#cwf [data-cwk="all"]');await wait(1700)}},
+
+  {title:'Webcams',
+    text:'Public webcams show the view from a place right now. Click a camera to watch it.',
+    target:'label:has([data-show="cams"])',enter:async()=>{await panel('cwf',false);await searchPlace('Madrid');await setLayer('cams',true);await wait(1500);
+      const cams=window.whg.webcams();if(cams.length){const c=nearest(cams,MADRID);glowAt(c.lon,c.lat);await wait(800);
+        if(window.whg.openWebcam(c.lon,c.lat)){await until(cardOpen,4000);await wait(2400);$('#infox')?.click();await wait(600)}}}},
+
+  {title:'Current weather',
+    text:'Current temperature for each place shown on the map. The glowing point shows the reading right now.',
+    target:'label:has([data-show="weather"])',enter:async()=>{await setLayer('weather',true);
       await until(()=>window.whg.weather().some(p=>p.temp!=null),9000);
       const p=nearest(window.whg.weather().filter(p=>p.temp!=null),MADRID);
-      if(p)glow(p.lon,p.lat,Math.round(p.temp)+'°C');await wait(1100)}},
-  {title:'The forecast',target:'#wx',
-    text:'Click Weather on any place card to see the forecast for the coming days.',
-    enter:async()=>{await tap('#wxbtn');await until(()=>!!shown('#wxb .wxdays'),9000);await wait(2400);await tap('#wxbtn');await wait(300)}},
-  {title:'Day and night',target:'label:has([data-show="night"])',
-    text:'The night side of the Earth is shaded, darker the further the sun is below the horizon. The night moves round as the Earth turns.',
-    enter:async()=>{for(const k of['cams','cw','cl','weather'])await setLayer(k,false);await setLayer('night',true);await zoomOut();await spin(120,4000)}},
-  {title:'Base maps',target:'#bmbtn',
-    text:'Switch between base maps. Here: satellite, then topographic, then back to the street map.',
-    enter:async()=>{for(const id of['satellite','topo','street'])await switchBase(id)}},
-  {title:'3D view',target:'#b3d',
-    text:'The 3D button tilts the same globe into real terrain, and tilts it back. Barcelona is just an example: the camera circles the centre of the city, and halfway round it switches to satellite.',
-    enter:async()=>{await bmOpen(false);await searchPlace('Barcelona');await set3D(true);await orbitCity(BARCELONA,()=>switchBase('satellite'))}},
-  {title:'Compass and location',target:'.tools',
-    text:'Point north, or go to your own location.',
-    enter:async()=>{await ensure2D();await zoomOut()}},
-  {title:'That is the tour',target:null,
-    text:'Your layers, panels, favourites and base map are back as they were. The Get started button stays at the bottom of the screen, so you can take the tour again.',
-    enter:ensure2D}
+      if(p)glowAt(p.lon,p.lat);await wait(1400)}},
+
+  {title:'Day and night',
+    text:'The night side of the Earth is shaded, darker the further the sun sits below the horizon. Here the other layers are switched off to show it clearly.',
+    target:'label:has([data-show="night"])',enter:async()=>{for(const k of['cams','cw','cl','weather'])quietLayer(k,false);await setLayer('night',false);await wait(800);await setLayer('night',true);
+      window.whg.zoomTo(1);await wait(900);await spin(120,4200)}},
+
+  {title:'Base maps',
+    text:'Map layers switches the base map: street, satellite, topographic or ocean. The working-hours colours stay on top of every one of them.',
+    target:'#bmbtn',enter:async()=>{for(const id of['satellite','topo','ocean','street'])await switchBase(id)}},
+
+  {title:'3D view',
+    text:'The 3D button tilts the globe into terrain and turns the camera. Here it circles Barcelona, and halfway round the map changes to satellite.',
+    target:'#b3d',enter:async()=>{await searchPlace('Barcelona');await set3D(true);await orbitCity(BARCELONA,()=>switchBase('satellite'))}},
+
+  {title:'Back to the globe',
+    text:'The 3D button tilts the view back to the globe, and the street map returns.',
+    target:'#b3d',enter:async()=>{await tap('#b3d');await until(()=>!window.whg.tilted(),9000);await switchBase('street')}},
+
+  {title:'Point north and your location',
+    text:'Point north turns the map back to north. Go to my location finds you on the map, once you allow it in the browser.',
+    target:'#north',enter:async()=>{await tap('#north');await wait(1500)}},
+
+  {title:'Around the world',
+    text:'Every place works the same way: Berlin, Madrid, Tokyo, Sydney. Each one gets its own working-hours band, weather, photos and co-living.',
+    target:null,enter:async()=>{await searchPlace('Tokyo');await searchPlace('Sydney');await wait(900)}},
+
+  {title:'That is the tour',
+    text:'Your layers, panels, favourites and base map are put back as they were. The Get started button stays at the bottom of the screen, so you can take the tour again.',
+    target:null,enter:async()=>{window.whg.zoomTo(1);await wait(900)}}
 ];
 
 // a glowing point on the map, and the place it is for
-function glow(lon,lat,label){run.glow={lon,lat,label}}
-function glowAt(lon,lat){run.glow={lon,lat}}
-function nearestXY(list,ll){const p=nearest(list,ll);return p?[p.lon,p.lat]:[ll[0],ll[1]]}
+function glowAt(lon,lat,label){run.glow={lon,lat,label}}
 
 // ---- showing a step ---------------------------------------------------------------------------------------------------
-// the card stays in one place for the whole tour: the open space between the left-hand column and the right-hand card,
-// at the bottom. On a narrow screen it is centred at the bottom.
+// the card stays in one place for the whole tour: the open space at the bottom, between the left column and the right card.
+// On a narrow screen it is centred at the bottom.
 function place(){if(!run)return;const W=innerWidth,H=innerHeight,root=getComputedStyle(document.documentElement),px=v=>parseFloat(root.getPropertyValue(v))||0;
   const col=px('--col')||280,colr=px('--colr')||300,cw=card.offsetWidth,ch=card.offsetHeight;
-  const r=run.steps[run.i].target&&shown(run.steps[run.i].target)?shown(run.steps[run.i].target).getBoundingClientRect():null;
+  const t=run.steps[run.i].target,el=t&&shown(t),r=el?el.getBoundingClientRect():null;
   const hole=r?[Math.max(0,r.left-PAD),Math.max(0,r.top-PAD),Math.min(W,r.right+PAD),Math.min(H,r.bottom+PAD)]:[W/2,H/2,W/2,H/2];
   const[x1,y1,x2,y2]=hole;
   veil.style.clipPath=`polygon(evenodd,0px 0px,${W}px 0px,${W}px ${H}px,0px ${H}px,0px 0px,${x1}px ${y1}px,${x2}px ${y1}px,${x2}px ${y2}px,${x1}px ${y2}px,${x1}px ${y1}px)`;
-  // while the photo gallery is open it covers the window, so the ring and the map glow step aside until it closes
+  // while the photo gallery is open it covers the window, so the ring and the glow step aside until it closes
   const gal=$('.phbox');const galOpen=!!gal&&!gal.hidden;
   if(r&&!galOpen){Object.assign(ring.style,{left:x1+'px',top:y1+'px',width:(x2-x1)+'px',height:(y2-y1)+'px'});ring.classList.add('on')}
   else ring.classList.remove('on');
@@ -234,8 +288,7 @@ function render(i){const s=run.steps[i],last=run.steps.length-1;
   card.querySelector('#tclose').onclick=end;
   card.querySelector('#tnext').focus({preventScroll:true})}
 
-// each step starts from a clean view: the popouts an earlier step opened are closed, so the step's own window is what shows
-// each step starts from a clean view: any gallery or popout an earlier step opened is closed and the tour waits for it
+// each step starts from a clean view: a gallery or popout an earlier step opened is closed, and the tour waits for it
 async function tidy(){if(isOpenEl('.phgrid')){$('.phgrid .phx')?.click();await until(()=>!isOpenEl('.phgrid'),2500)}
   if(isOpenEl('.phbox'))await closeGallery();
   for(const name of['hoursset','clf','cwf','favlist','bmmenu'])await panel(name,false)}
@@ -254,21 +307,19 @@ async function go(i){if(!run)return;trace('go',i);const mine=run;mine.i=i;mine.s
 // ---- starting and ending ----------------------------------------------------------------------------------------------
 function snapshot(){return{boxes:[...document.querySelectorAll('[data-show]')].map(c=>[c.dataset.show,c.checked]),
   folded:$('#lyr')?$('#lyr').classList.contains('folded'):false,start:$('#s')?$('#s').value:'',end:$('#e')?$('#e').value:'',
-  basemap:window.whg.basemap(),favs:window.whg.favouriteList()}}
+  season:$('#su')&&$('#su').getAttribute('aria-pressed')==='true'?'su':'w',
+  basemap:window.whg.basemap(),favs:window.whg.favouriteList(),zoomable:true}}
 // put the view back: layers, working hours, favourites, base map, 2D, and no panels open
 async function restore(s){
-  for(const[k,on]of s.boxes){const cb=$(`[data-show="${k}"]`);if(cb&&cb.checked!==on)cb.closest('label').click()}
+  for(const[k,on]of s.boxes){const cb=$(`[data-show="${k}"]`);if(cb&&cb.checked!==on)cb.click()}
   const st=$('#s'),en=$('#e');
   if(st&&s.start&&st.value!==s.start){st.value=s.start;st.dispatchEvent(new Event('input',{bubbles:true}))}
   if(en&&s.end&&en.value!==s.end){en.value=s.end;en.dispatchEvent(new Event('input',{bubbles:true}))}
-  if(panelOpen('#hoursset'))$('#hoursx').click();
+  const want=s.season==='su'?'#su':'#w';if($(want)&&$(want).getAttribute('aria-pressed')!=='true')$(want).click();
+  for(const n of Object.keys(PANELS))if(panelOpen(PANELS[n][0]))$(PANELS[n][2])?.click();
   const l=$('#lyr');if(l&&l.classList.contains('folded')!==s.folded)$('#lyrh').click();
-  if(panelOpen('#bmmenu'))$('#bmbtn').click();
-  if(window.whg.basemap()!==s.basemap){$('#bmbtn').click();await pause(200);$(`#bmmenu [data-id="${s.basemap}"]`)?.click();if(panelOpen('#bmmenu'))$('#bmbtn').click()}
-  if(panelOpen('#clf'))$('#clfx').click();
-  if(panelOpen('#cwf'))$('#cwfx').click();
-  if(panelOpen('#favlist'))$('#favlistx')?.click();
-  if($('#info').classList.contains('show'))$('#infox').click();
+  if(window.whg.basemap()!==s.basemap){$('#bmbtn').click();await pause(250);$(`#bmmenu [data-id="${s.basemap}"]`)?.click();await pause(300);if(panelOpen('#bmmenu'))$('#bmbtn').click()}
+  if(cardOpen())$('#infox').click();
   window.whg.setFavourites(s.favs);
   if(window.whg.tilted()){$('#b3d').click();await untilP(()=>!window.whg.tilted(),6000)}}
 
@@ -276,7 +327,6 @@ function start(){if(run)return;
   run={id:Math.random(),steps:STEPS,i:0,glow:null,saved:snapshot()};
   document.body.classList.add('touring');veil.hidden=false;ring.hidden=false;card.hidden=false;glowEl.hidden=false;cursor.hidden=false;
   timer=setInterval(place,300);go(0)}
-let timer=null;
 async function end(){if(!run)return;const mine=run;mine.ended=true;run=null;clearInterval(timer);cursor.classList.remove('on');busy=false;
   document.body.classList.remove('touring');
   try{await restore(mine.saved)}catch(e){console.warn('Tour could not put everything back:',e&&e.message||e)}
@@ -288,7 +338,7 @@ document.body.insertAdjacentHTML('beforeend','<div class="tveil" id="tveil" hidd
 veil=$('#tveil');ring=$('#tring');card=$('#tcard');glowEl=$('#tglow');cursor=$('#tcursor');
 $('#tour').onclick=start;
 addEventListener('resize',place);
-// the tour's state, for its test: whether a step is still acting, which step is on show, and whether its target is on screen
+// the tour's state, for its test: which step is on show, whether a step is still acting, and whether its target is on screen
 window.whgTour={busy:()=>busy,step:()=>run?run.i:-1,steps:()=>STEPS.length,running:()=>!!run,
   targetShown:()=>{if(!run)return false;const t=run.steps[run.i].target;return!t||!!shown(t)},
   title:()=>{const h=card.querySelector('h3');return h?h.textContent:''}};

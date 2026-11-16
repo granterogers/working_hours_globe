@@ -69,7 +69,7 @@ let SKYD=null;fetch('data/sky.json').then(r=>{if(!r.ok)throw 0;return r.json()})
 let SKYKEY='';
 // redraw the sky when the view has turned by a quarter of a degree or a minute has passed
 // the place the sky is seen from: the centre of the globe, or the centre of the 3D map when that is showing
-function skyObs(){if(document.body.classList.contains('in3d')&&m3d.map){const c=m3d.map.getCenter();return{lon:c.lng,lat:clamp(c.lat,-90,90)}}return{lon:-rot[0],lat:clamp(-rot[1],-90,90)}}
+function skyObs(){if(mapOn()){const c=m3d.map.getCenter();return{lon:c.lng,lat:clamp(c.lat,-90,90)}}return{lon:-rot[0],lat:clamp(-rot[1],-90,90)}}
 function skyFrame(){const o=skyObs();const key=Math.round(o.lon*4)+','+Math.round(o.lat*4)+','+Math.floor(Date.now()/6e4);if(key!==SKYKEY){SKYKEY=key;stars()}}
 // planets: Paul Schlyter's low-precision orbital elements (good to a fraction of a degree): [node, inclination,
 // argument of perihelion, semi-major axis, eccentricity, mean anomaly], each as a value at 2000 Jan 0 plus a daily rate
@@ -1022,7 +1022,7 @@ document.getElementById('north').onclick=()=>{const map=m3d.map;
 const M3D_JS='https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js',M3D_CSS='https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css';
 var m3d={map:null,el:null,lib:null,pin:null};
 // for the guided tour (assets/tour.js): where a place is on screen now (null when it is behind the globe), and the points it can point at
-window.whg={screen(lon,lat){if(document.body.classList.contains('in3d')&&m3d.map){const p=m3d.map.project([lon,lat]);return{x:p.x,y:p.y}}const p=scr([lon,lat]);return p?{x:p[0],y:p[1]}:null},
+window.whg={screen(lon,lat){if(mapOn()){const p=m3d.map.project([lon,lat]);return{x:p.x,y:p.y}}const p=scr([lon,lat]);return p?{x:p[0],y:p[1]}:null},
   map3d:()=>m3d.map,
   tilted:()=>isTilted(),
   ready:()=>!!m3d.ready,
@@ -1039,6 +1039,9 @@ window.whg={screen(lon,lat){if(document.body.classList.contains('in3d')&&m3d.map
   favouriteList:()=>JSON.parse(JSON.stringify(favs)),
   setFavourites:list=>{favs=JSON.parse(JSON.stringify(list));saveFavs();renderFavs();draw();m3dSync()},
   coliving:()=>CL.vis.map(x=>({lon:x.lon,lat:x.lat})),
+  // the webcams on the map, and a way to open the one nearest a point (the tour uses both)
+  webcams:()=>[...CAM.list.values()].filter(c=>isFinite(c.lat)&&isFinite(c.lon)).map(c=>({lon:c.lon,lat:c.lat})),
+  openWebcam:(lon,lat)=>{let best=null,bd=1e9;for(const c of CAM.list.values()){if(!isFinite(c.lat))continue;const d=(c.lon-lon)**2+(c.lat-lat)**2;if(d<bd){bd=d;best=c}}if(best)camShow(best);return!!best},
   cowork:()=>CW.vis.map(x=>({lon:x.lon,lat:x.lat})),
   weather:()=>(WX.shown||[]).map(p=>{const q=WX.pts.get(wxKey(p.lat,p.lon));return{lon:p.lon,lat:p.lat,temp:q?q.temp:null}}),
   // the 3D view's weather points, and how many of them have a reading so far
