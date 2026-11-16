@@ -34,7 +34,7 @@ const nearest=(list,[lon,lat])=>list.reduce((best,p)=>{const d=(p.lon-lon)**2+(p
 const nearestXY=(list,ll)=>{const p=nearest(list,ll);return p?[p.lon,p.lat]:[ll[0],ll[1]]};
 
 // ---- the engine ------------------------------------------------------------------------------------------------------
-let run=null,veil,ring,card,glowEl,cursor,busy=false,timer=null;
+let run=null,veil,ring,card,glowEl,cursor,busy=false,timer=null,restored=false;
 // a wait stops as soon as the tour has ended or moved on, so an old step never carries on into the next one
 function wait(ms){const mine=run,st=mine&&mine.step;return new Promise((res,rej)=>setTimeout(()=>mine&&(mine.ended||mine.step!==st)?rej(ABORT):res(),ms))}
 const pause=ms=>new Promise(r=>setTimeout(r,ms));
@@ -326,10 +326,11 @@ async function restore(s){
 function start(){if(run)return;
   run={id:Math.random(),steps:STEPS,i:0,glow:null,saved:snapshot()};
   document.body.classList.add('touring');veil.hidden=false;ring.hidden=false;card.hidden=false;glowEl.hidden=false;cursor.hidden=false;
-  timer=setInterval(place,300);go(0)}
+  restored=false;timer=setInterval(place,300);go(0)}
 async function end(){if(!run)return;const mine=run;mine.ended=true;run=null;clearInterval(timer);cursor.classList.remove('on');busy=false;
   document.body.classList.remove('touring');
   try{await restore(mine.saved)}catch(e){console.warn('Tour could not put everything back:',e&&e.message||e)}
+  restored=true;
   setTimeout(()=>{if(!run){veil.hidden=ring.hidden=card.hidden=glowEl.hidden=cursor.hidden=true}},600)}
 
 document.body.insertAdjacentHTML('beforeend','<div class="tveil" id="tveil" hidden></div><div class="tring" id="tring" hidden></div><div class="tglow" id="tglow" hidden><span></span></div>'+
@@ -341,6 +342,8 @@ addEventListener('resize',place);
 // the tour's state, for its test: which step is on show, whether a step is still acting, and whether its target is on screen
 window.whgTour={busy:()=>busy,step:()=>run?run.i:-1,steps:()=>STEPS.length,running:()=>!!run,
   targetShown:()=>{if(!run)return false;const t=run.steps[run.i].target;return!t||!!shown(t)},
+  // true once the view has been put back after the tour ends
+  restored:()=>restored,
   title:()=>{const h=card.querySelector('h3');return h?h.textContent:''}};
 // only the reader's own keys act on the tour; the tour's own clicks and synthetic keys never end it
 document.addEventListener('keydown',e=>{if(!run||!e.isTrusted)return;

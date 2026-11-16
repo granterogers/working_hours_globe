@@ -52,6 +52,8 @@ const STEP_LIMIT = 150000;   // a step that takes longer than this has got stuck
   }
   // the last step's Done ends the tour, and the view is back as it was
   await page.waitForTimeout(1200);
+  // the tour puts the view back a moment after it says it has ended, so wait for that before looking
+  await page.waitForFunction(() => window.whgTour && window.whgTour.restored(), null, { timeout: 90000, polling: 300 }).catch(() => {});
   const after = await state();
   const running = await page.evaluate(() => window.whgTour.running());
   check('tour ends', !running && !(await page.evaluate(() => document.body.classList.contains('touring'))));
