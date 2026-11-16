@@ -162,7 +162,7 @@ const STEPS=[
 
   {title:'Save a favourite',
     text:'Click Add to favourites to save a place. It appears as a heart on the map and in your favourites list, and opens again from the heart.',
-    target:'#favadd',enter:async()=>{
+    target:'#info',enter:async()=>{
       // a place already saved would show as saved, so the tour starts this step from a clean place
       if(window.whg.favourites().some(f=>Math.abs(f.lon-LISBON[0])<0.01&&Math.abs(f.lat-LISBON[1])<0.01)){
         window.whg.setFavourites(window.whg.favouriteList().filter(f=>!(Math.abs(f.lon-LISBON[0])<0.01&&Math.abs(f.lat-LISBON[1])<0.01)));
@@ -230,7 +230,7 @@ const STEPS=[
 
   {title:'Base maps',
     text:'Map layers switches the base map: street, satellite, topographic or ocean. The working-hours colours stay on top of every one of them.',
-    target:'#bmbtn',enter:async()=>{for(const id of['satellite','topo','ocean','street'])await switchBase(id)}},
+    target:'#bmbtn',enter:async()=>{if(cardOpen())$('#infox')?.click();await until(()=>!cardOpen(),2000);for(const id of['satellite','topo','ocean','street'])await switchBase(id)}},
 
   {title:'3D view',
     text:'The 3D button tilts the globe into terrain and turns the camera. Here it circles Barcelona, and halfway round the map changes to satellite.',
