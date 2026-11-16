@@ -44,7 +44,8 @@ const STEP_LIMIT = 150000;   // a step that takes longer than this has got stuck
     check(`step ${i} reached: ${info.title}`, reached, secs + 's');
     check(`step ${i} card inside the window`, info.inside);
     check(`step ${i} points at something on screen`, info.targetShown);
-    if (SHOTS) { fs.mkdirSync(SHOTS, { recursive: true }); await page.screenshot({ path: path.join(SHOTS, `step-${String(i).padStart(2, '0')}.png`) }); }
+    // a picture that cannot be taken in time is noted and skipped; the walk itself carries on
+    if (SHOTS) { fs.mkdirSync(SHOTS, { recursive: true }); try { await page.screenshot({ path: path.join(SHOTS, `step-${String(i).padStart(2, '0')}.png`), timeout: 60000 }); } catch (e) { console.log(`note: no picture of step ${i} (${e.message.split('\n')[0].slice(0, 60)})`); } }
     if (!reached) break;
     // the step's own Next (a direct click, so the test doesn't depend on the page's animation frames)
     await page.evaluate(() => { const b = document.getElementById('tnext'); if (b) b.click(); });
