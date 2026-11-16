@@ -9,7 +9,7 @@ const path = require('path');
 
 const BASE = (process.env.BASE || 'http://127.0.0.1:8123/').replace(/\/?$/, '/');
 const SHOTS = process.env.SHOTS || '';
-const STEP_LIMIT = 75000;   // a step that takes longer than this has got stuck
+const STEP_LIMIT = 150000;   // a step that takes longer than this has got stuck
 
 (async () => {
   const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox'] });

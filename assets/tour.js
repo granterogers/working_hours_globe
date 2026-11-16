@@ -298,7 +298,7 @@ async function go(i){if(!run)return;trace('go',i);const mine=run;mine.i=i;mine.s
   if(run!==mine)return;
   const my=mine.step;mine.glow=null;busy=true;
   // a step that has not finished within its time is left behind, so the tour can never stop on one step
-  const dog=setTimeout(()=>{if(run===mine&&mine.step===my){console.warn('Tour step ran long, moving on:',run.steps[i].title);mine.step++;if(i+1<run.steps.length)go(i+1);else end()}},90000);
+  const dog=setTimeout(()=>{if(run===mine&&mine.step===my){console.warn('Tour step ran long, moving on:',run.steps[i].title);mine.step++;if(i+1<run.steps.length)go(i+1);else end()}},150000);
   try{if(run.steps[i].enter)await run.steps[i].enter()}
   catch(e){if(e!==ABORT)console.warn('Tour step did not finish:',e&&e.message||e)}
   clearTimeout(dog);

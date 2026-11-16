@@ -1,0 +1,74 @@
+name: Guided tour check
+
+# Walks every step of the guided tour in a real browser (Chromium, Playwright) and checks that each step
+# reaches its target on screen, that its card sits inside the window, that the tour ends and puts the view back,
+# and that no page errors or tour warnings appear. It runs on every push that touches the site, every night,
+# or on demand from the Actions tab. The screenshots of every step and the log are kept as an artifact.
+on:
+  push:
+    branches: [main, claude/loving-brown-mrr6zr]
+    paths:
+      - 'assets/**'
+      - 'data/**'
+      - 'index.html'
+      - 'tests/tour.js'
+      - '.github/workflows/tour.yml'
+  schedule:
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tour-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tour:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Playwright and Chromium
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pw"
+          cd "$RUNNER_TEMP/pw"
+          npm init -y > /dev/null
+          npm install playwright@1.63.0
+          npx playwright install --with-deps chromium
+
+      - name: Serve the site
+        run: |
+          set -euo pipefail
+          nohup python3 -m http.server 8123 > "$RUNNER_TEMP/server.log" 2>&1 &
+          for i in $(seq 1 20); do curl -sf http://127.0.0.1:8123/index.html > /dev/null && break; sleep 1; done
+          curl -sf http://127.0.0.1:8123/index.html > /dev/null
+
+      - name: Walk the tour
+        env:
+          NODE_PATH: ${{ runner.temp }}/pw/node_modules
+          SHOTS: ${{ github.workspace }}/tour-shots
+        run: |
+          set -o pipefail
+          timeout 3300 node tests/tour.js 2>&1 | tee tour.log
+
+      - name: Keep the screenshots and the log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tour-check-${{ github.run_number }}
+          path: |
+            tour-shots
+            tour.log
+          if-no-files-found: warn
+          retention-days: 30
