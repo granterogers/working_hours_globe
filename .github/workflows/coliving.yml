@@ -2,10 +2,10 @@ name: Coliving layer update
 
 # Scans colivingDB for new colivings (and ones it has dropped), updates data/coliving.json and
 # records what changed in data/coliving-updates.json, which the globe's "Check for new colivings"
-# button reads. Runs every Monday morning, or press "Run workflow" on the Actions tab.
+# button reads. Runs every morning (UK time about 07:17), or press "Run workflow" on the Actions tab.
 on:
   schedule:
-    - cron: '17 6 * * 1'
+    - cron: '17 6 * * *'
   workflow_dispatch:
 
 permissions:

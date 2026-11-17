@@ -498,3 +498,8 @@ body:has(#info.show) .tourpill{display:none}
 
 /* while the map starts, the older canvas globe is kept out of sight; the map replaces it once it is ready */
 body.booting #c{opacity:0;transition:none}
+
+/* the date the co-living listings were last checked, at the top of the filters */
+.clstamp{font-size:.78rem;color:var(--ink2);margin:-4px 0 10px;padding:6px 9px;border-radius:9px;background:rgba(255,255,255,.14)}
+.clstamp b{color:var(--ink)}
+.clstamp.stale{color:#8a4b00;background:rgba(255,196,64,.22)}

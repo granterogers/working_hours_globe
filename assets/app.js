@@ -1673,6 +1673,7 @@ function clBuild(){const el=document.createElement('aside');el.className='clf gl
   const regions=[...new Set(CL.data.map(x=>x.rg).filter(Boolean))].sort();
   const pv=v=>`<option value="${v[0]}">${v[1]}</option>`;
   el.innerHTML=`<div class="clfh"><b>Filter co-living results</b><button class="x" id="clfx" aria-label="Close filters">×</button></div>
+    <p class="clstamp" id="clstamp" aria-live="polite"></p>
     <input id="clq" class="flin" type="search" placeholder="Search name, town or country" autocomplete="off">
     <div class="clg"><span class="cll">Type</span><div class="clchips">${['p','u','f'].map(t=>chip('types',t,CLT[t].short,CLT[t].col)).join('')}</div></div>
     <div class="clg"><span class="cll">Price per month <output id="clpv"></output></span>
@@ -1709,8 +1710,14 @@ function clSync(){const el=document.getElementById('clf');if(!el)return;const f=
   $('clstay').value=String(f.stay);$('clrt').value=String(f.rating);$('clrg').value=f.region;$('clmo').value=f.month;
   el.querySelectorAll('.clchip').forEach(c=>c.setAttribute('aria-pressed',String(f[c.dataset.k].includes(c.dataset.v))));
   if(f.tags.length||f.vibes.length)el.querySelector('.clmore').open=true;clCounts();clUpdText()}
-function clUpdText(){const p=document.getElementById('clupdtxt');if(!p||!CL.meta)return;const m=CL.meta,d=new Date(m.checked);
-  p.textContent=`${m.source==='KML export'?'List from your colivingDB export of':'Last scanned'} ${d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}. A scan runs every Monday.`+(m.error?' The last scan couldn’t read colivingDB, so nothing changed.':'')}
+function clUpdText(){const m=CL.meta;if(!m)return;const d=new Date(m.checked),ok=!isNaN(d);
+  // the date the listings were last checked against colivingDB, shown at the top of the filters, with a warning when it is old
+  const days=ok?Math.floor((Date.now()-d)/864e5):null,when=days==null?'':days<1?'today':days===1?'yesterday':`${days} days ago`;
+  const st=document.getElementById('clstamp');
+  if(st){const old=days!=null&&days>3||m.error;st.classList.toggle('stale',!!old);
+    st.innerHTML=ok?`Listings last checked <b>${d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</b> (${when})`+(days>3?' · this is overdue, a check should have run':'')+(m.error?' · the last check could not read colivingDB':''):'Listings check date unknown'}
+  const p=document.getElementById('clupdtxt');if(!p)return;
+  p.textContent=`${m.source==='KML export'?'List from your colivingDB export of':'Last scanned'} ${ok?d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'an unknown date'}. A scan runs every day.`+(m.error?' The last scan couldn’t read colivingDB, so nothing changed.':'')}
 function clRepo(){const h=location.hostname,p=location.pathname.split('/').filter(Boolean);return h.endsWith('.github.io')&&p[0]?`https://github.com/${h.split('.')[0]}/${p[0]}`:'https://github.com/granterogers/working_hours_globe'}
 async function clCheck(){const res=document.getElementById('clres'),btn=document.getElementById('clchk');btn.disabled=true;res.innerHTML='<p class="clsmall">Checking…</p>';
   let fresh,meta;

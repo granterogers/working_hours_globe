@@ -6,8 +6,8 @@
 
   python scripts/coliving.py update
       Scan colivingDB for listings that aren't in data/coliving.json yet, add them, drop listings
-      colivingDB no longer has, and record the result in data/coliving-updates.json. Run weekly
-      and on demand by .github/workflows/coliving.yml.
+      colivingDB no longer has, and record the result in data/coliving-updates.json (including the date
+      it was checked). Run every day and on demand by .github/workflows/coliving.yml.
 
 Only the standard library is used.
 """
