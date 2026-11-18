@@ -2296,7 +2296,8 @@ function cwToggle(open){let el=document.getElementById('cwf');
 
 // start
 // first visit: every layer starts off, and the four main ones are then ticked on one at a time while the view glides in
-let FIRST_VISIT=false;try{FIRST_VISIT=!localStorage.getItem('whg.visited')}catch(e){}
+// a first visit is one with no saved 'visited' mark; ?welcome forces one, for testing
+let FIRST_VISIT=/[?&]welcome\b/.test(location.search);try{FIRST_VISIT=FIRST_VISIT||!localStorage.getItem('whg.visited')}catch(e){}
 if(FIRST_VISIT){showHours=showFavs=showNight=showNames=false}
 layInit();
 function firstVisitLayers(){const order=['hours','fav','night','names'];

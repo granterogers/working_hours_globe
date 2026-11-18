@@ -474,10 +474,14 @@ body.touring .tcard{opacity:1}
 .tbtns button:disabled{opacity:.4;cursor:default}
 .tx{position:absolute;top:8px;right:10px;border:0;background:none;cursor:pointer;color:var(--ink2);font-size:1.25rem;line-height:1;padding:4px 6px}
 @media (max-width:700px){.tcard{left:12px!important;right:12px;width:auto}}
-.tourpill{position:fixed;right:16px;bottom:16px;z-index:40;display:flex;align-items:center}
-body:has(#info.show) .tourpill{display:none}
+.tourpill{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:40;display:flex;align-items:center}
 .tourpill[hidden],body.touring .tourpill{display:none}
+/* the small × in the top right corner of the button removes it */
+.tourpill .tourx{position:absolute;top:-7px;right:-7px;width:22px;height:22px;border-radius:999px;border:1px solid var(--glass-b);background:var(--glass);color:var(--ink2);font:600 .9rem/1 var(--sans);display:grid;place-items:center;cursor:pointer;padding:0;box-shadow:var(--shadow)}
+.tourpill .tourx:hover{color:var(--ink)}
+@media (max-width:700px){body:has(#info.show) .tourpill{display:none}}
 .tourpill #tour{border:0;cursor:pointer;background:var(--accent);color:var(--accent-ink);font:700 .95rem var(--sans);padding:11px 24px;border-radius:999px;box-shadow:none}
+.tourpill{position:fixed}
 
 /* working hours settings: opened from the cog beside Working hours, to the right of the Layers panel */
 .hoursset{padding:14px 16px 16px}

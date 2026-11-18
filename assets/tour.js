@@ -201,8 +201,8 @@ const STEPS=[
     target:'label:has([data-show="cl"])',enter:async()=>{await searchPlace('Barcelona');await setLayer('cl',true);glowAt(...nearestXY(window.whg.coliving(),BARCELONA));await wait(1300)}},
 
   {title:'Filter co-living spaces',
-    text:'The funnel opens the filters: room type, price, length of stay, rating and community. A dot on the funnel means filters are switched on. Here, shared rooms are shown, then all types again.',
-    target:'#clfb',enter:async()=>{await tap('#clfb');await until(()=>isOpenEl('#clf'),3000);await wait(600);
+    text:'The funnel opens the filters: search by name, type (permanent, pop-up or festival), price per month, rooms (private, shared or dorm), minimum stay, rating, region, pop-ups by month, and interests and vibe. A dot on the funnel means filters are on. Here, shared rooms are picked, then cleared again.',
+    target:'#clf',enter:async()=>{await tap('#clfb');await until(()=>isOpenEl('#clf'),3000);await wait(1400);
       await tap('#clf .clchip[data-v="shared"]');await wait(1700);await tap('#clf .clchip[data-v="shared"]');await wait(1700)}},
 
   {title:'Coworking spaces',
@@ -210,8 +210,8 @@ const STEPS=[
     target:'label:has([data-show="cw"])',enter:async()=>{await panel('clf',false);await searchPlace('Berlin');await setLayer('cw',true);glowAt(...nearestXY(window.whg.cowork(),BERLIN));await wait(1300)}},
 
   {title:'Filter coworking spaces',
-    text:'Filter coworking by kind, brand, opening hours, facilities and more. Here, independent spaces only, then all of them again.',
-    target:'#cwfb',enter:async()=>{await tap('#cwfb');await until(()=>isOpenEl('#cwf'),3000);await wait(600);
+    text:'The funnel opens the coworking filters: kind (all, independent or chain), brand, opening hours, the contact details that are listed, and facilities such as Wi-Fi, air conditioning and wheelchair access. Here, independent spaces only, then all of them again.',
+    target:'#cwf',enter:async()=>{await tap('#cwfb');await until(()=>isOpenEl('#cwf'),3000);await wait(1400);
       await tap('#cwf [data-cwk="indep"]');await wait(1700);await tap('#cwf [data-cwk="all"]');await wait(1700)}},
 
   {title:'Webcams',
@@ -345,6 +345,9 @@ document.body.insertAdjacentHTML('beforeend','<div class="tveil" id="tveil" hidd
   '<section class="tcard glass" id="tcard" role="dialog" aria-label="Guided tour" hidden></section>');
 veil=$('#tveil');ring=$('#tring');card=$('#tcard');glowEl=$('#tglow');cursor=$('#tcursor');
 $('#tour').onclick=start;
+// the small × hides the Get started button for this browser; it stays hidden until its saved mark is cleared
+const pill=$('#tourpill');try{if(localStorage.getItem('whg.tourHidden')==='1')pill.hidden=true}catch(e){}
+$('#tourx').onclick=()=>{pill.hidden=true;try{localStorage.setItem('whg.tourHidden','1')}catch(e){}};
 addEventListener('resize',place);
 // the tour's state, for its test: which step is on show, whether a step is still acting, and whether its target is on screen
 window.whgTour={busy:()=>busy,step:()=>run?run.i:-1,steps:()=>STEPS.length,running:()=>!!run,

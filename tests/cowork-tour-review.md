@@ -1,111 +1,115 @@
-# Review prompt: Working Hours Globe, tour and first visit (v1.115+)
+# Cowork review: Working Hours Globe (tour, filters, first visit, glitches)
 
-Paste everything below the line into Claude in Chrome (or Cowork with its own browser).
+Paste everything below the line into Claude Cowork (or Claude in Chrome).
 
 ---
 
-You are reviewing a live web app: the Working Hours Globe.
+You are testing a live web app: the Working Hours Globe.
 URL: https://granterogers.github.io/working_hours_globe/
-Version: small type at the bottom centre of the map. It must read 1.121 or later. If it reads lower, stop and say so; the review is not valid until the new version loads.
+Version: small type at the bottom centre of the map. It must read 1.122 or later. If it reads lower, stop and say so; the review is not valid until the new version loads.
 
-Do not change any code. Only look, click, measure and report.
+Your job is to find real problems: things that are broken, slow, missing, glitching, or highlighted where there is nothing to see. Do not change any code. Only look, click, measure and report. Be specific: name the step, the element, the time, and quote what you saw. If you did not check something, say so. Do not guess.
 
-## 0. Set up the test properly
-- Use a fresh profile or private window, so the app starts as a first visit. If that is impossible, clear this site's saved data and say so in the report.
-- Allow location for this site when asked. The view glides toward your location on a first visit, so that step can only be checked with location allowed. If location is denied, say so.
-- Keep the window in the foreground and the page visible for the whole run. If the page stops drawing (blank map, frozen cursor, or screenshots failing), stop that measurement, note the time, and re-run that step once. Do not estimate timings you could not observe.
-- Run the desktop checks at 1280 × 800, and the phone checks at 390 × 844.
-- Record the window size and the browser version at the top of the report.
+## 0. Set up
+- Use a fresh profile or private window. To test a first visit without clearing anything, add `?welcome` to the URL, for example https://granterogers.github.io/working_hours_globe/?welcome. Say which method you used.
+- Allow location when asked. The first-visit glide toward your location only happens with location allowed. If you deny it, say so.
+- Keep the window in the foreground and the page visible throughout. If the page stops drawing (blank map, frozen cursor, screenshots failing), stop that measurement, note the time, and re-run that step once.
+- Test at 1280 × 800 (desktop) and 390 × 844 (phone). Record both window sizes and your browser at the top of the report.
 
-## 0b. Known open issues: confirm each one, with the exact cause
-These came from the automated check, and from the last human review. For each one, reproduce it, say what you saw, and name the most likely cause in the code (file and function if you can see it).
-1. Steps 14 and 17 to 20 are very slow (110 to 165 s in the automated run). Measure how long each takes on this machine, and whether the map is busy (frozen cursor, blank map) while waiting.
-2. Step 20 (Filter coworking spaces): after "all of them again", how many desk icons show in the same view as step 19? Count them.
-3. Steps 26 and 29 should end on the whole globe, not on city zoom. Report the zoom level you see.
-4. The place card's time zone label and local time (step 10 and step 28): compare with the expected values in section 2.
-5. If the tour ends with the Layers panel different from how it started, list which layers differ.
+## 1. First visit: layers and the glide
+Watch the Layers panel (top left) from the moment the loading message ("Loading the map…") disappears. Call that moment READY.
+- At the start, all eight layers must be unticked.
+- At about READY + 0.5 s, Working hours should tick on. Then Favourites at about +3 s, Day and night at about +5.5 s, Place names at about +8 s.
+- Each change should fade in on the map before the next one starts. Describe what you see during each fade.
+- With location allowed, the view should glide slowly toward your location. Say where it starts, where it ends, and how long it takes.
+- Reload the page. It is no longer a first visit, so the four layers should come up on at once.
+Report the actual times and anything that flickers, pops on, or is missing.
 
-## 1. First visit: the layers
-Before clicking anything, watch the top-left Layers panel, and time from the moment the loading message ("Loading the map…") disappears. Call that moment READY, and use its time as zero.
-- At the start, the four layers Working hours, Favourites, Day and night, Place names must be unticked. The other four must also be unticked.
-- At about READY + 0.5 s, Working hours should tick on. Then Favourites at about +3 s, Day and night at about +5.5 s, Place names at about +8 s. Measure each tick and report the actual times.
-- Each change should fade in on the map before the next starts. Describe what you see during each fade, in a sentence.
-- The view should glide slowly toward your location during this. Say where it started, where it ended, and roughly how long it took.
-- Reload the page. It is no longer a first visit, so the four layers should come up on at once. Confirm this.
+## 2. The Get started button
+- The Get started button must sit at the bottom middle of the screen, and stay there.
+- Click a few places on the map, and open a place card. The button must still be visible while the card is open. On a phone, the card may cover it; note that and nothing more.
+- Click the small × at the top right of the button. The button should disappear. Reload. It should stay hidden. Report whether that happens.
 
-## 2. The guided tour: all 29 steps
-Click "Get started" (bottom right). Use Next to move through all 29 steps. Esc is not tested. End the tour with the × only in step 29, or before it if something breaks.
+## 3. The guided tour: all 29 steps
+Click Get started. Use Next to move through all 29 steps. Esc is not tested. Stop the tour with × only at step 29, or earlier if it breaks.
 
 For EACH step, record:
 - Step number, title, and the time from clicking Next until the card can be read (in seconds).
-- Ring: is it around the element the text describes? Name the element. If there is no ring, or it is on the wrong thing, say so.
+- Ring: is the ring around the element the text describes? Name the element.
+- Empty highlight: is the ringed area actually showing something? A ring around empty map, a blank panel, or a missing icon is a problem. Say so.
 - Text against screen: does everything the text describes appear on screen? Quote any phrase you cannot see.
-- Card: does it stay inside the window, and does it avoid covering its target?
-- Anything wrong: a panel left open, a layer stuck on or off, an empty panel, a broken icon, cut-off text, a long wait.
-- Screenshot file name, so the step can be checked later.
+- Card: does it stay inside the window, and avoid covering its target?
+- Anything else wrong: a panel left open, a layer stuck on or off, cut-off text, a broken icon, a flicker, a long wait.
+- Screenshot file name.
 
 Check these in particular:
-- Step 3 (Working hours): the settings panel should not hide the search bar. If it does, note it.
-- Step 4 (Your shift and season): the shift should be back at 12:00–20:00 by the end of this step. Read the start and end times in the panel and report them.
-- Step 10 (The place card): the ring should be around the local time and working-hours block. Read the local time and time zone on the card and report them.
-- Step 11 (Open in Google Maps): the cursor should move onto the link and stay there. It must not click the link. Report whether it stays.
-- Step 12 (Save a favourite): after saving, the place should appear as a heart on the map and in the favourites list. Say what it looks like on the map.
-- Steps 15 and 16 (Weather, then Flights): after the forecast opens and closes, the photo strip in the card should still show its thumbnails. Report whether it does.
-- Steps 17 to 20 (Co-living and coworking, with their filters): wait until the map has finished loading before judging. Report whether the house and desk icons appear, and how long they take.
+- Step 3 (Working hours): the settings panel should not hide the search bar.
+- Step 4 (Shift and season): the shift should be back at 12:00–20:00 at the end. Read the times.
+- Step 10 (The place card): read the local time and time zone on the card. The ring should be on the time block.
+- Step 11 (Open in Google Maps): the cursor should move onto the link and stay there, without clicking it.
+- Step 12 (Save a favourite): after saving, the place should show as a heart on the map and in the favourites list.
+- Steps 15 and 16 (Weather, then Flights): after the forecast opens and closes, the photo strip should still show its thumbnails.
+- Step 18 (Filter co-living spaces): the co-living filter panel should open and stay open while the step is shown, with its options visible: search, type, price, rooms, minimum stay, rating, region, pop-ups by month, and interests and vibe. Report every option you can read, and any option that is missing or cut off. Report whether the ring is around the whole panel.
+- Step 20 (Filter coworking spaces): the coworking filter panel should open and stay open, with its options visible: kind, brand, opening hours, contact details, and facilities. Report the same things as for step 18.
+- Steps 17 to 20 are heavy. Measure how long each takes, and whether the map is busy (blank, frozen cursor) while it waits.
 - Step 21 (Webcams): report whether camera icons appear on the map.
 - Step 22 (Current weather): report whether temperature readings appear on the map and in the card. If the weather service does not respond, say so; that is not a tour fault.
-- Step 23 (Day and night): report whether the night side is shaded on the globe.
-- Step 24 (Base maps): report the basemap each time it changes, and whether it renders.
-- Step 25 (3D view): wait up to 150 seconds. Report whether the 3D view renders, how long it takes, and anything that freezes. Also list any missing-icon warnings you can see in the console.
-- Step 26 (Back to the globe): report whether the view returns to 2D and the street map.
+- Step 23 (Day and night): report whether the night side is shaded on the globe, and whether the view is on the whole globe.
+- Step 24 (Base maps): report each base map as it changes, and whether it renders.
+- Step 25 (3D view): wait up to 240 s. Report whether the 3D view renders, how long it takes, and whether anything freezes. Also list any missing-icon warnings in the console.
+- Step 26 (Back to the globe): the view should return to the whole globe in 2D, with the street map. Report the zoom you see.
 - Step 27 (Point north): report whether the north button is ringed, and whether "Go to my location" is ringed. It should not need to be.
-- Step 28 (Around the world): the tour should visit Berlin, Madrid, Tokyo and Sydney in turn. For each one, read the time zone on the card and compare it with the expected value below.
-- Step 29 (That is the tour): the layers, basemap and working hours should be the same as before the tour. Report the Layers panel ticks, the basemap in the menu, and the working-hours times.
+- Step 28 (Around the world): the tour should fly to Berlin, Madrid, Tokyo and Sydney in turn. For each, read the time zone on the card and compare with the expected value below.
+- Step 29 (That is the tour): the layers, basemap and working hours should be the same as before the tour. Report the Layers ticks, the basemap in the menu, and the working-hours times. The view should be the whole globe.
 
-Expected time zones on the place card (compare exactly):
+Expected time zones on the place card:
 - Berlin: CET, one hour ahead of the UK.
 - Madrid: CET, one hour ahead of the UK.
 - Tokyo: JST, nine hours ahead of the UK.
 - Sydney: AEST or AEDT (depending on the date), ten or eleven hours ahead of the UK.
 - Lisbon: UK time, the same as the UK.
 
-## 3. Co-living filter
-Tick Colivings in the Layers panel, then open its funnel button. At the top of the filter panel, read the line "Listings last checked …". Report:
-- the exact text,
-- whether the number of days is correct for today,
-- whether it says "yesterday" or "today" only when that is true.
+## 4. Filters outside the tour
+Tick Colivings in the Layers panel, then open its funnel. Read the line "Listings last checked …". Report the exact text, whether the day count is right for today, and whether "yesterday" or "today" is used only when it is true. Then do the same for Coworking spaces.
 
-## 4. Phone width (390 × 844)
-Resize to 390 × 844 and reload. Report:
-- whether the Layers panel overlaps the search bar,
-- whether the search bar overlaps the 3D or north buttons,
-- whether any label is cut off ("Working ho…", "Coworking s…" and so on),
-- whether the tour card covers the colour key in step 5, or the Get started button,
-- whether the page scrolls sideways.
+## 5. Phone width (390 × 844)
+Reload at this size. Report whether the Layers panel overlaps the search bar, whether the search bar overlaps the 3D or north buttons, whether any label is cut off, whether the tour card covers the colour key in step 5 or the Get started button, and whether the page scrolls sideways.
 
-## 5. Re-start check
-After the tour ends, click "Get started" again. It should start again from step 1 with nothing left over from the last run. Report whether it does.
+## 6. Glitches and slowness (across the whole run)
+- Missing graphics: map tiles, icons, labels or panels that should be there and are not.
+- Empty highlights: any ring, glow or arrow pointing at nothing. List each one.
+- Flicker, black frames, or layers that pop rather than fade.
+- Slowness: any action that takes more than 5 seconds to show a result. Give the step and the time.
+- Console errors and warnings (open the browser's developer console). Quote the first few different messages.
 
-## 6. Report
+## 7. Restart
+After the tour ends (or on step 29), click Get started again. It should start from step 1 with nothing left over from the last run.
+
+## 8. Report
 
 ### Setup
-Browser, window size, first visit method, location allowed or not, and whether the page drew throughout.
+Browser, window sizes, first-visit method, location allowed or not, and whether the page drew throughout.
 
 ### Summary
-Three to five sentences: what works well, and the most important problems.
+Three to five sentences: what works, and the most important problems.
 
-### Table of steps
-One row per step: number, title, ring (yes / no / wrong), text matches (yes / no), card inside window (yes / no), time to readable (seconds), screenshot file, and notes. Keep the notes short.
+### Table of tour steps
+One row per step: number, title, ring (yes / no / wrong / empty), text matches (yes / no), card inside window (yes / no), time to readable (seconds), screenshot file, and short notes.
 
 ### Problems
-Most serious first. For each: step or area, what you saw, what you expected, and a suggested fix. Mark it "blocker", "bug", or "polish". Put a problem in the table notes, not here, if it is a single small thing.
+Most serious first. For each: area or step, what you saw, what you expected, the most likely cause (file and function if you can tell), and a suggested fix. Mark each as "blocker", "bug", "glitch" or "polish".
+
+### Empty highlights and missing graphics
+A separate list: each one, with the step and what should be there.
+
+### Slowness
+A separate list: each step or action over 5 seconds, with the time.
 
 ### Could not verify
-Anything you could not check, and the reason: the page stopped drawing, the weather service did not respond, location was denied, and so on. Re-run these where you can. Do not count them as passes or fails.
+Anything you could not test, and why. Do not count these as passes or fails.
 
 ### Tour order
-The current order has 29 steps. Suggest a shorter, logical order for someone seeing the app for the first time, with the reason for each merge or move. Start from this order, which the last review suggested, and say where you agree or disagree:
-
+Suggest a shorter, logical order for a first-time visitor, with the reason for each merge or move. Start from this order and say where you agree or disagree:
 1. Welcome
 2. Moving around the globe
 3. Working hours, with shift and season
@@ -130,5 +134,3 @@ The current order has 29 steps. Suggest a shorter, logical order for someone see
 22. Around the world, and that is the tour
 
 Keep the working-hours explanation before the colour key. Keep the place card steps together.
-
-Be specific. Name the step and the element, quote what you saw, and say what you did not check. Do not guess.
