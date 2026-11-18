@@ -2305,7 +2305,7 @@ function firstVisitLayers(){const order=['hours','fav','night','names'];
 function firstVisitGo(order){
   // half a second after the page is ready, then one layer every 2.5 seconds, so each change can be seen on the map
   const FIRST_START=500,FIRST_GAP=2500;
-  order.forEach((k,i)=>setTimeout(()=>{const cb=document.querySelector(`[data-show="${k}"]`);if(cb)cb.checked=true;setShow(k,true);LAY[k]=layOn(k)},FIRST_START+i*FIRST_GAP));
+  order.forEach((k,i)=>setTimeout(()=>{const cb=document.querySelector(`[data-show="${k}"]`);if(cb)cb.checked=true;setShow(k,true)},FIRST_START+i*FIRST_GAP));
   setTimeout(()=>{try{localStorage.setItem('whg.visited','1')}catch(e){}},FIRST_START+order.length*FIRST_GAP)}
 if(FIRST_VISIT){lyrRender();firstVisitLayers()}
 window.addEventListener('resize',resize);setSeason(season);theme();resize();
