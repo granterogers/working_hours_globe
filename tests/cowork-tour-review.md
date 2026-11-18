@@ -6,7 +6,7 @@ Paste everything below the line into Claude in Chrome (or Cowork with its own br
 
 You are reviewing a live web app: the Working Hours Globe.
 URL: https://granterogers.github.io/working_hours_globe/
-Version: small type at the bottom centre of the map. It must read 1.115 or later. If it reads lower, stop and say so; the review is not valid until the new version loads.
+Version: small type at the bottom centre of the map. It must read 1.121 or later. If it reads lower, stop and say so; the review is not valid until the new version loads.
 
 Do not change any code. Only look, click, measure and report.
 
@@ -16,6 +16,14 @@ Do not change any code. Only look, click, measure and report.
 - Keep the window in the foreground and the page visible for the whole run. If the page stops drawing (blank map, frozen cursor, or screenshots failing), stop that measurement, note the time, and re-run that step once. Do not estimate timings you could not observe.
 - Run the desktop checks at 1280 × 800, and the phone checks at 390 × 844.
 - Record the window size and the browser version at the top of the report.
+
+## 0b. Known open issues: confirm each one, with the exact cause
+These came from the automated check, and from the last human review. For each one, reproduce it, say what you saw, and name the most likely cause in the code (file and function if you can see it).
+1. Steps 14 and 17 to 20 are very slow (110 to 165 s in the automated run). Measure how long each takes on this machine, and whether the map is busy (frozen cursor, blank map) while waiting.
+2. Step 20 (Filter coworking spaces): after "all of them again", how many desk icons show in the same view as step 19? Count them.
+3. Steps 26 and 29 should end on the whole globe, not on city zoom. Report the zoom level you see.
+4. The place card's time zone label and local time (step 10 and step 28): compare with the expected values in section 2.
+5. If the tour ends with the Layers panel different from how it started, list which layers differ.
 
 ## 1. First visit: the layers
 Before clicking anything, watch the top-left Layers panel, and time from the moment the loading message ("Loading the map…") disappears. Call that moment READY, and use its time as zero.
