@@ -2048,9 +2048,14 @@ function wxLoad(ll){if(!ll)return;const tok=++wxTok;
   .catch(()=>{if(tok!==wxTok)return;const st=document.getElementById('wxst');if(st)st.textContent='unavailable right now'})}
 // one section open at a time in a card: opening Weather, Photos or Flights closes the other two
 const ACC=[['wxbtn','wxb'],['phbtn','phg'],['fltog','flbody']];
+// one section open at a time: opening one folds the others away, and closing it brings back exactly those it folded
+const ACC_FOLDED=new Set();
 document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('#wxbtn,#phbtn,#fltog');if(!b)return;
-  setTimeout(()=>{if(b.getAttribute('aria-expanded')!=='true')return;for(const [bt,bd] of ACC){if(bt===b.id)continue;const B=document.getElementById(bt),D=document.getElementById(bd);
-    if(B&&D&&!D.hidden){D.hidden=true;B.setAttribute('aria-expanded','false')}}})});
+  setTimeout(()=>{
+    if(b.getAttribute('aria-expanded')==='true'){for(const [bt,bd] of ACC){if(bt===b.id)continue;const B=document.getElementById(bt),D=document.getElementById(bd);
+      if(B&&D&&!D.hidden){D.hidden=true;B.setAttribute('aria-expanded','false');ACC_FOLDED.add(bd)}}}
+    else{for(const [bt,bd] of ACC){if(!ACC_FOLDED.has(bd))continue;const B=document.getElementById(bt),D=document.getElementById(bd);
+      if(D)D.hidden=false;if(B)B.setAttribute('aria-expanded','true');ACC_FOLDED.delete(bd)}}})});
 
 // Webcams layer. Windy's webcam service doesn't accept calls straight from a web page, so a weekly GitHub Action
 // (scripts/webcams.py, key in a repository secret) saves the most popular cameras per country to

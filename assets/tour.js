@@ -248,7 +248,7 @@ const STEPS=[
 
   {title:'Around the world',
     text:'Every place works the same way: Berlin, Madrid, Tokyo, Sydney. Each one gets its own working-hours band, weather, photos and co-living.',
-    target:null,enter:async()=>{await searchPlace('Tokyo');await searchPlace('Sydney');await wait(900)}},
+    target:null,enter:async()=>{await searchPlace('Berlin');await wait(700);await searchPlace('Madrid');await wait(700);await searchPlace('Tokyo');await wait(700);await searchPlace('Sydney');await wait(900)}},
 
   {title:'That is the tour',
     text:'Your layers, panels, favourites and base map are put back as they were. The Get started button stays at the bottom of the screen, so you can take the tour again.',
