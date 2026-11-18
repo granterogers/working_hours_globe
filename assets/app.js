@@ -123,6 +123,13 @@ const band=o=>{let s=(((S+o)%24)+24)%24;if(s<5)s+=24;return Math.min(HOUR_BINS-1
 const vsUK=o=>{if(!o)return'Same as the UK';const a=Math.abs(o),h=Math.floor(a),m=Math.round((a-h)*60);
   return(h?h+(h===1?' hour':' hours'):'')+(h&&m?' ':'')+(m?m+' min':'')+(o>0?' ahead of':' behind')+' the UK'};
 const utc=o=>{const u=o+(season?1:0),a=Math.abs(u),h=Math.floor(a),m=Math.round((a-h)*60);return'UTC'+(u?(u>0?'+':'−')+h+(m?':'+String(m).padStart(2,'0'):''):'')};
+// the zone's own short name for the place (CET, AEDT, ...), from the browser's time-zone data; null when it has none
+const zoneName=tz=>{for(const loc of['en-GB','en-AU','ja-JP']){try{const p=new Intl.DateTimeFormat(loc,{timeZone:tz,timeZoneName:'short'}).formatToParts(new Date()).find(x=>x.type==='timeZoneName');
+  if(p&&!/^(GMT|UTC)[+\-−]/.test(p.value))return p.value}catch(e){}}return null};
+// how the card names the zone: "UK time" for the UK, the short name where the browser has one, otherwise the UTC offset
+const zoneLabel=(tz,o)=>{const n=zoneName(tz);if(o===0&&(n==='GMT'||n==='BST'))return'UK time';if(n&&!/^(GMT|UTC)[+\-−]/.test(n)&&n!=='GMT'&&n!=='UTC')return n+' · '+utc(o);return utc(o)};
+// the local clock at the place
+const localClock=tz=>{try{return new Intl.DateTimeFormat('en-GB',{timeZone:tz,hour:'2-digit',minute:'2-digit'}).format(new Date())}catch(e){return''}};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 // sizing
@@ -903,7 +910,7 @@ let infoTok=0;
 function showInfo(title,where,tz,ll){activeFav=null;draft=null;infoTok++;const z=D.zones[tz]||[0,0],o=z[season],b=band(o),other=z[1-season];
   document.getElementById('infob').innerHTML=`<h2>${esc(title)}</h2><p class="where">${esc(where&&where!==title?where:' ')}</p>
   <div class="big"><i style="background:${pal['b'+b]}"></i>${hours(o)}</div><p class="bandname">${bandName(b)}, ${season?'summer':'winter'}</p>
-  <dl><dt>${season?'Winter':'Summer'}</dt><dd>${hours(other)}</dd><dt>Difference</dt><dd>${vsUK(o)}</dd><dt>Time zone</dt><dd>${utc(o)}</dd></dl>${ll?`<div class="cllinks">${gmapsLink(ll)}</div>`:''}${ll?favBtn(ll):''}${ll?wxBlock():''}${ll?photosBlock():''}${ll?flightsBlock():''}`;
+  <dl><dt>${season?'Winter':'Summer'}</dt><dd>${hours(other)}</dd><dt>Difference</dt><dd>${vsUK(o)}</dd>${localClock(tz)?`<dt>Local time</dt><dd>${localClock(tz)}</dd>`:''}<dt>Time zone</dt><dd>${zoneLabel(tz,o)}</dd></dl>${ll?`<div class="cllinks">${gmapsLink(ll)}</div>`:''}${ll?favBtn(ll):''}${ll?wxBlock():''}${ll?photosBlock():''}${ll?flightsBlock():''}`;
   wireFlights(ll);wxLoad(ll);photosLoad(ll);if(ll)wireFav(title,ll,where,tz);document.getElementById('info').classList.add('show');}
 function hideInfo(){document.getElementById('info').classList.remove('show');if(typeof CW!=='undefined'&&CW.sel){CW.sel=null;draw()}if(typeof CAM!=='undefined'&&CAM.sel){CAM.sel=null;draw()}PH.tok++;if(clickPin){clickPin=null;draw()}if(typeof CL!=='undefined'&&CL.sel){CL.sel=null;draw()}if(selected||activeFav||draft){selected=null;activeFav=null;draft=null;draw()}}
 document.getElementById('infox').onclick=hideInfo;

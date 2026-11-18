@@ -226,9 +226,9 @@ const STEPS=[
       if(p)glowAt(p.lon,p.lat);await wait(1400)}},
 
   {title:'Day and night',
-    text:'The night side of the Earth is shaded, darker the further the sun sits below the horizon. Here the other layers are switched off to show it clearly.',
+    text:'The night side of the Earth is shaded, darker the further the sun sits below the horizon. The icon layers are switched off here so the night stands out; Working hours stays on, so you can see the colours against the night.',
     target:'label:has([data-show="night"])',enter:async()=>{for(const k of['cams','cw','cl','weather'])quietLayer(k,false);await setLayer('night',false);await wait(800);await setLayer('night',true);
-      window.whg.zoomTo(1);await wait(900);await spin(120,4200)}},
+      await toGlobe();await spin(120,4200)}},
 
   {title:'Base maps',
     text:'Map layers switches the base map: street, satellite, topographic or ocean. The working-hours colours stay on top of every one of them.',
@@ -240,7 +240,7 @@ const STEPS=[
 
   {title:'Back to the globe',
     text:'The 3D button tilts the view back to the globe, and the street map returns.',
-    target:'#b3d',enter:async()=>{await tap('#b3d');await until(()=>!window.whg.tilted(),9000);await switchBase('street')}},
+    target:'#b3d',enter:async()=>{await toGlobe();await switchBase('street')}},
 
   {title:'Point north and your location',
     text:'Point north turns the map back to north. Go to my location finds you on the map, once you allow it in the browser.',
@@ -252,9 +252,12 @@ const STEPS=[
 
   {title:'That is the tour',
     text:'Your layers, panels, favourites and base map are put back as they were. The Get started button stays at the bottom of the screen, so you can take the tour again.',
-    target:null,enter:async()=>{window.whg.zoomTo(1);await wait(900)}}
+    target:null,enter:async()=>{await toGlobe()}}
 ];
 
+// the view on the whole globe: 3D is turned off first, then the map is zoomed out, and the tour waits for it to settle
+async function toGlobe(){if(window.whg.tilted()){await tap('#b3d');await until(()=>!window.whg.tilted(),9000)}
+  window.whg.zoomTo(1);await wait(1400)}
 // a glowing point on the map, and the place it is for
 function glowAt(lon,lat,label){run.glow={lon,lat,label}}
 
@@ -304,7 +307,7 @@ async function go(i){if(!run)return;trace('go',i);const mine=run;mine.i=i;mine.s
   try{if(run.steps[i].enter)await run.steps[i].enter()}
   catch(e){if(e!==ABORT)console.warn('Tour step did not finish:',e&&e.message||e)}
   clearTimeout(dog);
-  if(run===mine&&mine.step===my){busy=false;cursor.classList.remove('on');place()}}
+  if(run===mine&&mine.step===my){busy=false;place()}}
 
 // ---- starting and ending ----------------------------------------------------------------------------------------------
 function snapshot(){return{boxes:[...document.querySelectorAll('[data-show]')].map(c=>[c.dataset.show,c.checked]),
