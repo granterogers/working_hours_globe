@@ -1712,7 +1712,8 @@ function clSync(){const el=document.getElementById('clf');if(!el)return;const f=
   if(f.tags.length||f.vibes.length)el.querySelector('.clmore').open=true;clCounts();clUpdText()}
 function clUpdText(){const m=CL.meta;if(!m)return;const d=new Date(m.checked),ok=!isNaN(d);
   // the date the listings were last checked against colivingDB, shown at the top of the filters, with a warning when it is old
-  const days=ok?Math.floor((Date.now()-d)/864e5):null,when=days==null?'':days<1?'today':days===1?'yesterday':`${days} days ago`;
+  // whole calendar days, so a check from two days ago reads as two days ago
+  const days=ok?Math.round((new Date(new Date().toDateString())-new Date(d.toDateString()))/864e5):null,when=days==null?'':days<1?'today':days===1?'yesterday':`${days} days ago`;
   const st=document.getElementById('clstamp');
   if(st){const old=days!=null&&days>3||m.error;st.classList.toggle('stale',!!old);
     st.innerHTML=ok?`Listings last checked <b>${d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</b> (${when})`+(days>3?' · this is overdue, a check should have run':'')+(m.error?' · the last check could not read colivingDB':''):'Listings check date unknown'}
@@ -2287,6 +2288,9 @@ let FIRST_VISIT=false;try{FIRST_VISIT=!localStorage.getItem('whg.visited')}catch
 if(FIRST_VISIT){showHours=showFavs=showNight=showNames=false}
 layInit();
 function firstVisitLayers(){const order=['hours','fav','night','names'];
+  // the layers wait until the map has loaded (the loading message is removed), so nothing ticks on before the map is there
+  const t0=Date.now(),iv=setInterval(()=>{if(!document.getElementById('loading')||Date.now()-t0>20000){clearInterval(iv);firstVisitGo(order)}},100)}
+function firstVisitGo(order){
   // half a second after the page is ready, then one layer every 2.5 seconds, so each change can be seen on the map
   const FIRST_START=500,FIRST_GAP=2500;
   order.forEach((k,i)=>setTimeout(()=>{const cb=document.querySelector(`[data-show="${k}"]`);if(cb)cb.checked=true;setShow(k,true);LAY[k]=layOn(k)},FIRST_START+i*FIRST_GAP));

@@ -24,8 +24,8 @@ const LISBON=[-9.1393,38.7223],BARCELONA=[2.1686,41.3874],BERLIN=[13.405,52.52],
 // the cities the tour visits: the search finds a region, then the tour flies on to the city itself
 const CITIES={Lisbon:{n:'Lisbon',sub:'Portugal',lon:-9.1393,lat:38.7223,size:0.12,minDeg:0.05,tz:'Europe/London'},
   Barcelona:{n:'Barcelona',sub:'Spain',lon:2.1686,lat:41.3874,size:0.12,minDeg:0.05,tz:'Europe/Paris'},
-  Berlin:{n:'Berlin',sub:'Germany',lon:13.405,lat:52.52,size:0.12,minDeg:0.05,tz:'Europe/Berlin'},
-  Madrid:{n:'Madrid',sub:'Spain',lon:-3.7038,lat:40.4168,size:0.12,minDeg:0.05,tz:'Europe/Madrid'},
+  Berlin:{n:'Berlin',sub:'Germany',lon:13.405,lat:52.52,size:0.12,minDeg:0.05,tz:'Europe/Paris'},
+  Madrid:{n:'Madrid',sub:'Spain',lon:-3.7038,lat:40.4168,size:0.12,minDeg:0.05,tz:'Europe/Paris'},
   Tokyo:{n:'Tokyo',sub:'Japan',lon:139.6917,lat:35.6895,size:0.12,minDeg:0.05,tz:'Asia/Tokyo'},
   Sydney:{n:'Sydney',sub:'Australia',lon:151.2093,lat:-33.8688,size:0.12,minDeg:0.05,tz:'Australia/Sydney'}};
 
@@ -131,7 +131,7 @@ const STEPS=[
 
   {title:'Your shift and season',
     text:'Set when your working day starts in UK time. Winter and Summer follow the clocks, and the colours move with them. The opacity slider sets how strong the colours are.',
-    target:'#hoursset',enter:async()=>{await panel('hoursset',true);await setShift(['09:00','10:00','11:00']);
+    target:'#hoursset',enter:async()=>{await panel('hoursset',true);await setShift(['09:00','10:00','11:00','12:00']);
       await tap('#su');await wait(1200);await tap('#w');await wait(900)}},
 
   {title:'What the colours mean',
