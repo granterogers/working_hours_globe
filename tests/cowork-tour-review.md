@@ -13,7 +13,7 @@ Work in a private/incognito window so the app starts as a first visit. Do not ch
 ## 1. First visit: the layers
 Before you touch anything, check the layers panel (top left):
 - Working hours, Favourites, Day and night, and Place names should start UNTICKED. Everything else starts unticked too.
-- Over the first ~5 seconds, those four should tick on one after another (about a second apart), and the map should fade in each layer smoothly. The view should also glide slowly toward your location while this happens.
+- Half a second after the page is ready, the four should start to tick on, one every 2.5 seconds: Working hours at about 0.5 s, Favourites at about 3 s, Day and night at about 5.5 s, Place names at about 8 s. Each change should fade in on the map before the next one. The view should also glide slowly toward your location while this happens.
 - Record the timing of each tick, and anything that looks abrupt, flickers, or is missing.
 - Reload the page. It is no longer a first visit, so the layers should come up on, as before.
 

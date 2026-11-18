@@ -2287,8 +2287,10 @@ let FIRST_VISIT=false;try{FIRST_VISIT=!localStorage.getItem('whg.visited')}catch
 if(FIRST_VISIT){showHours=showFavs=showNight=showNames=false}
 layInit();
 function firstVisitLayers(){const order=['hours','fav','night','names'];
-  order.forEach((k,i)=>setTimeout(()=>{const cb=document.querySelector(`[data-show="${k}"]`);if(cb)cb.checked=true;setShow(k,true);LAY[k]=layOn(k)},1400+i*900));
-  setTimeout(()=>{try{localStorage.setItem('whg.visited','1')}catch(e){}},1400+order.length*900)}
+  // half a second after the page is ready, then one layer every 2.5 seconds, so each change can be seen on the map
+  const FIRST_START=500,FIRST_GAP=2500;
+  order.forEach((k,i)=>setTimeout(()=>{const cb=document.querySelector(`[data-show="${k}"]`);if(cb)cb.checked=true;setShow(k,true);LAY[k]=layOn(k)},FIRST_START+i*FIRST_GAP));
+  setTimeout(()=>{try{localStorage.setItem('whg.visited','1')}catch(e){}},FIRST_START+order.length*FIRST_GAP)}
 if(FIRST_VISIT){lyrRender();firstVisitLayers()}
 window.addEventListener('resize',resize);setSeason(season);theme();resize();
 const intro=()=>{if(matchMedia('(prefers-reduced-motion: reduce)').matches){k=kT=1;draw();return}
