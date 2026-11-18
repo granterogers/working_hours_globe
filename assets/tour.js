@@ -49,6 +49,8 @@ async function tap(sel,ms=5000){const ok=await until(()=>!!shown(sel),ms);
   if(!ok){console.warn('Tour could not find:',sel);return false}
   const el=shown(sel);const r=el.getBoundingClientRect();await moveTo(r.left+r.width/2,r.top+r.height/2);ripple();await wait(220);
   (shown(sel)||el).click();await wait(160);return true}
+// a city is flown to straight from the list of cities (no typing), and the tour waits until its card shows
+async function goCity(name){trace('city',name);window.whg.select(CITIES[name]);await until(()=>isOpenEl('#info')&&cardName().includes(CITIES[name].n),9000);await wait(1000)}
 // the cursor moves onto an element and rests there, without clicking it
 async function tapHover(sel){const ok=await until(()=>!!shown(sel),5000);if(!ok)return false;const el=shown(sel);const r=el.getBoundingClientRect();await moveTo(r.left+r.width/2,r.top+r.height/2);ripple();await wait(500);return true}
 // the cursor points at a place on the map (the map itself is not clicked)
@@ -248,7 +250,7 @@ const STEPS=[
 
   {title:'Around the world',
     text:'Every place works the same way: Berlin, Madrid, Tokyo, Sydney. Each one gets its own working-hours band, weather, photos and co-living.',
-    target:null,enter:async()=>{await searchPlace('Berlin');await wait(700);await searchPlace('Madrid');await wait(700);await searchPlace('Tokyo');await wait(700);await searchPlace('Sydney');await wait(900)}},
+    target:null,enter:async()=>{for(const c of['Berlin','Madrid','Tokyo','Sydney']){await goCity(c);await wait(900)}}},
 
   {title:'That is the tour',
     text:'Your layers, panels, favourites and base map are put back as they were. The Get started button stays at the bottom of the screen, so you can take the tour again.',
