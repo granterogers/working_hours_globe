@@ -2282,7 +2282,14 @@ function cwToggle(open){let el=document.getElementById('cwf');
   const show=open==null?el.hidden:open;el.hidden=!show;if(show){const c=document.getElementById('clf');if(c)c.hidden=true;el._sync();el.querySelector('#cwq').focus({preventScroll:true})}}
 
 // start
+// first visit: every layer starts off, and the four main ones are then ticked on one at a time while the view glides in
+let FIRST_VISIT=false;try{FIRST_VISIT=!localStorage.getItem('whg.visited')}catch(e){}
+if(FIRST_VISIT){showHours=showFavs=showNight=showNames=false}
 layInit();
+function firstVisitLayers(){const order=['hours','fav','night','names'];
+  order.forEach((k,i)=>setTimeout(()=>{const cb=document.querySelector(`[data-show="${k}"]`);if(cb)cb.checked=true;setShow(k,true);LAY[k]=layOn(k)},1400+i*900));
+  setTimeout(()=>{try{localStorage.setItem('whg.visited','1')}catch(e){}},1400+order.length*900)}
+if(FIRST_VISIT){lyrRender();firstVisitLayers()}
 window.addEventListener('resize',resize);setSeason(season);theme();resize();
 const intro=()=>{if(matchMedia('(prefers-reduced-motion: reduce)').matches){k=kT=1;draw();return}
   const t0=performance.now(),r0=[-70,-20,0],r1=rot.slice();

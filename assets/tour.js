@@ -49,6 +49,8 @@ async function tap(sel,ms=5000){const ok=await until(()=>!!shown(sel),ms);
   if(!ok){console.warn('Tour could not find:',sel);return false}
   const el=shown(sel);const r=el.getBoundingClientRect();await moveTo(r.left+r.width/2,r.top+r.height/2);ripple();await wait(220);
   (shown(sel)||el).click();await wait(160);return true}
+// the cursor moves onto an element and rests there, without clicking it
+async function tapHover(sel){const ok=await until(()=>!!shown(sel),5000);if(!ok)return false;const el=shown(sel);const r=el.getBoundingClientRect();await moveTo(r.left+r.width/2,r.top+r.height/2);ripple();await wait(500);return true}
 // the cursor points at a place on the map (the map itself is not clicked)
 async function pointAt(lon,lat){const p=window.whg.screen(lon,lat);if(!p)return;await moveTo(p.x,p.y);ripple();await wait(400)}
 const panelOpen=sel=>{const e=$(sel);return!!e&&!e.hidden&&getComputedStyle(e).display!=='none'};
@@ -154,11 +156,11 @@ const STEPS=[
 
   {title:'The place card',
     text:'The card gives the place, its local time and the working-hours band there, and how far its hours are from the UK. Below are its time zone, a link to Google Maps, and the weather, photos and flights for this spot.',
-    target:'#info',enter:async()=>{await until(cardOpen,4000);await wait(900)}},
+    target:'#infob .big',enter:async()=>{await until(cardOpen,4000);await wait(900)}},
 
   {title:'Open in Google Maps',
     text:'The Open in Google Maps link opens this spot in a new tab, for streets, transport and reviews. The map is still here when you come back.',
-    target:'#info a.gmaps',enter:()=>wait(900)},
+    target:'#info a.gmaps',enter:async()=>{await until(cardOpen,4000);await tapHover('#info a.gmaps');await wait(900)}},
 
   {title:'Save a favourite',
     text:'Click Add to favourites to save a place. It appears as a heart on the map and in your favourites list, and opens again from the heart.',
