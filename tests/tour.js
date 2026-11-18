@@ -22,6 +22,8 @@ const STEP_LIMIT = 150000;   // a step that takes longer than this has got stuck
 
   await page.goto(BASE + 'index.html?t=' + Date.now(), { waitUntil: 'load', timeout: 60000 });
   await page.waitForFunction(() => window.whg && window.whg.ready && window.whg.ready(), null, { timeout: 90000, polling: 500 });
+  // a first visit switches four layers on over the first few seconds; wait until that has finished, so the 'before' picture is settled
+  await page.waitForFunction(() => { try { return !!localStorage.getItem('whg.visited') || !!document.querySelector('[data-show="names"]')?.checked; } catch (e) { return true; } }, null, { timeout: 30000, polling: 250 }).catch(() => {});
   await page.waitForTimeout(1500);
   const state = () => page.evaluate(() => ({ boxes: [...document.querySelectorAll('[data-show]')].map(c => [c.dataset.show, c.checked]), basemap: window.whg.basemap(), tilted: window.whg.tilted(), favs: window.whg.favouriteList(), start: document.getElementById('s') ? document.getElementById('s').value : '', end: document.getElementById('e') ? document.getElementById('e').value : '' }));
   const before = await state();
@@ -57,7 +59,8 @@ const STEP_LIMIT = 150000;   // a step that takes longer than this has got stuck
   const after = await state();
   const running = await page.evaluate(() => window.whgTour.running());
   check('tour ends', !running && !(await page.evaluate(() => document.body.classList.contains('touring'))));
-  check('the layers are back as they were', JSON.stringify(before.boxes) === JSON.stringify(after.boxes), '');
+  const diffLayers = before.boxes.filter(([k, on]) => { const a = after.boxes.find(x => x[0] === k); return !a || a[1] !== on }).map(([k, on]) => { const a = after.boxes.find(x => x[0] === k); return k + ' was ' + on + ' now ' + (a ? a[1] : 'missing') });
+  check('the layers are back as they were', diffLayers.length === 0, diffLayers.join(', '));
   check('the base map is back', before.basemap === after.basemap, before.basemap + ' → ' + after.basemap);
   check('the view is 2D again', before.tilted === after.tilted);
   check('the favourites are back as they were', JSON.stringify(before.favs) === JSON.stringify(after.favs), before.favs.length + ' → ' + after.favs.length);
