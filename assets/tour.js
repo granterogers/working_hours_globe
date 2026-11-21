@@ -346,8 +346,9 @@ document.body.insertAdjacentHTML('beforeend','<div class="tveil" id="tveil" hidd
 veil=$('#tveil');ring=$('#tring');card=$('#tcard');glowEl=$('#tglow');cursor=$('#tcursor');
 $('#tour').onclick=start;
 // the small × hides the Get started button for this browser; it stays hidden until its saved mark is cleared
-const pill=$('#tourpill');try{if(localStorage.getItem('whg.tourHidden')==='1')pill.hidden=true}catch(e){}
-$('#tourx').onclick=()=>{pill.hidden=true;try{localStorage.setItem('whg.tourHidden','1')}catch(e){}};
+// the × hides the button for this visit only: a refresh brings it back. Any mark saved by an earlier version is cleared.
+const pill=$('#tourpill');try{localStorage.removeItem('whg.tourHidden')}catch(e){}
+$('#tourx').onclick=()=>{pill.hidden=true};
 addEventListener('resize',place);
 // the tour's state, for its test: which step is on show, whether a step is still acting, and whether its target is on screen
 window.whgTour={busy:()=>busy,step:()=>run?run.i:-1,steps:()=>STEPS.length,running:()=>!!run,
