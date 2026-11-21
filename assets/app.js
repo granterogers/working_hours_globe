@@ -144,7 +144,8 @@ const BORDER_OFF_K=5,BORDER_OFF_Z=6;
 let hiP=null;function loadHi(){if(D.cbHi||hiP)return hiP;
   hiP=fetch('data/borders-hi.json').then(r=>{if(!r.ok)throw new Error(r.status);return r.json()}).then(j=>{D.cbHi=prep(j,true);draw();if(mapOn())m3dSync()}).catch(()=>{hiP=null});return hiP}
 // the smallest the globe may be: its radius is 40% of the shorter side of the window, on the 2D globe and the 3D map alike
-function m3dMinZoom(){const r=0.4*Math.min(innerWidth,innerHeight);return Math.max(0,Math.log2(r/81.49))}
+// zoom out as far as the map goes, so the whole globe can always be seen in 3D as well
+function m3dMinZoom(){return 0}
 function computeView(){const s=base*k;const far=Math.max(Math.hypot(cx,cy),Math.hypot(W-cx,cy),Math.hypot(cx,H-cy),Math.hypot(W-cx,H-cy));
   const rho=(far>=s?Math.PI/2:Math.asin(far/s))+0.02;viewCap=[[-rot[0],-rot[1]],rho];VC=vec(-rot[0],-rot[1]);VR=rho;CR=Math.cos(rho);SR=Math.sin(rho);}
 let VC=[1,0,0],VR=1,CR=0,SR=1;

@@ -73,8 +73,11 @@ async function setLayer(key,on){const cb=$(`[data-show="${key}"]`);if(!cb){conso
   if(cb.checked!==on)await tap(`label:has([data-show="${key}"])`);await until(()=>$(`[data-show="${key}"]`)?.checked===on,2000);await wait(450)}
 // the same switch, made without moving the cursor, for setting up a step's starting state
 function quietLayer(key,on){const cb=$(`[data-show="${key}"]`);if(cb&&cb.checked!==on)cb.click()}
+// a base map is picked the way a person picks it: the cursor goes to the Map layers button, the menu opens, the cursor goes to the map's name and clicks it
 async function switchBase(id){trace('switchBase',id);if(window.whg.basemap()===id)return;
-  await panel('bmmenu',true);await tap(`#bmmenu [data-id="${id}"]`);await until(()=>window.whg.basemap()===id,6000);await wait(1400);await panel('bmmenu',false)}
+  if(!isOpenEl('#bmmenu')){await tap('#bmbtn');await until(()=>isOpenEl('#bmmenu'),3000);await wait(500)}
+  await tap(`#bmmenu [data-id="${id}"]`);await until(()=>window.whg.basemap()===id,6000);await wait(1800)}
+
 // the shift start time is changed through its input, one step at a time, so the colours visibly move
 async function setShift(times){const s=$('#s');if(!s)return;for(const t of times){s.value=t;s.dispatchEvent(new Event('input',{bubbles:true}));await wait(700)}}
 const cardName=()=>(document.querySelector('#info h2')||{}).textContent||'';
@@ -233,7 +236,7 @@ const STEPS=[
       await toGlobe();await spin(120,4200)}},
 
   {title:'Base maps',
-    text:'Map layers switches the base map: street, satellite, topographic or ocean. The working-hours colours stay on top of every one of them.',
+    text:'Map layers switches the base map. The cursor now clicks through them in turn: street, satellite, topographic or ocean. The working-hours colours stay on top of every one of them.',
     target:'#bmbtn',enter:async()=>{if(cardOpen())$('#infox')?.click();await until(()=>!cardOpen(),2000);for(const id of['satellite','topo','ocean','street'])await switchBase(id)}},
 
   {title:'3D view',
