@@ -24,7 +24,7 @@ const DEG=180/Math.PI, MINK=0.93, MAXK=9000;
 const M3D_MAX_PITCH=60;
 let S=12,E=20,season=0,W=0,H=0,dpr=1,base=300,cx=0,cy=0;
 // the layers start in the same state on every launch: working hours, favourites and day and night on, the rest off
-let showNight=true,showFavs=true,showCw=false,showCams=false,showWeather=false,showNames=true,showHours=true;
+let showNight=true,showFavs=true,showCw=false,showCams=false,showWeather=true,showNames=true,showHours=true;
 let rot=[-8,-36,0],k=0.7,kT=1,vel=[0,0],anchor=null,dragging=false,running=false,fly=null,overlays=[],placed=[],dark=true,pal={};
 try{if(new Date().toLocaleString('en-GB',{timeZone:'Europe/London',timeZoneName:'short'}).includes('BST'))season=1}catch(e){}
 
@@ -2299,9 +2299,9 @@ function cwToggle(open){let el=document.getElementById('cwf');
 // first visit: every layer starts off, and the four main ones are then ticked on one at a time while the view glides in
 // a first visit is one with no saved 'visited' mark; ?welcome forces one, for testing
 let FIRST_VISIT=/[?&]welcome\b/.test(location.search);try{FIRST_VISIT=FIRST_VISIT||!localStorage.getItem('whg.visited')}catch(e){}
-if(FIRST_VISIT){showHours=showFavs=showNight=showNames=false}
+if(FIRST_VISIT){showHours=showFavs=showWeather=showNight=showNames=false}
 layInit();
-function firstVisitLayers(){const order=['hours','fav','night','names'];
+function firstVisitLayers(){const order=['hours','fav','weather','night','names'];
   // the layers wait until the map has loaded (the loading message is removed), so nothing ticks on before the map is there
   const t0=Date.now(),iv=setInterval(()=>{if(!document.getElementById('loading')||Date.now()-t0>20000){clearInterval(iv);firstVisitGo(order)}},100)}
 function firstVisitGo(order){

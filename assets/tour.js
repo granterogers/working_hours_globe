@@ -15,7 +15,7 @@ const trace=(...a)=>{if(window.whgTourDebug)console.log('TRACE',...a)};
 const PAD=3,GAP=18,EDGE=12;
 
 // the layers the tour starts from, whatever the reader had on or off: the working-hours colours, saved places, night and names
-const BASE_LAYERS={hours:true,fav:true,cl:false,cw:false,cams:false,weather:false,night:true,names:true};
+const BASE_LAYERS={hours:true,fav:true,cl:false,cw:false,cams:false,weather:true,night:true,names:true};
 // sample photos for the tour, from Wikimedia Commons (CC BY-SA 4.0), used only when the live services have none nearby
 const SAMPLES=[['photo-1.jpg','Forte da Esquerda','FortSimplicio1.jpg',1900],['photo-2.jpg','Fort of Carvalha','FortofCarvalha1.jpg',2400],
   ['photo-3.jpg','Forte da Retaguarda','ForteNovo1.jpg',2000],['photo-4.jpg','Fort of Alqueidão','FortAlqueid%C3%A3o4.jpg',2000]]
@@ -225,7 +225,7 @@ const STEPS=[
 
   {title:'Current weather',
     text:'Current temperature for each place shown on the map. The glowing point shows the reading right now.',
-    target:'label:has([data-show="weather"])',enter:async()=>{await setLayer('weather',true);
+    target:'label:has([data-show="weather"])',enter:async()=>{await setLayer('weather',false);await wait(900);await setLayer('weather',true);
       await until(()=>window.whg.weather().some(p=>p.temp!=null),9000);
       const p=nearest(window.whg.weather().filter(p=>p.temp!=null),MADRID);
       if(p)glowAt(p.lon,p.lat);await wait(1400)}},
