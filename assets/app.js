@@ -583,7 +583,9 @@ function vtLabels(dk,dd){if(dd.labels)return dd.labels;const [z,x,y]=dk.split('/
   if(L.transportation_name)for(const F of L.transportation_name.f){const c=String(F.p.class||'').replace('_construction',''),R=ROADPRI[c];if(R&&F.t===2)line(L.transportation_name,F,{kind:'road',cls:c,pri:R[0],minz:R[1]})}
   return dd.labels=out;}
 const FONT='"Bricolage Grotesque", "Segoe UI", sans-serif';
-const LF={city:'700 14px '+FONT,town:'600 12.5px '+FONT,place:'500 11.5px '+FONT,small:'500 10.5px '+FONT,poi:'500 10.5px '+FONT,
+// each kind of label has its own style: place names in the serif, roads in the sans; hours and weather are set apart from them
+const SERIF_NAME='Fraunces, Georgia, serif';
+const LF={city:'700 14px '+SERIF_NAME,town:'600 12.5px '+SERIF_NAME,place:'500 11.5px '+SERIF_NAME,small:'italic 500 10.5px '+SERIF_NAME,poi:'500 10.5px '+SERIF_NAME,
   water:'italic 500 12px Fraunces, Georgia, serif',road:'500 10.5px '+FONT,peak:'500 11px '+FONT};
 const LINK={place:'#000000',small:'#333333',water:'#4d80b3',road:'#222222',peak:'#3a2a10'};
 let vtZ=0,VB=null;
@@ -1375,7 +1377,7 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
     paint:{'text-color':dk||basemap==='street'?'#ffffff':'#ffffff','text-halo-color':'rgba(10,16,30,.8)','text-halo-width':1.6}});
   for(const kd in WXI)if(!map.hasImage('wx-'+kd)){const im=new Image(52,52);im.onload=()=>{try{if(!map.hasImage('wx-'+kd)){map.addImage('wx-'+kd,im,{pixelRatio:2});clearTimeout(m3d.wxT);m3d.wxT=setTimeout(()=>{const s=map.getSource(M3D_OWN+'wx');if(s)s.setData(m3dGeo().wx)},50)}}catch(e){}};im.src='data:image/svg+xml,'+encodeURIComponent(WXI[kd].replace('<svg ','<svg width="52" height="52" '))}
   lay({id:M3D_OWN+'wxt',type:'symbol',source:M3D_OWN+'wx',layout:{'icon-image':['get','ic'],'icon-size':1,'icon-anchor':'right','icon-offset':[-2,0],'text-field':['get','t'],'text-font':font,'text-size':12.5,'text-anchor':'left','text-offset':[0.3,0],
-      'text-allow-overlap':true,'icon-allow-overlap':true,'icon-optional':true},
+      'text-allow-overlap':false,'icon-allow-overlap':false,'icon-optional':true},
     paint:{'text-color':'#ffffff','text-halo-color':'rgba(10,16,30,.85)','text-halo-width':1.8}});
   lay({id:M3D_OWN+'cm',type:'symbol',source:M3D_OWN+'cm',layout:{'icon-image':['case',['==',['get','live'],1],'cam-live','cam'],'icon-size':0.9,'icon-allow-overlap':false,'icon-padding':['interpolate',['linear'],['zoom'],2,30,6,16,10,8],'symbol-sort-key':['case',['==',['get','live'],1],0,1]},paint:{}});
   if(map.getLayer(M3D_OWN+'cwk'))try{map.removeLayer(M3D_OWN+'cwk')}catch(e){}
@@ -2014,11 +2016,12 @@ function wxDraw(mapNames){WX.mapNames=mapNames;const font='600 12px "Bricolage G
     if(at.some(a=>Math.hypot(a[0]-x,a[1]-y)<gap))continue;
     if(names.has(p.name))continue;
     const q=WX.pts.get(wxKey(p.lat,p.lon)),tt=q?Math.round(q.temp)+'°':'…',name='',nw=0,w=nw+tw(tt,font)+34,h=24,by=p.under?y+12:y-h/2,bx=[x-w/2,by,x+w/2,by+h];
-    if(boxes.some(b=>bx[0]<b[2]+3&&bx[2]+3>b[0]&&bx[1]<b[3]+2&&bx[3]+2>b[1]))continue;boxes.push(bx);WX.boxes.push(bx);WX.shown.push(p);names.add(p.name);at.push([x,y]);n++;if(!q)continue;
-    ctx.beginPath();ctx.roundRect?ctx.roundRect(bx[0],bx[1],w,h,12):ctx.rect(bx[0],bx[1],w,h);ctx.fillStyle=dark&&!mapNames?'rgba(14,20,36,.85)':'rgba(255,255,255,.92)';ctx.fill();
+    // a wider margin than the other labels, so a temperature never sits on a name or an hours label
+    if(boxes.some(b=>bx[0]<b[2]+8&&bx[2]+8>b[0]&&bx[1]<b[3]+6&&bx[3]+6>b[1]))continue;boxes.push(bx);WX.boxes.push(bx);WX.shown.push(p);names.add(p.name);at.push([x,y]);n++;if(!q)continue;
+    ctx.beginPath();ctx.roundRect?ctx.roundRect(bx[0],bx[1],w,h,12):ctx.rect(bx[0],bx[1],w,h);ctx.fillStyle=dark&&!mapNames?'rgba(14,30,56,.9)':'rgba(222,240,255,.95)';ctx.fill();
     ctx.lineWidth=2;ctx.strokeStyle=wxTempCol(q.temp);ctx.stroke();
     const im=wxImg(q.code,q.day);if(im.complete&&im.naturalWidth)ctx.drawImage(im,bx[0]+5,by+2,20,20);
-    const ink=dark&&!mapNames?'#f6f7fb':'#111a30';
+    const ink=dark&&!mapNames?'#e6f2ff':'#0b3a66';
     if(name){ctx.font=nfont;ctx.fillStyle=ink;ctx.globalAlpha=.8;ctx.fillText(name,bx[0]+27,by+h/2+1);ctx.globalAlpha=1}
     ctx.font=font;ctx.fillStyle=ink;ctx.fillText(tt,bx[0]+27+nw,by+h/2+1)}
   ctx.restore();wxQueue()}
