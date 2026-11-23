@@ -1473,7 +1473,8 @@ function m3dWx(){const map=m3d.map;if(!map||!showWeather||m3d.el.hidden)return;c
   const W3=map.getContainer().clientWidth,H3=map.getContainer().clientHeight,b=map.getBounds(),dense=map.getZoom()>=5;
   const cap=dense?clamp(Math.round(W3*H3/(map.getZoom()>=8?30000:50000)),6,28):clamp(Math.round(W3*H3/60000),8,30),at=[],out=[];
   const pk=p=>p.name+'|'+p.lat.toFixed(2)+'|'+p.lon.toFixed(2),old=new Set((WX.shown3d||[]).map(pk));
-  const all=(dense?wxTowns(map).filter(p=>b.contains([p.lon,p.lat])):[]).concat(c.filter(p=>b.contains([p.lon,p.lat]))).sort((a,b)=>b.pri-a.pri);
+  // the pills sit on the town labels of the map, so each reading is next to its own name (airports are not used)
+  const all=(dense?wxTowns(map).filter(p=>b.contains([p.lon,p.lat])):[]).sort((a,b)=>b.pri-a.pri);
   // the points already on show come first, so they stay put while you pan instead of blinking in and out
   const pool=all.filter(p=>old.has(pk(p))).concat(all.filter(p=>!old.has(pk(p))));
   for(const p of pool){if(out.length>=cap)break;const q=map.project([p.lon,p.lat]);if(!isFinite(q.x)||q.x<40||q.y<70||q.x>W3-40||q.y>H3-30)continue;
@@ -1995,12 +1996,7 @@ const WX_RANK={city:4,town:3,village:2,suburb:1};
 function wxCands(){const out=[];
   if(WX.mapNames)for(const L of MAPLAB){const r=WX_RANK[L.cls];if(!r)continue;
       out.push({name:L.name,v:L.v,lat:Math.asin(clamp(L.v[2],-1,1))*DEG,lon:Math.atan2(L.v[1],L.v[0])*DEG,pri:1e5+r*1000+L.pri,under:true})}
-  // towns in the map data whose names aren't on screen (names off, or no room): these badges carry the name
-  const shownNames=new Set(WX.mapNames?MAPLAB.map(l=>l.name):[]);
-  for(const dk of vtUsed){const dd=vdata.get(dk);if(!dd||!dd.ok)continue;
-    for(const L of vtLabels(dk,dd)){const r=WX_RANK[L.cls];if(L.kind!=='place'||!r||r<2||shownNames.has(L.name))continue;
-      out.push({name:L.name,v:L.v,lat:Math.asin(clamp(L.v[2],-1,1))*DEG,lon:Math.atan2(L.v[1],L.v[0])*DEG,pri:r*1000+L.pri})}}
-  const cities=wxCities();if(cities)out.push(...cities);
+  // only places whose name is drawn on the map get a pill, so every reading sits next to its own name; airports are not used
   return out.sort((a,b)=>b.pri-a.pri)}
 // every city with an airport (one entry per city): bigger airports rank first
 function wxCities(){if(!airports){loadAirports().then(()=>{draw();m3dSync();m3dWx()}).catch(()=>{});return null}
