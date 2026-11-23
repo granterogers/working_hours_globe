@@ -1887,7 +1887,7 @@ async function phSearch(lat,lon,onUpdate){const seen=new Map();let radius=0,answ
 // the button under them opens every photo found so far in the full grid.
 const photosBlock=()=>`<div class="phs" id="phs"><div class="phg" id="phg"></div><button type="button" class="phbtn" id="phbtn" aria-controls="phg"><span>All photos nearby</span><small id="phst">Searching…</small><i class="phchev" aria-hidden="true">›</i></button></div>`;
 // the location in Google Maps, opened in a new tab
-const gmapsLink=ll=>ll?`<a class="clbtn gmaps" href="https://www.google.com/maps/search/?api=1&query=${ll[1].toFixed(6)},${ll[0].toFixed(6)}" target="_blank" rel="noopener noreferrer">Open in Google Maps ↗</a>`:'';
+const gmapsLink=ll=>ll?`<a class="clbtn gmaps" href="https://www.google.com/maps/search/?api=1&query=${ll[1].toFixed(6)},${ll[0].toFixed(6)}" target="_blank" rel="noopener noreferrer">Open in Google Maps ↗</a>`+`<a class="clbtn gearth" href="https://earth.google.com/web/@${ll[1].toFixed(6)},${ll[0].toFixed(6)},0a,4000d,35y,0h,0t,0r" target="_blank" rel="noopener noreferrer">Open in Google Earth ↗</a>`:'';
 function photosLoad(ll){if(!ll)return;const tok=++PH.tok;if(PH.ac)PH.ac.abort();PH.ac=new AbortController();PH.list=[];PH.done=false;PH.failed=false;PH.radius=0;PH.sig='';PH.ll=ll;
   const btn=document.getElementById('phbtn');if(btn)btn.onclick=()=>{if(PH.list.length)phGrid()};
   phSearch(ll[1],ll[0],(list,r,done)=>{if(tok!==PH.tok||!document.getElementById('phg'))return false;PH.list=list;PH.radius=r;PH.done=done;photosRender()})}
