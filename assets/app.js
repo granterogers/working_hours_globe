@@ -1973,14 +1973,15 @@ const WXI=(()=>{const CL='<path d="M8 19h9.5a4.5 4.5 0 0 0 .6-8.96A6 6 0 0 0 6.6
 const wxSvg=(c,day,px)=>`<img class="wxi" src="data:image/svg+xml,${encodeURIComponent(WXI[wxKind(c,day)])}" width="${px}" height="${px}" alt="${esc(WMO[c]||'')}" title="${esc(WMO[c]||'')}">`;
 // a weather pill for the 3D map: a rounded rectangle with the weather icon, the place and the temperature. It is drawn once per text
 // and kept as a map image, drawn at twice the size so it stays sharp.
-function wxPillImage(map,text,col,kd){try{const im=WXIMG[kd],loaded=!!(im&&im.complete&&im.naturalWidth),name='wxp|'+text+'|'+col+'|'+(loaded?kd:'-');
-  if(map.hasImage(name))return name;const sc=2,f=`600 ${12*sc}px "Bricolage Grotesque", "Segoe UI", sans-serif`;
-  const c=document.createElement('canvas'),g=c.getContext('2d');g.font=f;const tw=g.measureText(text).width,pad=8*sc,ic=22*sc,h=30*sc,w=Math.ceil(pad+ic+6*sc+tw+pad);
-  c.width=w;c.height=h;g.beginPath();g.roundRect(sc,sc,w-2*sc,h-2*sc,h/2);g.fillStyle='rgba(222,240,255,.95)';g.fill();g.lineWidth=2*sc;g.strokeStyle=col;g.stroke();
+function wxPillImage(map,text,col,kd){try{const im=wxImgKind(kd),loaded=!!(im&&im.complete&&im.naturalWidth),name='wxp|'+text+'|'+col+'|'+kd+'|'+(loaded?'i':'-');
+  if(map.hasImage(name))return name;const sc=2,f=`600 ${11*sc}px "Bricolage Grotesque", "Segoe UI", sans-serif`;
+  const c=document.createElement('canvas'),g=c.getContext('2d');g.font=f;const tw=g.measureText(text).width,pad=6*sc,ic=loaded?15*sc:0,gap=loaded?4*sc:0,h=22*sc,w=Math.ceil(pad+ic+gap+tw+pad);
+  c.width=w;c.height=h;g.beginPath();g.roundRect(sc,sc,w-2*sc,h-2*sc,h/2);g.fillStyle='rgba(222,240,255,.95)';g.fill();g.lineWidth=1.5*sc;g.strokeStyle=col;g.stroke();
   if(loaded)g.drawImage(im,pad,(h-ic)/2,ic,ic);
-  g.font=f;g.fillStyle='#0b3a66';g.textBaseline='middle';g.fillText(text,pad+ic+6*sc,h/2+1);
+  g.font=f;g.fillStyle='#0b3a66';g.textBaseline='middle';g.fillText(text,pad+ic+gap,h/2+1);
   map.addImage(name,g.getImageData(0,0,w,h),{pixelRatio:sc});return name}catch(e){return null}}
-const WXIMG={};const wxImg=(c,day)=>{const kd=wxKind(c,day);if(!WXIMG[kd]){const im=new Image();im.onload=()=>draw();im.src='data:image/svg+xml,'+encodeURIComponent(WXI[kd]);WXIMG[kd]=im}return WXIMG[kd]};
+const WXIMG={};const wxImgKind=kd=>{if(!WXIMG[kd]){const im=new Image();im.onload=()=>{draw();if(mapOn())m3dSync()};im.src='data:image/svg+xml,'+encodeURIComponent(WXI[kd]);WXIMG[kd]=im}return WXIMG[kd]};
+const wxImg=(c,day)=>wxImgKind(wxKind(c,day));
 const WX={pts:new Map(),pending:new Set(),timer:0,busy:false,boxes:[]};
 const wxTempCol=t=>t<=-10?'#5b6ee1':t<=0?'#4f9de0':t<=10?'#39b6c8':t<=18?'#4cc38a':t<=25?'#f2c14e':t<=32?'#f28b3c':'#e2453c';
 const wxKey=(lat,lon)=>lat.toFixed(2)+','+lon.toFixed(2);
