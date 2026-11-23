@@ -1313,7 +1313,7 @@ function m3dGeo(){
   const ov={type:'FeatureCollection',features:[]};
   overlays.forEach((L,li)=>{if(L.on)L.fc.features.forEach((f,fi)=>{if(f.geometry)ov.features.push({type:'Feature',properties:{li,fi,c:L.color,n:(f.properties&&f.properties.name)||''},geometry:f.geometry})})});
   // a place keeps its label while its reading is still on its way (a dash, and a plain cloud), so it never drops out and comes back
-const wx={type:'FeatureCollection',features:on('weather')?(WX.shown3d||[]).map(p=>{const q=WX.pts.get(wxKey(p.lat,p.lon));return{type:'Feature',properties:{t:p.name+'  '+(q?Math.round(q.temp)+'°':'…'),c:q?wxTempCol(q.temp):'#ffffff',ic:q?'wx-'+wxKind(q.code,q.day):'wx-cloud'},geometry:{type:'Point',coordinates:[p.lon,p.lat]}}}):[]};
+const wx={type:'FeatureCollection',features:on('weather')?(WX.shown3d||[]).map(p=>{const q=WX.pts.get(wxKey(p.lat,p.lon));const kd=q?wxKind(q.code,q.day):'cloud';const text=p.name+'  '+(q?Math.round(q.temp)+'°':'…');return{type:'Feature',properties:{t:text,pill:wxPillImage(m3d.map,text,q?wxTempCol(q.temp):'#ffffff',kd)||'',ic:'wx-'+kd},geometry:{type:'Point',coordinates:[p.lon,p.lat]}}}):[]};
   const cm={type:'FeatureCollection',features:on('cams')?[...CAM.list.values()].map(c=>({type:'Feature',properties:{id:c.id,live:c.src==='windy'?1:0},geometry:{type:'Point',coordinates:[c.lon,c.lat]}})):[]};
   const cwk={type:'FeatureCollection',features:on('cw')?CW.vis.map(c=>({type:'Feature',properties:{id:c.id,p:cwPriority(c)},geometry:{type:'Point',coordinates:[c.lon,c.lat]}})):[]};
   // the two polar caps, which the basemap's tiles stop short of, in the basemap's own colours
@@ -1376,7 +1376,8 @@ function m3dSync(){if(!m3d||!m3d.map)return;const map=m3d.map;let g;try{if(!map.
   lay({id:M3D_OWN+'lab',type:'symbol',source:M3D_OWN+'lab',layout:{'text-field':['get','t'],'text-font':font,'text-size':['match',['get','r'],1,13,11.5],'text-line-height':1.25,'text-padding':6},
     paint:{'text-color':dk||basemap==='street'?'#ffffff':'#ffffff','text-halo-color':'rgba(10,16,30,.8)','text-halo-width':1.6}});
   for(const kd in WXI)if(!map.hasImage('wx-'+kd)){const im=new Image(52,52);im.onload=()=>{try{if(!map.hasImage('wx-'+kd)){map.addImage('wx-'+kd,im,{pixelRatio:2});clearTimeout(m3d.wxT);m3d.wxT=setTimeout(()=>{const s=map.getSource(M3D_OWN+'wx');if(s)s.setData(m3dGeo().wx)},50)}}catch(e){}};im.src='data:image/svg+xml,'+encodeURIComponent(WXI[kd].replace('<svg ','<svg width="52" height="52" '))}
-  lay({id:M3D_OWN+'wxt',type:'symbol',source:M3D_OWN+'wx',layout:{'icon-image':['get','ic'],'icon-size':1,'icon-anchor':'right','icon-offset':[-2,0],'text-field':['get','t'],'text-font':font,'text-size':12.5,'text-anchor':'left','text-offset':[0.3,0],
+  // each weather reading is a rounded pill (icon, place and temperature), drawn once as an image, so it reads apart from the place names
+  lay({id:M3D_OWN+'wxt',type:'symbol',source:M3D_OWN+'wx',layout:{'icon-image':['get','pill'],'icon-size':1,'icon-anchor':'center','icon-offset':[0,0],'text-field':'','text-font':font,'text-size':12.5,'text-anchor':'left','text-offset':[0.3,0],
       'text-allow-overlap':false,'icon-allow-overlap':false,'icon-optional':true},
     paint:{'text-color':'#ffffff','text-halo-color':'rgba(10,16,30,.85)','text-halo-width':1.8}});
   lay({id:M3D_OWN+'cm',type:'symbol',source:M3D_OWN+'cm',layout:{'icon-image':['case',['==',['get','live'],1],'cam-live','cam'],'icon-size':0.9,'icon-allow-overlap':false,'icon-padding':['interpolate',['linear'],['zoom'],2,30,6,16,10,8],'symbol-sort-key':['case',['==',['get','live'],1],0,1]},paint:{}});
@@ -1970,6 +1971,15 @@ const WXI=(()=>{const CL='<path d="M8 19h9.5a4.5 4.5 0 0 0 .6-8.96A6 6 0 0 0 6.6
     snow:w(CL+'<g fill="#7fb6ef">'+[9,13,17].map(x=>`<circle cx="${x}" cy="22.5" r="1.5"/>`).join('')+'</g>'),
     storm:w(CL.replace('#d5dde9','#9aa6b8')+'<path d="M13 17l-3 5h3l-1.5 4 4.5-6h-3l1.5-3z" fill="#ffc83d" stroke="#d89a12" stroke-width=".6"/>')}})();
 const wxSvg=(c,day,px)=>`<img class="wxi" src="data:image/svg+xml,${encodeURIComponent(WXI[wxKind(c,day)])}" width="${px}" height="${px}" alt="${esc(WMO[c]||'')}" title="${esc(WMO[c]||'')}">`;
+// a weather pill for the 3D map: a rounded rectangle with the weather icon, the place and the temperature. It is drawn once per text
+// and kept as a map image, drawn at twice the size so it stays sharp.
+function wxPillImage(map,text,col,kd){try{const im=WXIMG[kd],loaded=!!(im&&im.complete&&im.naturalWidth),name='wxp|'+text+'|'+col+'|'+(loaded?kd:'-');
+  if(map.hasImage(name))return name;const sc=2,f=`600 ${12*sc}px "Bricolage Grotesque", "Segoe UI", sans-serif`;
+  const c=document.createElement('canvas'),g=c.getContext('2d');g.font=f;const tw=g.measureText(text).width,pad=8*sc,ic=22*sc,h=30*sc,w=Math.ceil(pad+ic+6*sc+tw+pad);
+  c.width=w;c.height=h;g.beginPath();g.roundRect(sc,sc,w-2*sc,h-2*sc,h/2);g.fillStyle='rgba(222,240,255,.95)';g.fill();g.lineWidth=2*sc;g.strokeStyle=col;g.stroke();
+  if(loaded)g.drawImage(im,pad,(h-ic)/2,ic,ic);
+  g.font=f;g.fillStyle='#0b3a66';g.textBaseline='middle';g.fillText(text,pad+ic+6*sc,h/2+1);
+  map.addImage(name,g.getImageData(0,0,w,h),{pixelRatio:sc});return name}catch(e){return null}}
 const WXIMG={};const wxImg=(c,day)=>{const kd=wxKind(c,day);if(!WXIMG[kd]){const im=new Image();im.onload=()=>draw();im.src='data:image/svg+xml,'+encodeURIComponent(WXI[kd]);WXIMG[kd]=im}return WXIMG[kd]};
 const WX={pts:new Map(),pending:new Set(),timer:0,busy:false,boxes:[]};
 const wxTempCol=t=>t<=-10?'#5b6ee1':t<=0?'#4f9de0':t<=10?'#39b6c8':t<=18?'#4cc38a':t<=25?'#f2c14e':t<=32?'#f28b3c':'#e2453c';
