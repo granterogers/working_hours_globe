@@ -1,130 +1,118 @@
-# Working hours globe 🌍
+# Working Hours Globe
 
-An interactive 3D globe that shows what your UK working hours would be, in local time, anywhere in the world. Every country is coloured by how your shift would fall locally, and as you zoom in, each state, province and island group gets its own label.
+**Plan your working life around the world.** Set your shift in UK time, then spin a 3D globe and see, country by country and city by city, when your working day falls in local time. Then find where to stay: co-living and coworking spaces, weather, photos and flights for every place, in one place.
 
-Built for planning where to live and work as a remote worker on UK hours.
+**[Open the live site →](https://granterogers.github.io/working_hours_globe/)** &nbsp;·&nbsp; [Full feature list](docs/FEATURES.md)
 
-**Live site:** [granterogers.github.io/working_hours_globe](https://granterogers.github.io/working_hours_globe/)
+![The whole globe with your working hours coloured in](docs/screenshots/globe-working-hours.jpg)
 
-## Features
+---
 
-- Spin, zoom and fly around a smooth, hand-rendered globe, with eased zoom towards the cursor and momentum when you flick it.
-- Local working hours for every country, with smart labelling as you zoom: one label per country, plus extra labels only for regions on a different clock, separate islands, or to repeat a large country's hours once the previous label is far away. No clutter from dozens of identical labels.
-- Colours follow real time-zone boundaries, from "Early bird" through "Classic day" to "Overnight".
-- Set any shift in UK time, and switch between winter (UK on GMT) and summer (UK on BST).
-- Click anywhere for the hours at that exact spot in both seasons and its offset from the UK. The card is named after the nearest village, town or feature to where you clicked (from OpenStreetMap's Nominatim, in English), in more detail the further you zoom in.
-- Every location, coliving and favourite card has a **Weather** section (collapsed, with today's temperature and conditions on its header): conditions now, the latest measured temperature from the nearest airport weather station within 40 km (METAR, from [AviationWeather.gov](https://aviationweather.gov/data/api/), saved worldwide every three hours by `scripts/metar.py` into `data/metar.json`, because AviationWeather doesn't allow browsers to ask it directly), and a 7-day forecast by day. Forecast figures are the middle value of five weather models via [Open-Meteo](https://open-meteo.com/) (ECMWF, DWD ICON, NOAA GFS, Météo-France and Open-Meteo's best match). Weather, Photos and Flights open one at a time.
-- Every location card (place, saved favourite, dropped pin, coliving, coworking and webcam) has an **Open in Google Maps ↗** link that opens the spot in a new tab.
-- Every location, saved favourite and coliving card shows **photos nearby** of the place itself: the three nearest thumbnails appear in the card as soon as any source answers, and **All photos nearby** opens every photo found (a search that no source answered is not saved, and says so with a Try again button), from open sources: Wikimedia Commons, Wikidata, Panoramax, KartaView and OpenStreetMap (Mapillary too once a token is set; see below). Wildlife close-ups are left out, and runs of street-level frames are thinned to one per ~60 m. The search widens from 500 m to 2, 10 and 50 km until about ten photos turn up. The third thumbnail's “+N” tile and the All photos nearby button open the overview; any photo opens full size with arrow keys, on-screen arrows or a swipe, while the rest of the app is softly blurred. Each photo shows its distance, source, author, licence, date and a link to the original.
-- Mapillary street-level photos: open the page once as `…/working_hours_globe/#mapillary=MLY|your-client-token`; the token is kept only in that browser and removed from the address bar.
-- Clicking the map drops a blue pin on the spot you clicked.
-- Search bar across the top: type a country, state or island; press `/` to jump to it.
-- Street-level detail when you zoom in towards a country: a street map in the standard OpenStreetMap style fades in and takes over from the time-zone colours and rough outlines, with names in English where available. Towns, villages, peaks, rivers and points of interest appear as you get closer, as on openstreetmap.org, and you can zoom right down to street level.
-- **Layers button** (top right, the furthest right of the row, with its menu directly beneath): add your own map layers (KML, KMZ or GeoJSON) at the top, then your favourites, then the base map. Click any place on the globe and press the heart to add it to your favourites; they show on the map as hearts, and the Favourites row in the Layers panel switches them on and off.
-- **Layers panel** (top left, foldable; working hours, favourites and day and night are on at every launch and the rest are off; the filters open beside it, and the favourites list sits above it): tick boxes for Working hours, Colivings (with its filter button and count), Place names and Current weather (current temperature and conditions for the towns and cities on the map, from Open-Meteo) and Webcams. **Base map** (layers button, top right): the English street map, Satellite (Esri World Imagery, with English names), Sentinel-2 cloudless (EOX), Topographic (OpenTopoMap), Ocean (Esri sea-floor relief) or Earth at night (NASA Black Marble). Every base map fades in as you zoom towards a country, taking over from the working-hours colours; the colour key fades with them.
-- **Working hours settings**: the cog beside Working hours opens the shift and season, to the right of the Layers panel.
-- **2D and 3D**: the change of view cross-fades: the globe fades out as the 3D view fades in and tilts up, and back again.
-- **Working hours**: the land is coloured, opaque, with country borders; the sea has no colour, so the base map shows there. The colours fade as you zoom in towards a country.
-**Day and night** (Layers panel, on at every launch): the night side of the Earth is shaded, with soft twilight bands so the day/night line (the terminator) fades rather than cuts; it moves with the clock, on the 2D globe and in 3D. On the 2D globe the shading is worked out pixel by pixel from the sun's height, so the poles have no seams or wedges; the working-hours colours stop at 85° north and south, where the polar caps show instead.
-- With **Working hours** switched off, the chosen base map shows in full at every zoom, from the whole globe down; with it on, the base map fades in as you zoom towards a country.
-- **Coworking filters** (the funnel beside Coworking spaces): by type (coworking or office services), operator (independent or chain), network, open now (checked against the opening hours at the place’s approximate local time), opening hours listed, website, phone number, listing confidence and country. Facilities (Wi-Fi, wheelchair access, air conditioning, free entry) come from OpenStreetMap tags where a place has them, so they appear after the next weekly update; price is not in the data.
-- **Coworking** (Layers panel): purple dots for coworking spaces from [Overture Maps](https://overturemaps.org/) Places (businesses conflated from Meta, Microsoft and others) merged with OpenStreetMap, rebuilt weekly by `scripts/coworking.py` (run from the webcams workflow) into one file, `data/coworking.json`, that loads with the page like the colivings, so nothing is downloaded as you pan. Closed places are left out. At globe scale, places that would overlap merge into one purple dot; press one to fly to it. Its filter button offers search, country, independent vs chains (Regus, WeWork…), has a website, opening hours listed, and well-established listings only.
-- Switching a layer on or off fades it in or out.
-- **Webcams** (Layers panel): the most popular webcams in every country from [Windy.com](https://www.windy.com/webcams), refreshed weekly by a GitHub Action (`scripts/webcams.py`, `.github/workflows/webcams.yml`, key in the `WINDY_WEBCAMS_KEY` repository secret), plus webcams listed in OpenStreetMap and Wikidata when zoomed in. Click a camera to play today's images in Windy's player, with the hours and weather there.
-- `assets/tour/` holds four Wikimedia Commons photos (CC BY-SA 4.0, credited in `assets/tour.js`) that the tour shows when the live photo services have nothing nearby.
-- **Get started** (the button at the bottom right, which starts the tour, hidden while a place card is open): a guided walk through the interface. A cursor clicks the real controls and types into the search, the page is lightly dimmed except the part being explained, a glowing ring outlines it, and a glow marks the real place on the map being talked about. It shows the place card, a saved favourite, photos and the gallery, flights, the favourites list, the co-living and coworking filters, webcams, the weather and its forecast, day and night, base maps, and 3D around Barcelona (switching to satellite part way round). Your layers, panels and base map are restored when you finish, and Esc stops it at any time. The steps live in `assets/tour.js`, and they drive the real controls, so the tour follows interface changes.
-- **My location** button (above the zoom buttons): zooms to where you are, with a blue dot and a ring showing how precise the fix is; works in 3D too. The browser asks permission the first time.
-- **3D view** (3D button): opens at exactly the spot and scale you were looking at, then tilt it into 3D with real terrain ([Mapterhorn](https://mapterhorn.com/)) in whichever base map is chosen. Left-drag moves, the wheel zooms, and holding the wheel button down while dragging turns and tilts. Working-hours colours and hours, colivings, favourites and your own layers all show, and clicking opens the same cards as on the globe. Back to globe returns to where you were looking. Uses [MapLibre GL JS](https://maplibre.org/).
-- Flights from any place's details card: pick where you're flying from (your last six are kept as one-tap choices, alongside Europe's busiest airports), choose one of the nearest airports and a date, then open a one-way search on Google Flights or Skyscanner's cheapest-days month calendar with everything filled in.
-- Favourites: press **Add a favourite**, click the map to drop a pin, and it's named after the nearest town or feature with its coordinates. Drag the pin to fine-tune it, add a note and save. A heart marks the spot, saved favourites can be dragged too, and they're kept in your browser between visits.
-- Add your own KML, KMZ or GeoJSON files as layers on top (the view stays where you are, and layers are kept between visits), then click any point, line or area to see its name, description, extended data and your working hours at that spot.
-- Rename any added layer (pencil button, or double-click its name) and switch layers on or off, including the built-in working-hours colours and times, for a plain globe with just your own layers.
-- A built-in **Colivings** layer with every listing from [colivingDB](https://colivingdb.com): shown as green dots (the card says whether it's permanent, a pop-up or a festival). Click a dot for prices, rating, rooms, minimum stay, dates, links and your hours there. The filter button next to the layer opens search, type, price per month, rooms, minimum stay, rating, region, the month a pop-up runs, interests and vibe; your filters are remembered. Finished editions are hidden automatically.
-- **Check for new colivings** (in the coliving filters) reports listings added since you last looked and lets you jump to each. A GitHub Action scans colivingDB every Monday, or whenever you run it from the Actions tab.
-- A small version number sits at the bottom of the page (`v1.131` in `index.html`). Its minor number goes up with every change.
-- **Night sky** (both themes: light stars on the dark theme, navy stars on the light one): the whole background is the sky above the centre of the globe, for the time now, from `data/sky.json`: about 5,000 stars (Yale Bright Star Catalogue via d3-celestial), with the planets marked as dots from low-precision orbits. It turns as you turn the globe.
-- Dark and light themes, full-screen mode, keyboard controls (arrow keys to spin, `+` and `-` to zoom), and a layout that works on mobile.
+## Why it saves time
 
-## Run it locally
+Working across time zones means doing the same sums again and again: what time is it there, is that still a sensible hour to call, and is the place I'm looking at any good to work from? Working Hours Globe answers those questions at a glance.
 
-The page loads its map data with `fetch`, so browsers won't run it when you double-click `index.html`. Serve the folder instead. On Windows, in PowerShell:
+- **Know the answer before you ask.** Every country is coloured by how your shift lands locally. Hover, click or zoom and the local hours, the time difference and the local clock are on screen.
+- **Compare places without a spreadsheet.** Click any spot for its hours in winter and summer, its offset from the UK, and its time zone.
+- **Plan a whole trip in one place.** Search a city, then add it to favourites, check the weather, read the nearby photos, see co-living and coworking options, and open the route in Google Maps or Google Earth.
+- **Works everywhere.** The same app runs in a browser on a laptop or a phone, with no install and nothing to sign up for.
 
-```powershell
-cd path\to\working_hours_globe
-python -m http.server 8000
-```
+## See it in action
 
-Then open [http://localhost:8000](http://localhost:8000).
+| | |
+|---|---|
+| ![A place card with local time and map links](docs/screenshots/place-card-street.jpg) | **Place cards that answer the question.** Local time, the working-hours band, the time difference from the UK, and Open in Google Maps or Google Earth in one tap. |
+| ![3D terrain over Paris on satellite imagery](docs/screenshots/3d-paris-satellite.jpg) | **3D, when you want the detail.** Tilt into real terrain over any base map, from satellite to street, with your working-hours colours kept on top. |
+| ![Co-living filters](docs/screenshots/colivings-filter.jpg) | **Find the right co-living.** Filter by type, price, rooms, minimum stay, rating, region, pop-up dates, and interests and vibe. Your filters are remembered. |
+| ![Coworking spaces in Berlin](docs/screenshots/coworking-berlin.jpg) | **Coworking, mapped.** Purple desks for coworking spaces from open data, thinned out when you zoom out so the busy areas show first. |
+| ![The guided tour](docs/screenshots/guided-tour.jpg) | **A guided tour in about two minutes.** Press *Get started* and a cursor walks you through every control, with a ring on what it's talking about. Esc stops it at any time. |
 
-## Publish with GitHub Pages
+## What's inside
 
-1. Push this folder to [granterogers/working_hours_globe](https://github.com/granterogers/working_hours_globe):
-   ```powershell
-   git init
-   git add .
-   git commit -m "Working hours globe"
-   git branch -M main
-   git remote add origin https://github.com/granterogers/working_hours_globe.git
-   git push -u origin main
-   ```
-2. On GitHub, open **Settings → Pages**.
-3. Under **Build and deployment**, choose **Deploy from a branch**, then pick `main` and `/ (root)`, and save.
-4. After a minute or so the site appears at [granterogers.github.io/working_hours_globe](https://granterogers.github.io/working_hours_globe/).
+- **Working hours on every country,** colours from real time-zone boundaries, with a shift you set in UK time and winter or summer switching.
+- **Street detail when you zoom in:** English place names, roads and points of interest from OpenStreetMap.
+- **Day and night** on the globe and in 3D.
+- **Weather** for places on the map and in every card, with a 7-day forecast.
+- **Photos nearby** from open sources, with credits and licences shown.
+- **Flights:** search Google Flights or Skyscanner with your airport and dates filled in.
+- **Favourites** you can drag, annotate and keep between visits.
+- **Your own layers:** add KML, KMZ or GeoJSON files and click through them with your hours alongside.
+- **Featured listings:** paid placements appear in a panel bottom left, only when they are actually in view and clearly marked.
+- **Dark and light themes,** full-screen mode, keyboard controls and a layout for phones.
 
-There is no build step for the site itself. The `.nojekyll` file tells GitHub Pages to serve the files as they are.
+## Quick start
 
-## Rebuild the map data
+The site is static: there is no server to run and no build step.
 
-`data/globe-data.json` is already included, so you only need this to pick up time-zone changes or tweak the geometry.
+- **Use it:** [granterogers.github.io/working_hours_globe](https://granterogers.github.io/working_hours_globe/)
+- **Run it locally:** serve the folder (browsers won't load the data files from a double-clicked `index.html`):
+  ```bash
+  cd working_hours_globe
+  python3 -m http.server 8000
+  ```
+  Then open <http://localhost:8000>.
 
-```powershell
-pip install -r scripts/requirements.txt
-python scripts/build_data.py
-```
+## Deploy your own copy
 
-The script downloads the source data into `scripts/cache/` (ignored by git), computes each zone's offset from the UK for a winter date and a summer date, simplifies and tiles the shapes at three levels of detail, and writes `data/globe-data.json`. To use a newer time-zone release, change `TZBB_RELEASE` at the top of the script.
+1. Fork or push this repository to your GitHub account.
+2. In **Settings → Pages**, choose **Deploy from a branch**, then `main` and `/ (root)`.
+3. The site appears at `https://<your-user>.github.io/<repo>/` within a minute or two.
 
-## Project structure
+Everything the site needs is in the repository (`.nojekyll` tells GitHub Pages to serve the files as they are).
+
+## Keeping the data fresh
+
+Several data sets refresh themselves on a schedule with GitHub Actions:
+
+| Data | Refreshed by | When |
+|---|---|---|
+| Co-living listings (colivingDB) | `scripts/coliving.py` | every morning |
+| Coworking spaces (Overture Maps, OpenStreetMap) | `scripts/coworking.py` | weekly |
+| Webcams | `scripts/webcams.py` | weekly |
+| Weather stations (METAR) | `scripts/metar.py` | every three hours |
+| Guided tour check | `tests/tour.js` in a real browser | every push and nightly |
+
+The co-living panel shows the date it was last checked, so you can always see how current the list is.
+
+## Project layout
 
 ```
-index.html              Page markup
-assets/style.css        Styles and themes
-assets/app.js           Globe rendering, interaction, search and layers
-assets/tour.js          Guided tour: the steps, spotlight and card
-data/coliving.json      Coliving listings from colivingDB (built by scripts/coliving.py)
-data/coliving-updates.json  When colivingDB was last scanned and what changed
-data/metar.json        Latest weather station reports, worldwide (built by scripts/metar.py)
-data/coworking.json     Coworking spaces from Overture Maps and OpenStreetMap (built by scripts/coworking.py)
-scripts/coliving.py     Import a colivingDB KML export, or scan colivingDB for changes
-.github/workflows/coliving.yml  Weekly and on-demand colivingDB scan
-data/globe-data.json    Prebuilt map data (time zones, country borders, label points)
-data/airports.json      Airports with scheduled flights, for flight searches
-data/LICENSE-DATA.md    Data sources and licence
-scripts/build_data.py   Rebuilds globe-data.json from the source data
-scripts/requirements.txt
-tests/smoke.js         Browser smoke test (Playwright): coworking count, filter, 3D view
-tests/features.js      Feature checks (Playwright): opening hours, layout, tour button, coworking filters, photos and the gallery; run with BASE=… node tests/features.js
+index.html                 the page
+assets/app.js              the globe, 3D view, layers, search and cards
+assets/tour.js             the guided tour
+assets/style.css           styles and themes
+data/                      prebuilt data (time zones, listings, weather, featured entries)
+scripts/                   the refresh and build scripts (Python, standard library where possible)
+tests/                     browser tests (Playwright) and the review prompt for Claude Cowork
+docs/                      full feature list and screenshots
 ```
 
-## How it works
+## Tests
 
-The globe is drawn on a canvas with a custom orthographic projection. Every vertex is stored as a precomputed 3D unit vector, so each frame is just a rotation and a quick visibility test, with no trigonometry. Shapes are split into tiles and checked against the visible part of the sphere so only what's on screen is drawn, and the level of detail goes up as you zoom in. [D3](https://d3js.org/) is used for small helpers such as the graticule and point-in-polygon lookups, and [JSZip](https://stuk.github.io/jszip/) reads KMZ files.
+```bash
+npm install playwright && npx playwright install chromium
+BASE=http://127.0.0.1:8000/ node tests/visual.js
+BASE=http://127.0.0.1:8000/ node tests/tour.js
+```
 
-Hours are worked out per IANA time zone for two reference dates: 15 December 2026 for winter and 15 July 2027 for summer. Around the daylight-saving changeover weeks in March, October and November, when countries switch on different dates, real offsets can briefly differ by an hour.
+`tests/visual.js` checks the globe and labels. `tests/tour.js` walks all 29 steps of the guided tour and checks each one lands on its target and puts the view back when it ends.
 
-## Map tiles
+## Data and credits
 
-Street maps are drawn from [OpenFreeMap](https://openfreemap.org/) vector tiles (the [OpenMapTiles](https://openmaptiles.org/) schema, built from [OpenStreetMap](https://www.openstreetmap.org/copyright) data) and load only once you zoom in. Each tile is painted in the browser in openstreetmap-carto's colours and wrapped onto the globe; names are drawn upright on top, using OpenStreetMap's English name (`name:en`) where one exists and the local name otherwise. Country and state names are left to the time-zone labels. OpenFreeMap is free with no key; the page reads the current tile address from its [TileJSON](https://tiles.openfreemap.org/planet), since it changes with each weekly build, and shows the attribution while the map is visible. Place names for clicked spots and new favourites come from OpenStreetMap's [Nominatim](https://nominatim.org/) service, one lookup per click or pin drop, which is free for light personal use; for a high-traffic deployment, follow its [usage policy](https://operations.osmfoundation.org/policies/nominatim/).
+- Map tiles and vector data: [OpenFreeMap](https://openfreemap.org/) and [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.
+- Satellite imagery: Esri World Imagery. Topographic: OpenTopoMap. Terrain: [Mapterhorn](https://mapterhorn.com/).
+- Time zones: IANA tz database. Country borders: [Natural Earth](https://www.naturalearthdata.com/).
+- Co-living listings: [colivingDB](https://colivingdb.com). Coworking: [Overture Maps](https://overturemaps.org/) and OpenStreetMap. Webcams: [Windy](https://www.windy.com/webcams).
+- Weather: [Open-Meteo](https://open-meteo.com/) and [AviationWeather.gov](https://aviationweather.gov/).
+- Photos: Wikimedia Commons, Wikidata, Panoramax, KartaView and OpenStreetMap, each credited on the photo.
+- Built with [MapLibre GL JS](https://maplibre.org/), [D3](https://d3js.org/) and [JSZip](https://stuk.github.io/jszip/).
 
-Flight searches open Google Flights or Skyscanner in a new tab. Neither offers a free public API for embedding live prices, so the page prefills their search pages instead.
+See [`data/LICENSE-DATA.md`](data/LICENSE-DATA.md) for the licence of each data set.
 
-## Limitations
+## Contributing
 
-- A few very large regions that cross a time-zone line, such as Nunavut and some Russian and Brazilian states, get one label based on the zone at their centre. The colours underneath still show the split, and clicking a spot gives that spot's hours.
-- The borders are simplified to keep the data small, so coastlines are approximate when you zoom right in.
-- There is no satellite imagery.
-- Favourites and added layers are stored in your browser (local storage and IndexedDB), so they don't sync between devices, and clearing site data removes them.
+Issues and pull requests are welcome. For changes to the guided tour, edit the steps in `assets/tour.js`; the tour drives the real controls, so it follows interface changes automatically.
 
 ## Licence
 
-The code is released under the [MIT License](LICENSE). The map data is released under the ODbL 1.0, with attribution required. See [data/LICENSE-DATA.md](data/LICENSE-DATA.md).
+See [LICENSE](LICENSE).
