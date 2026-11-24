@@ -25,7 +25,7 @@ Working across time zones means doing the same sums again and again: what time i
 | ![3D terrain over Paris on satellite imagery](docs/screenshots/3d-paris-satellite.jpg) | **3D, when you want the detail.** Tilt into real terrain over any base map, from satellite to street, with your working-hours colours kept on top. |
 | ![Co-living filters](docs/screenshots/colivings-filter.jpg) | **Find the right co-living.** Filter by type, price, rooms, minimum stay, rating, region, pop-up dates, and interests and vibe. Your filters are remembered. |
 | ![Coworking spaces in Berlin](docs/screenshots/coworking-berlin.jpg) | **Coworking, mapped.** Purple desks for coworking spaces from open data, thinned out when you zoom out so the busy areas show first. |
-| ![The guided tour](docs/screenshots/guided-tour.jpg) | **A guided tour in about two minutes.** Press *Get started* and a cursor walks you through every control, with a ring on what it's talking about. Esc stops it at any time. |
+| ![The guided tour](docs/screenshots/guided-tour.jpg) | **A guided tour of the whole app.** Press *Get started* and a cursor walks you through every control, with a ring on what it's talking about. Esc stops it at any time. |
 
 ## What's inside
 
