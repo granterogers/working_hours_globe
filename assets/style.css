@@ -508,3 +508,23 @@ body.booting #c{opacity:0;transition:none}
 .clstamp{font-size:.78rem;color:var(--ink2);margin:-4px 0 10px;padding:6px 9px;border-radius:9px;background:rgba(255,255,255,.14)}
 .clstamp b{color:var(--ink)}
 .clstamp.stale{color:#8a4b00;background:rgba(255,196,64,.22)}
+
+/* featured: a panel bottom left that lists the paid entries currently in view; it can be folded away */
+.feat{position:fixed;left:16px;bottom:16px;z-index:44;width:300px;max-width:calc(100vw - 32px);border-radius:16px;padding:0;overflow:hidden}
+.feathd{all:unset;box-sizing:border-box;width:100%;display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;font-family:var(--sans);font-size:.82rem;letter-spacing:.06em;text-transform:uppercase;color:#7a4b00}
+.feathd b{font-weight:700}
+#featcount{font-size:.72rem;color:var(--ink2);text-transform:none;letter-spacing:0}
+.featchev{margin-left:auto;transition:transform .2s;font-size:.9rem}
+.feat.folded .featchev{transform:rotate(-90deg)}
+.feat.folded .featlist{display:none}
+.featlist{padding:0 10px 10px;display:grid;gap:8px;max-height:260px;overflow:auto}
+.featlist:empty::before{content:"Featured places appear here when they are in view.";display:block;font-size:.78rem;color:var(--ink2);padding:4px 4px 8px}
+.featcard{all:unset;box-sizing:border-box;cursor:pointer;display:block;position:relative;border-radius:14px;padding:12px 14px 12px;background:linear-gradient(135deg,#fff6dc,#ffe9b0 60%,#ffd98a);color:#2a1b00;box-shadow:0 6px 22px rgba(120,80,0,.28),inset 0 0 0 1px rgba(160,110,0,.35)}
+.featcard:focus-visible,.featcard:hover{box-shadow:0 8px 26px rgba(120,80,0,.4),inset 0 0 0 2px #b77a00}
+.featcard .ribbon{display:inline-block;font:700 .66rem var(--sans);letter-spacing:.12em;text-transform:uppercase;background:#2a1b00;color:#ffd98a;padding:3px 8px;border-radius:999px}
+.featcard .fname{display:block;font-family:var(--serif);font-size:1.2rem;font-weight:600;margin:6px 0 1px}
+.featcard .fplace{display:block;font-size:.8rem;color:#5b4212}
+.featcard .ftag{display:block;font-size:.8rem;line-height:1.4;margin:6px 0 4px}
+.featcard .fmeta{display:flex;flex-wrap:wrap;gap:6px 10px;font-size:.76rem;font-weight:600}
+.featcard .fpaid{display:block;margin-top:6px;font-size:.66rem;color:#7a5a1f;letter-spacing:.02em}
+@media (max-width:700px){.feat{width:calc(100vw - 24px);left:12px;bottom:12px}}

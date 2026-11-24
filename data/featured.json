@@ -1,0 +1,15 @@
+[
+  {
+    "id": "bencomo-coliving",
+    "kind": "coliving",
+    "name": "Bencomo Coliving",
+    "place": "Santa Úrsula, Tenerife, Spain",
+    "lon": -16.488,
+    "lat": 28.426,
+    "from": "from €837 a month",
+    "rating": "4.9 · 40 reviews",
+    "tagline": "Island living with coworking, wellness and a creative community, for focused work.",
+    "link": "https://www.mapmelon.com/colivings/bencomo-coliving?ref=colivingdb",
+    "paid": true
+  }
+]

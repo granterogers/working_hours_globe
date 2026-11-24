@@ -25,6 +25,7 @@ const M3D_MAX_PITCH=60;
 let S=12,E=20,season=0,W=0,H=0,dpr=1,base=300,cx=0,cy=0;
 // the layers start in the same state on every launch: working hours, favourites and day and night on, the rest off
 let showNight=true,showFavs=true,showCw=false,showCams=false,showWeather=true,showNames=true,showHours=true;
+let FEAT=[],featKey='';
 let rot=[-8,-36,0],k=0.7,kT=1,vel=[0,0],anchor=null,dragging=false,running=false,fly=null,overlays=[],placed=[],dark=true,pal={};
 try{if(new Date().toLocaleString('en-GB',{timeZone:'Europe/London',timeZoneName:'short'}).includes('BST'))season=1}catch(e){}
 
@@ -216,7 +217,7 @@ function draw(){
   withA(LAY.night,drawNight);
   const bk=document.getElementById('bandkey');if(bk){bk.hidden=LAY.hours<0.01;bk.style.opacity=LAY.hours}
   drawOverlays();withA(LAY.cl,clDraw);withA(LAY.cams,camDraw);withA(LAY.cw,cwDraw);
-  const mapNames=LAY.names>0&&shown&&(!raster||BM().labels);drawLabels();MAPLAB.length=0;MAPBOX.length=0;if(mapNames)drawMapLabels(LAY.names);withA(LAY.weather,()=>wxDraw(mapNames));withA(LAY.fav,drawFavs);drawPin();
+  const mapNames=LAY.names>0&&shown&&(!raster||BM().labels);drawLabels();MAPLAB.length=0;MAPBOX.length=0;if(mapNames)drawMapLabels(LAY.names);withA(LAY.weather,()=>wxDraw(mapNames));withA(LAY.fav,drawFavs);drawPin();featSync();
 }
 
 // the lines of each vector tile in view, as unit vectors, worked out once per tile: the country borders on land, and
@@ -1237,7 +1238,7 @@ async function openMap(){let el=m3d.el;
       // the map is shown once its style has loaded (or after 5 s at most): a single slow tile must not keep the page on 'Loading'
       map.once('style.load',()=>{setTimeout(()=>mapReady(map),0)});setTimeout(()=>mapReady(map),5000);
       map.on('style.load',()=>{m3d.styleBusy=false;m3d.mode=null;m3dExtras(map);m3dSync();if(basemap!=='street')for(const l of map.getStyle().layers)if(l.type==='background')map.setPaintProperty(l.id,'background-color','#9ebdff');stars()});
-      map.on('move',()=>{if(mapOn())syncFromMap();if(document.body.classList.contains('in3d'))skyFrame()});
+      map.on('move',()=>{if(mapOn())syncFromMap();featSync();if(document.body.classList.contains('in3d'))skyFrame()});
       map.on('zoomend',()=>{m3dMode(map);m3dLimit(map)});map.on('moveend',()=>{if(m3d.me&&myLoc)m3dMe();prefetchTiles(map);coastFeed(map)});
       map.on('click',m3dClick);map.on('moveend',m3dWx);
       // the towns come from the map's vector tiles, which can arrive after the view has settled: the weather points are then re-picked
@@ -2305,6 +2306,26 @@ function cwToggle(open){let el=document.getElementById('cwf');
     el.addEventListener('keydown',e=>{if(e.key==='Escape')cwToggle(false)})}
   const show=open==null?el.hidden:open;el.hidden=!show;if(show){const c=document.getElementById('clf');if(c)c.hidden=true;el._sync();el.querySelector('#cwq').focus({preventScroll:true})}}
 
+// featured: paid listings, shown in the panel bottom left only while they are in view (on the globe or in 3D)
+fetch('data/featured.json').then(r=>{if(!r.ok)throw 0;return r.json()}).then(j=>{if(Array.isArray(j)){FEAT=j;featSync(true)}}).catch(()=>{});
+function featInView(){const out=[];
+  if(mapOn()){const m=m3d.map,c=m.getCenter(),cv=vec(c.lng,c.lat),Wm=m.getContainer().clientWidth,Hm=m.getContainer().clientHeight;
+    for(const f of FEAT){const v=vec(f.lon,f.lat);if(v[0]*cv[0]+v[1]*cv[1]+v[2]*cv[2]<0.34)continue;const p=m.project([f.lon,f.lat]);
+      if(p.x>20&&p.y>20&&p.x<Wm-20&&p.y<Hm-20)out.push(f)}}
+  else{for(const f of FEAT){const v=vec(f.lon,f.lat),X=M[0]*v[0]+M[1]*v[1]+M[2]*v[2];if(X<0.12)continue;
+      const x=cx+SC*(M[3]*v[0]+M[4]*v[1]),y=cy-SC*(M[6]*v[0]+M[7]*v[1]+M[8]*v[2]);if(x>20&&y>20&&x<W-20&&y<H-20)out.push(f)}}
+  return out}
+function featSync(force){const el=document.getElementById('feat'),list=document.getElementById('featlist');if(!el||!list||!FEAT.length)return;
+  const items=featInView(),key=items.map(f=>f.id).join(',');
+  if(!force&&key===featKey)return;featKey=key;
+  document.getElementById('featcount').textContent=items.length?`${items.length} in view`:'';
+  list.innerHTML=items.map(f=>`<button type="button" class="featcard" data-id="${esc(f.id)}"><span class="ribbon">Featured</span><span class="fname">${esc(f.name)}</span><span class="fplace">${esc(f.place||'')}</span><span class="ftag">${esc(f.tagline||'')}</span><span class="fmeta"><span>${esc(f.from||'')}</span><span>${esc(f.rating||'')}</span></span>${f.paid?'<span class="fpaid">Paid placement · see the listing</span>':''}</button>`).join('');
+  list.querySelectorAll('.featcard').forEach(b=>b.onclick=()=>{const f=FEAT.find(x=>x.id===b.dataset.id);if(!f)return;
+    flyTo(f.lon,f.lat,0.6);if(f.kind==='coliving'&&typeof CL!=='undefined'&&CL.byId&&CL.byId.get(f.id))clShow(CL.byId.get(f.id))});
+}
+{const t=document.getElementById('feattog'),el=document.getElementById('feat');
+  if(t&&el){const open=localStorage.getItem('whg.featOpen')!=='0';el.classList.toggle('folded',!open);t.setAttribute('aria-expanded',String(open));
+    t.onclick=()=>{const o=el.classList.contains('folded');el.classList.toggle('folded',!o);t.setAttribute('aria-expanded',String(o));try{localStorage.setItem('whg.featOpen',o?'1':'0')}catch(e){}}}}
 // start
 // first visit: every layer starts off, and the four main ones are then ticked on one at a time while the view glides in
 // a first visit is one with no saved 'visited' mark; ?welcome forces one, for testing
