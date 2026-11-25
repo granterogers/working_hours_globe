@@ -528,3 +528,4 @@ body.booting #c{opacity:0;transition:none}
 .featcard .fmeta{display:flex;flex-wrap:wrap;gap:6px 10px;font-size:.76rem;font-weight:600}
 .featcard .fpaid{display:block;margin-top:6px;font-size:.66rem;color:#7a5a1f;letter-spacing:.02em}
 @media (max-width:700px){.feat{width:calc(100vw - 24px);left:12px;bottom:12px}}
+.feat[hidden]{display:none}
